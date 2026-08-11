@@ -1,6 +1,6 @@
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { Card } from '@/components/ui/card'
-import { ShoppingCart } from '@/components/ui/card'
+import { ShoppingCart } from 'lucide-react'
 
 export default function Vendas() {
   const { sales } = useFarmStore()

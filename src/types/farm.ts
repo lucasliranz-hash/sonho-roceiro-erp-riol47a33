@@ -1,3 +1,20 @@
+export type ActivityType =
+  | 'Avicultura'
+  | 'Piscicultura'
+  | 'Suinocultura'
+  | 'Bovinocultura'
+  | 'Cavalos'
+  | 'Hortas'
+  | 'Pomar'
+
+export interface Activity {
+  id: string
+  name: string
+  type: ActivityType
+  description?: string
+  isActive: boolean
+}
+
 export type LotType =
   | 'Poedeiras'
   | 'Frango de corte'
@@ -12,6 +29,7 @@ export interface Lot {
   code: string
   name: string
   type: LotType
+  activityId?: string
   startDate: string
   origin: string
   supplier: string
@@ -293,6 +311,8 @@ export interface Asset {
   usefulLifeYears: number
   condition: 'Excelente' | 'Bom' | 'Regular' | 'Necessita manutenção'
   location: string
+  status: 'Em uso' | 'Ocioso' | 'Em manutenção' | 'Descartado'
+  residualValue?: number
   notes?: string
 }
 

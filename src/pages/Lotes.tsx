@@ -32,6 +32,7 @@ import {
   ArrowLeft,
 } from 'lucide-react'
 import { Lot, LotType } from '@/types/farm'
+import { computeLotCosts } from '@/lib/calculations'
 import { toast } from '@/hooks/use-toast'
 
 export default function Lotes() {
@@ -84,6 +85,7 @@ export default function Lotes() {
 
     const totalExp = lotExpenses.reduce((acc, e) => acc + e.totalValue, 0)
     const totalRev = lotSales.reduce((acc, s) => acc + s.totalPrice, 0)
+    const lotCosts = computeLotCosts(selectedLot, expenses, sales)
 
     return (
       <div className="space-y-6 animate-fade-in">
@@ -137,6 +139,66 @@ export default function Lotes() {
               </p>
             </CardContent>
           </Card>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card className="rounded-2xl bg-white border-border">
+            <CardContent className="p-3">
+              <span className="text-[11px] text-muted-foreground">Custo / Ave Alojada</span>
+              <p className="text-lg font-bold text-amber-700">
+                R$ {lotCosts.costPerBirdHoused.toFixed(2)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl bg-white border-border">
+            <CardContent className="p-3">
+              <span className="text-[11px] text-muted-foreground">Custo / Ave Vendida</span>
+              <p className="text-lg font-bold text-amber-700">
+                R$ {lotCosts.costPerBirdSold.toFixed(2)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl bg-white border-border">
+            <CardContent className="p-3">
+              <span className="text-[11px] text-muted-foreground">Custo / KG</span>
+              <p className="text-lg font-bold text-amber-700">R$ {lotCosts.costPerKg.toFixed(2)}</p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl bg-white border-border">
+            <CardContent className="p-3">
+              <span className="text-[11px] text-muted-foreground">ROI do Lote</span>
+              <p
+                className={`text-lg font-bold ${lotCosts.roi >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
+              >
+                {lotCosts.roi.toFixed(1)}%
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-white p-3 rounded-2xl border border-border text-center">
+            <span className="text-[11px] text-muted-foreground block">Custo Total</span>
+            <span className="text-sm font-bold text-rose-600">
+              R$ {lotCosts.totalCost.toFixed(2)}
+            </span>
+          </div>
+          <div className="bg-white p-3 rounded-2xl border border-border text-center">
+            <span className="text-[11px] text-muted-foreground block">Margem</span>
+            <span
+              className={`text-sm font-bold ${lotCosts.margin >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
+            >
+              {lotCosts.margin.toFixed(1)}%
+            </span>
+          </div>
+          <div className="bg-white p-3 rounded-2xl border border-border text-center">
+            <span className="text-[11px] text-muted-foreground block">Lucro</span>
+            <span
+              className={`text-sm font-bold ${lotCosts.profit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
+            >
+              R$ {lotCosts.profit.toFixed(2)}
+            </span>
+          </div>
         </div>
 
         <Tabs defaultValue="resumo" className="w-full">

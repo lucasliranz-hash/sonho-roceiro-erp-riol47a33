@@ -1,4 +1,5 @@
 import {
+  Activity,
   Lot,
   StructureCost,
   Expense,
@@ -19,9 +20,27 @@ import {
   FarmAlert,
 } from '@/types/farm'
 
+export const initialActivities: Activity[] = [
+  {
+    id: 'act-1',
+    name: 'Avicultura',
+    type: 'Avicultura',
+    description: 'Criação de galinhas caipiras, poedeiras e frangos de corte',
+    isActive: true,
+  },
+  {
+    id: 'act-2',
+    name: 'Piscicultura',
+    type: 'Piscicultura',
+    description: 'Criação de tilápias em açude (em implantação)',
+    isActive: true,
+  },
+]
+
 export const initialLots: Lot[] = [
   {
     id: 'l-1',
+    activityId: 'act-1',
     code: 'L-0001',
     name: 'Lote Poedeiras Isa Brown',
     type: 'Poedeiras',
@@ -39,6 +58,7 @@ export const initialLots: Lot[] = [
   },
   {
     id: 'l-2',
+    activityId: 'act-1',
     code: 'L-0002',
     name: 'Lote Caipira Gigante 01',
     type: 'Frango caipira',
@@ -56,6 +76,7 @@ export const initialLots: Lot[] = [
   },
   {
     id: 'l-3',
+    activityId: 'act-1',
     code: 'L-0003',
     name: 'Lote Corte Cobb 500',
     type: 'Frango de corte',
@@ -444,6 +465,8 @@ export const initialAssets: Asset[] = [
     usefulLifeYears: 5,
     condition: 'Excelente',
     location: 'Sala de Incubação',
+    status: 'Em uso',
+    residualValue: 250,
     notes: 'Controle digital de temperatura e umidade',
   },
   {
@@ -455,6 +478,8 @@ export const initialAssets: Asset[] = [
     usefulLifeYears: 8,
     condition: 'Bom',
     location: 'Poço Caipira',
+    status: 'Em uso',
+    residualValue: 100,
     notes: 'Alimenta bebedouros automáticos do galinheiro',
   },
 ]

@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { toast } from '@/hooks/use-toast'
-import { DollarSign, Wheat, Scale, Skull, Egg, ShoppingCart, Flame } from 'lucide-react'
+import { DollarSign, Wheat, Scale, Skull, Egg, ShoppingCart, Flame, Briefcase } from 'lucide-react'
 
 interface QuickEntryModalProps {
   open: boolean
@@ -33,6 +33,7 @@ type QuickActionType =
   | 'ovos'
   | 'venda'
   | 'chocadeira'
+  | 'investimento'
   | null
 
 export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
@@ -47,6 +48,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
     addEggProduction,
     addSale,
     addIncubation,
+    addStructure,
   } = useFarmStore()
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
@@ -84,6 +86,12 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
   const [incEggCount, setIncEggCount] = useState('30')
   const [incBreed, setIncBreed] = useState('Caipira')
 
+  const [invDescription, setInvDescription] = useState('')
+  const [invCategory, setInvCategory] = useState<
+    'Equipamentos' | 'Chocadeira' | 'Estruturas' | 'Outros'
+  >('Equipamentos')
+  const [invValue, setInvValue] = useState('')
+
   const resetForm = () => {
     setActionType(null)
     setExpDesc('')
@@ -93,6 +101,8 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
     setCollected('')
     setSaleQty('')
     setSaleUnitPrice('')
+    setInvDescription('')
+    setInvValue('')
   }
 
   const handleClose = () => {
@@ -198,6 +208,23 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
         expectedHatchDate: new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0],
       })
       toast({ title: 'Lançado com sucesso! ✅', description: 'Nova incubação iniciada (21 dias).' })
+    } else if (actionType === 'investimento') {
+      addStructure({
+        date,
+        category: invCategory,
+        description: invDescription || `Investimento em ${invCategory}`,
+        quantity: 1,
+        unit: 'unid',
+        unitValue: Number(invValue) || 0,
+        supplier: 'Fornecedor Local',
+        paymentMethod: 'Pix',
+        isPaid: true,
+        center: 'Patrimônio',
+      })
+      toast({
+        title: 'Investimento registrado! 🏗️',
+        description: 'Bem patrimonial adicionado ao CAPEX.',
+      })
     }
 
     handleClose()
@@ -245,6 +272,12 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
       label: 'Chocadeira',
       icon: Flame,
       color: 'bg-orange-100 text-orange-800 border-orange-200',
+    },
+    {
+      type: 'investimento',
+      label: 'Investimento',
+      icon: Briefcase,
+      color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
     },
   ]
 
@@ -327,6 +360,10 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
 
             {actionType === 'despesa' && (
               <>
+                <div className="p-2 rounded-xl bg-emerald-50 text-[11px] text-emerald-800 font-medium">
+                  💡 Para qual criação? Selecione o lote acima. Se for um gasto geral, escolha
+                  qualquer lote.
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Categoria</Label>
@@ -549,6 +586,53 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                   />
                 </div>
               </div>
+            )}
+
+            {actionType === 'investimento' && (
+              <>
+                <div className="p-2 rounded-xl bg-indigo-50 text-[11px] text-indigo-800 font-medium">
+                  💡 Este é um investimento (CAPEX), não um custo de criação. Será registrado como
+                  patrimônio.
+                </div>
+                <div>
+                  <Label className="text-xs">O que foi comprado?</Label>
+                  <Input
+                    placeholder="Ex: Chocadeira 120 ovos"
+                    value={invDescription}
+                    onChange={(e) => setInvDescription(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Categoria</Label>
+                    <Select value={invCategory} onValueChange={(v) => setInvCategory(v as any)}>
+                      <SelectTrigger className="h-10 text-xs rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Equipamentos">Equipamentos</SelectItem>
+                        <SelectItem value="Chocadeira">Chocadeira</SelectItem>
+                        <SelectItem value="Estruturas">Estruturas</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Valor (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={invValue}
+                      onChange={(e) => setInvValue(e.target.value)}
+                      className="h-10 text-xs rounded-xl"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
             )}
 
             <Button

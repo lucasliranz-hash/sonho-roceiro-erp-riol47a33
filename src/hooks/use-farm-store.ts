@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import {
+  Activity,
   Lot,
   StructureCost,
   Expense,
@@ -21,6 +22,7 @@ import {
   PeriodFilter,
 } from '@/types/farm'
 import {
+  initialActivities,
   initialLots,
   initialStructures,
   initialExpenses,
@@ -59,6 +61,9 @@ function saveToStorage<T>(key: string, value: T): void {
 }
 
 export function useFarmStore() {
+  const [activities, setActivities] = useState<Activity[]>(() =>
+    loadFromStorage('activities', initialActivities),
+  )
   const [lots, setLots] = useState<Lot[]>(() => loadFromStorage('lots', initialLots))
   const [structures, setStructures] = useState<StructureCost[]>(() =>
     loadFromStorage('structures', initialStructures),
@@ -103,6 +108,7 @@ export function useFarmStore() {
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>('Todos')
   const [selectedLotId, setSelectedLotId] = useState<string>('todos')
 
+  useEffect(() => saveToStorage('activities', activities), [activities])
   useEffect(() => saveToStorage('lots', lots), [lots])
   useEffect(() => saveToStorage('structures', structures), [structures])
   useEffect(() => saveToStorage('expenses', expenses), [expenses])
@@ -216,6 +222,8 @@ export function useFarmStore() {
   }
 
   return {
+    activities,
+    setActivities,
     lots,
     setLots,
     addLot,

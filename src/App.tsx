@@ -21,6 +21,7 @@ import Acasalamentos from './pages/Acasalamentos'
 import Vendas from './pages/Vendas'
 import ClientesFornecedores from './pages/ClientesFornecedores'
 import Financeiro from './pages/Financeiro'
+import Producao from './pages/Producao'
 import Indicadores from './pages/Indicadores'
 import Patrimonio from './pages/Patrimonio'
 import Alertas from './pages/Alertas'
@@ -52,6 +53,7 @@ const App = () => (
           <Route path="/vendas" element={<Vendas />} />
           <Route path="/parceiros" element={<ClientesFornecedores />} />
           <Route path="/financeiro" element={<Financeiro />} />
+          <Route path="/producao" element={<Producao />} />
           <Route path="/indicadores" element={<Indicadores />} />
           <Route path="/patrimonio" element={<Patrimonio />} />
           <Route path="/alertas" element={<Alertas />} />
