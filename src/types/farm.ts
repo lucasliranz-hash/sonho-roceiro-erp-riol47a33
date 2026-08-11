@@ -105,6 +105,8 @@ export interface Expense {
   supplier: string
   paymentMethod: string
   isPaid: boolean
+  aplicacao?: 'geral' | 'atividade' | 'lote'
+  activity?: string
   notes?: string
 }
 
@@ -125,6 +127,8 @@ export interface InventoryItem {
   currentStock: number
   minStock: number
   averageCost: number
+  supplier?: string
+  notes?: string
   lastUpdated: string
 }
 
@@ -223,6 +227,7 @@ export interface EnergyMeasurement {
   consumptionKwh: number
   ratePerKwh: number
   totalCost: number
+  measurementType?: 'Propriedade' | 'Atividade' | 'Estrutura' | 'Equipamento' | 'Lote'
   incubationId?: string
 }
 
@@ -324,6 +329,28 @@ export interface FarmAlert {
   date: string
   isRead: boolean
   modulePath: string
+}
+
+export interface StockMovement {
+  id: string
+  date: string
+  inventoryItemId: string
+  inventoryItemName: string
+  type: 'entrada' | 'saida'
+  movementType: string
+  quantity: number
+  unit: string
+  balanceAfter: number
+  unitValue: number
+  totalValue: number
+  supplier?: string
+  lotId?: string
+  lotName?: string
+  activity?: string
+  documentNumber?: string
+  notes?: string
+  generateExpense?: boolean
+  user?: string
 }
 
 export type PeriodFilter = 'Hoje' | '7 dias' | 'Este mês' | 'Últimos 30 dias' | 'Este ano' | 'Todos'

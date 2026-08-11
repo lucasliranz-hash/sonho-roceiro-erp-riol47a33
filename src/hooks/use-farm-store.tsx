@@ -20,6 +20,10 @@ import {
   Sale,
   Asset,
   FarmAlert,
+  StockMovement,
+  EnergyMeasurement,
+  Customer,
+  Supplier,
   PeriodFilter,
 } from '@/types/farm'
 
@@ -43,6 +47,11 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const suppliers = useSupabaseEntity<any>(FARM_TABLES.suppliers, orgId, 'suppliers')
   const assets = useSupabaseEntity<Asset>(FARM_TABLES.assets, orgId, 'assets')
   const alerts = useSupabaseEntity<FarmAlert>(FARM_TABLES.alerts, orgId, 'alerts')
+  const stockMovements = useSupabaseEntity<StockMovement>(
+    FARM_TABLES.stockMovements,
+    orgId,
+    'stockMovements',
+  )
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>('Todos')
   const [selectedLotId, setSelectedLotId] = useState('todos')
@@ -194,12 +203,19 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addInventoryItem = useCallback(
-    async (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => {
+    async (item: Omit<InventoryItem, 'id' | 'lastUpdated'> & { id?: string }) => {
       return inventory.add({
         ...item,
-        id: `inv-${Date.now()}`,
+        id: item.id || `inv-${Date.now()}`,
         lastUpdated: new Date().toISOString().split('T')[0],
       })
+    },
+    [inventory],
+  )
+
+  const updateInventory = useCallback(
+    async (id: string, updates: Partial<InventoryItem>) => {
+      return inventory.update(id, updates)
     },
     [inventory],
   )
@@ -216,6 +232,48 @@ function useFarmStoreImpl(orgId: string | undefined) {
       return assets.add(asset)
     },
     [assets],
+  )
+
+  const addStockMovement = useCallback(
+    async (m: Omit<StockMovement, 'id'>) => {
+      return stockMovements.add({ ...m, id: `sm-${Date.now()}` })
+    },
+    [stockMovements],
+  )
+
+  const addEnergyLog = useCallback(
+    async (e: Omit<EnergyMeasurement, 'id'>) => {
+      return energyLogs.add({ ...e, id: `en-${Date.now()}` })
+    },
+    [energyLogs],
+  )
+
+  const addAnimal = useCallback(
+    async (a: Omit<Animal, 'id'>) => {
+      return animals.add({ ...a, id: `an-${Date.now()}` })
+    },
+    [animals],
+  )
+
+  const addMating = useCallback(
+    async (m: Omit<Mating, 'id'>) => {
+      return matings.add({ ...m, id: `mt-${Date.now()}` })
+    },
+    [matings],
+  )
+
+  const addCustomer = useCallback(
+    async (c: Omit<Customer, 'id'>) => {
+      return customers.add({ ...c, id: `cus-${Date.now()}` })
+    },
+    [customers],
+  )
+
+  const addSupplier = useCallback(
+    async (s: Omit<Supplier, 'id'>) => {
+      return suppliers.add({ ...s, id: `sup-${Date.now()}` })
+    },
+    [suppliers],
   )
 
   return {
@@ -266,6 +324,14 @@ function useFarmStoreImpl(orgId: string | undefined) {
     addAsset,
     alerts: alerts.items,
     markAlertAsRead,
+    stockMovements: stockMovements.items,
+    addStockMovement,
+    addEnergyLog,
+    addAnimal,
+    addMating,
+    addCustomer,
+    addSupplier,
+    updateInventory,
     selectedPeriod,
     setSelectedPeriod,
     selectedLotId,
