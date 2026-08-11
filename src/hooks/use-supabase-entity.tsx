@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   fetchEntity,
   insertEntity,
@@ -7,6 +7,7 @@ import {
   type FarmTableName,
 } from '@/services/farm'
 import { enqueueOperation } from '@/lib/sync-queue'
+import { logAudit } from '@/services/audit'
 
 function loadCache(key: string): any[] {
   try {
@@ -33,6 +34,8 @@ export function useSupabaseEntity<T extends { id: string }>(
   cacheKey: string,
 ) {
   const [items, setItems] = useState<T[]>(() => loadCache(cacheKey))
+  const itemsRef = useRef(items)
+  itemsRef.current = items
 
   useEffect(() => {
     if (!orgId) {
@@ -101,32 +104,16 @@ export function useSupabaseEntity<T extends { id: string }>(
   const update = useCallback(
     async (id: string, updates: Partial<T>): Promise<{ error: any }> => {
       if (!orgId) {
-        console.error('[useSupabaseEntity] update: no orgId', { table })
         return { error: { message: 'Organização não carregada.' } }
       }
-
-      console.log('[useSupabaseEntity] update: start', {
-        table,
-        id,
-        updates,
-        orgId,
-      })
-
+      const oldItem = itemsRef.current.find((i) => i.id === id)
       const { error } = await updateEntity(table, id, updates as unknown as Record<string, unknown>)
-
-      console.log('[useSupabaseEntity] update: result', {
-        table,
-        id,
-        error,
-        success: !error,
-      })
-
       if (error) {
         console.error('[useSupabaseEntity] update: FAILED', { table, id, error })
         enqueueOperation({ table, operation: 'update', data: { id, data: updates } })
         return { error }
       }
-
+      logAudit('UPDATE', table, id, oldItem as any, updates as any)
       setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)))
       return { error: null }
     },
@@ -136,27 +123,16 @@ export function useSupabaseEntity<T extends { id: string }>(
   const remove = useCallback(
     async (id: string): Promise<{ error: any }> => {
       if (!orgId) {
-        console.error('[useSupabaseEntity] remove: no orgId', { table })
         return { error: { message: 'Organização não carregada.' } }
       }
-
-      console.log('[useSupabaseEntity] remove: start', { table, id, orgId })
-
+      const oldItem = itemsRef.current.find((i) => i.id === id)
       const { error } = await softDeleteEntity(table, orgId, id)
-
-      console.log('[useSupabaseEntity] remove: result', {
-        table,
-        id,
-        error,
-        success: !error,
-      })
-
       if (error) {
         console.error('[useSupabaseEntity] remove: FAILED', { table, id, error })
         enqueueOperation({ table, operation: 'delete', data: { id, organization_id: orgId } })
         return { error }
       }
-
+      logAudit('DELETE', table, id, oldItem as any)
       setItems((prev) => prev.filter((i) => i.id !== id))
       return { error: null }
     },

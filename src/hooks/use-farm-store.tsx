@@ -276,29 +276,117 @@ function useFarmStoreImpl(orgId: string | undefined) {
     [suppliers],
   )
 
+  const deleteMortality = useCallback(
+    async (id: string) => {
+      const m = mortality.items.find((item) => item.id === id)
+      const { error } = await mortality.remove(id)
+      if (error) return { error }
+      if (m) {
+        const lot = lots.items.find((l) => l.id === m.lotId)
+        if (lot) await lots.update(m.lotId, { currentQuantity: lot.currentQuantity + m.quantity })
+      }
+      return { error: null }
+    },
+    [mortality, lots],
+  )
+
+  const updateMortalityRecord = useCallback(
+    async (id: string, updates: Partial<Mortality>) => {
+      const old = mortality.items.find((m) => m.id === id)
+      const { error } = await mortality.update(id, updates)
+      if (error) return { error }
+      if (old && updates.quantity !== undefined && updates.quantity !== old.quantity) {
+        const lot = lots.items.find((l) => l.id === old.lotId)
+        if (lot) {
+          const diff = old.quantity - updates.quantity
+          await lots.update(old.lotId, { currentQuantity: Math.max(0, lot.currentQuantity + diff) })
+        }
+      }
+      return { error: null }
+    },
+    [mortality, lots],
+  )
+
+  const deleteFeedConsumption = useCallback(
+    async (id: string) => {
+      const f = feedLogs.items.find((item) => item.id === id)
+      const { error } = await feedLogs.remove(id)
+      if (error) return { error }
+      if (f && f.inventoryItemId) {
+        const item = inventory.items.find((i) => i.id === f.inventoryItemId)
+        if (item)
+          await inventory.update(f.inventoryItemId, {
+            currentStock: item.currentStock + f.quantityKg,
+          })
+      }
+      return { error: null }
+    },
+    [feedLogs, inventory],
+  )
+
+  const updateFeedRecord = useCallback(
+    async (id: string, updates: Partial<FeedConsumption>) => {
+      const old = feedLogs.items.find((f) => f.id === id)
+      const { error } = await feedLogs.update(id, updates)
+      if (error) return { error }
+      if (
+        old &&
+        updates.quantityKg !== undefined &&
+        updates.quantityKg !== old.quantityKg &&
+        old.inventoryItemId
+      ) {
+        const item = inventory.items.find((i) => i.id === old.inventoryItemId)
+        if (item) {
+          const diff = old.quantityKg - updates.quantityKg
+          await inventory.update(old.inventoryItemId, {
+            currentStock: Math.max(0, item.currentStock + diff),
+          })
+        }
+      }
+      return { error: null }
+    },
+    [feedLogs, inventory],
+  )
+
   return {
     activities: activities.items,
     setActivities: activities.setItems,
     lots: lots.items,
     setLots: lots.setItems,
     addLot,
+    updateLot: lots.update,
+    deleteLot: lots.remove,
     structures: structures.items,
     setStructures: structures.setItems,
     addStructure,
+    updateStructure: structures.update,
+    deleteStructure: structures.remove,
     expenses: expenses.items,
     setExpenses: expenses.setItems,
     addExpense,
+    updateExpense: expenses.update,
+    deleteExpense: expenses.remove,
     inventory: inventory.items,
     setInventory: inventory.setItems,
     addInventoryItem,
+    updateInventory,
+    deleteInventory: inventory.remove,
     feedLogs: feedLogs.items,
     addFeedConsumption,
+    updateFeedConsumption: updateFeedRecord,
+    deleteFeedConsumption,
     weighings: weighings.items,
     addWeighing,
+    updateWeighing: weighings.update,
+    deleteWeighing: weighings.remove,
     mortality: mortality.items,
     addMortality,
+    updateMortality: updateMortalityRecord,
+    deleteMortality,
     eggs: eggs.items,
     addEggProduction,
+    updateEggProduction: eggs.update,
+    deleteEggProduction: eggs.remove,
     incubations: incubations.items,
     addIncubation,
     updateIncubation,
@@ -307,31 +395,45 @@ function useFarmStoreImpl(orgId: string | undefined) {
     candlings: candlings.items,
     setCandlings: candlings.setItems,
     addCandling,
+    deleteCandling: candlings.remove,
     energyLogs: energyLogs.items,
     setEnergyLogs: energyLogs.setItems,
+    addEnergyLog,
+    updateEnergyLog: energyLogs.update,
+    deleteEnergyLog: energyLogs.remove,
     animals: animals.items,
     setAnimals: animals.setItems,
+    addAnimal,
+    updateAnimal: animals.update,
+    deleteAnimal: animals.remove,
     matings: matings.items,
     setMatings: matings.setItems,
+    addMating,
+    updateMating: matings.update,
+    deleteMating: matings.remove,
     sales: sales.items,
     addSale,
+    updateSale: sales.update,
+    deleteSale: sales.remove,
     customers: customers.items,
     setCustomers: customers.setItems,
+    addCustomer,
+    updateCustomer: customers.update,
+    deleteCustomer: customers.remove,
     suppliers: suppliers.items,
     setSuppliers: suppliers.setItems,
+    addSupplier,
+    updateSupplier: suppliers.update,
+    deleteSupplier: suppliers.remove,
     assets: assets.items,
     setAssets: assets.setItems,
     addAsset,
+    updateAsset: assets.update,
+    deleteAsset: assets.remove,
     alerts: alerts.items,
     markAlertAsRead,
     stockMovements: stockMovements.items,
     addStockMovement,
-    addEnergyLog,
-    addAnimal,
-    addMating,
-    addCustomer,
-    addSupplier,
-    updateInventory,
     selectedPeriod,
     setSelectedPeriod,
     selectedLotId,

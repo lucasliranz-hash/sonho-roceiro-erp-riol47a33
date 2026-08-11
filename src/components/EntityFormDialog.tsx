@@ -41,6 +41,7 @@ interface Props {
   onSubmit: (values: Record<string, string>) => Promise<void>
   submitLabel?: string
   lotConfig?: { required: boolean }
+  initialValues?: Record<string, string>
 }
 
 export function EntityFormDialog({
@@ -52,6 +53,7 @@ export function EntityFormDialog({
   onSubmit,
   submitLabel = 'Salvar',
   lotConfig,
+  initialValues,
 }: Props) {
   const { lots } = useFarmStore()
   const [values, setValues] = useState<Record<string, string>>({})
@@ -59,14 +61,16 @@ export function EntityFormDialog({
 
   useEffect(() => {
     if (open) {
-      const init: Record<string, string> = { lotId: '' }
+      const init: Record<string, string> = { lotId: initialValues?.lotId || '' }
       fields.forEach((f) => {
         init[f.key] =
-          f.defaultValue || (f.type === 'date' ? new Date().toISOString().split('T')[0] : '')
+          initialValues?.[f.key] ||
+          f.defaultValue ||
+          (f.type === 'date' ? new Date().toISOString().split('T')[0] : '')
       })
       setValues(init)
     }
-  }, [open])
+  }, [open, initialValues])
 
   const visibleFields = fields.filter((f) => !f.showWhen || f.showWhen(values))
 
