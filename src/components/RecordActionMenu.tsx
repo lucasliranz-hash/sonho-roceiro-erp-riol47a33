@@ -1,4 +1,4 @@
-import { MoreVertical, Pencil, Trash2 } from 'lucide-react'
+import { MoreVertical, Pencil, Trash2, Eye, ArrowRight } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -8,11 +8,13 @@ import {
 import { Button } from '@/components/ui/button'
 
 interface Props {
-  onEdit: () => void
-  onDelete: () => void
+  onEdit?: () => void
+  onDelete?: () => void
+  onViewDetails?: () => void
+  onViewOrigin?: () => void
 }
 
-export function RecordActionMenu({ onEdit, onDelete }: Props) {
+export function RecordActionMenu({ onEdit, onDelete, onViewDetails, onViewOrigin }: Props) {
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <DropdownMenu>
@@ -22,12 +24,26 @@ export function RecordActionMenu({ onEdit, onDelete }: Props) {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onEdit} className="text-xs cursor-pointer">
-            <Pencil className="w-3.5 h-3.5 mr-2" /> Editar
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onDelete} className="text-xs cursor-pointer text-rose-600">
-            <Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir
-          </DropdownMenuItem>
+          {onViewDetails && (
+            <DropdownMenuItem onClick={onViewDetails} className="text-xs cursor-pointer">
+              <Eye className="w-3.5 h-3.5 mr-2" /> Ver detalhes
+            </DropdownMenuItem>
+          )}
+          {onViewOrigin && (
+            <DropdownMenuItem onClick={onViewOrigin} className="text-xs cursor-pointer">
+              <ArrowRight className="w-3.5 h-3.5 mr-2" /> Ver origem
+            </DropdownMenuItem>
+          )}
+          {onEdit && (
+            <DropdownMenuItem onClick={onEdit} className="text-xs cursor-pointer">
+              <Pencil className="w-3.5 h-3.5 mr-2" /> Editar
+            </DropdownMenuItem>
+          )}
+          {onDelete && (
+            <DropdownMenuItem onClick={onDelete} className="text-xs cursor-pointer text-rose-600">
+              <Trash2 className="w-3.5 h-3.5 mr-2" /> Excluir
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

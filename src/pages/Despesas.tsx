@@ -1,11 +1,81 @@
+import { useState } from 'react'
 import { useFarmStore } from '@/hooks/use-farm-store'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { DollarSign, CheckCircle } from 'lucide-react'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
+import { RecordActionMenu } from '@/components/RecordActionMenu'
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { toast } from '@/hooks/use-toast'
+import { DollarSign, Plus } from 'lucide-react'
+import { Expense } from '@/types/farm'
+
+const fields: FormField[] = [
+  { key: 'date', label: 'Data', type: 'date', required: true },
+  { key: 'description', label: 'Descrição', type: 'text', required: true },
+  {
+    key: 'category',
+    label: 'Categoria',
+    type: 'select',
+    options: [
+      'Ração',
+      'Pintinhos',
+      'Medicamentos',
+      'Vacinas',
+      'Cama',
+      'Energia',
+      'Água',
+      'Transporte',
+      'Manutenção',
+      'Outros',
+    ],
+  },
+  { key: 'quantity', label: 'Quantidade', type: 'number', defaultValue: '1' },
+  { key: 'unitValue', label: 'Valor Unitário (R$)', type: 'number', step: '0.01' },
+]
 
 export default function Despesas() {
-  const { expenses } = useFarmStore()
+  const { expenses, addExpense, updateExpense, deleteExpense } = useFarmStore()
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Expense | null>(null)
+  const [deleting, setDeleting] = useState<Expense | null>(null)
 
   const totalExp = expenses.reduce((acc, e) => acc + e.totalValue, 0)
+
+  const handleSubmit = async (values: Record<string, string>) => {
+    const data = {
+      date: values.date,
+      description: values.description,
+      category: values.category as Expense['category'],
+      quantity: Number(values.quantity) || 1,
+      unitValue: Number(values.unitValue) || 0,
+      supplier: 'Geral',
+      paymentMethod: 'Pix',
+      isPaid: true,
+    }
+    if (editing) {
+      const { error } = await updateExpense(editing.id, {
+        ...data,
+        totalValue: Number((data.quantity * data.unitValue).toFixed(2)),
+      })
+      if (error) throw new Error(error.message)
+      toast({ title: 'Despesa atualizada! ✅' })
+    } else {
+      const { error } = await addExpense(data as any)
+      if (error) throw new Error(error.message)
+      toast({ title: 'Despesa registrada! ✅' })
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    const { error } = await deleteExpense(deleting.id)
+    if (error) {
+      toast({ title: 'Erro', variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Despesa excluída! 🗑️' })
+    setDeleting(null)
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -18,16 +88,30 @@ export default function Despesas() {
             Gastos do dia a dia com ração, vacinas, manutenção e insumos.
           </p>
         </div>
+        <Button
+          onClick={() => {
+            setEditing(null)
+            setOpen(true)
+          }}
+          className="rounded-xl bg-primary text-white text-xs gap-2"
+        >
+          <Plus className="w-4 h-4" /> Nova Despesa
+        </Button>
       </div>
 
-      <Card className="rounded-2xl bg-white border-border p-4">
-        <span className="text-xs text-muted-foreground">Total em Despesas Registradas</span>
+      <Card className="p-4 rounded-2xl bg-white border-border">
+        <span className="text-xs text-muted-foreground">Total em Despesas</span>
         <p className="text-2xl font-extrabold text-rose-600">R$ {totalExp.toFixed(2)}</p>
       </Card>
 
       <Card className="rounded-3xl bg-white border-border shadow-subtle p-5">
-        <h2 className="text-base font-bold mb-4">Lista de Despesas Operacionais</h2>
+        <h2 className="text-base font-bold mb-4">Lista de Despesas</h2>
         <div className="space-y-2">
+          {expenses.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Nenhuma despesa registrada.
+            </p>
+          )}
           {expenses.map((exp) => (
             <div
               key={exp.id}
@@ -39,14 +123,52 @@ export default function Despesas() {
                   Categoria: {exp.category} {exp.lotName ? `• Lote: ${exp.lotName}` : ''}
                 </p>
               </div>
-              <div className="text-right">
-                <p className="font-extrabold text-rose-600">R$ {exp.totalValue.toFixed(2)}</p>
-                <span className="text-[10px] text-emerald-600 font-semibold">{exp.date}</span>
+              <div className="flex items-center gap-2">
+                <div className="text-right">
+                  <p className="font-extrabold text-rose-600">R$ {exp.totalValue.toFixed(2)}</p>
+                  <span className="text-[10px] text-emerald-600 font-semibold">{exp.date}</span>
+                </div>
+                <RecordActionMenu
+                  onEdit={() => {
+                    setEditing(exp)
+                    setOpen(true)
+                  }}
+                  onDelete={() => setDeleting(exp)}
+                />
               </div>
             </div>
           ))}
         </div>
       </Card>
+
+      <EntityFormDialog
+        open={open}
+        onOpenChange={(v) => {
+          setOpen(v)
+          if (!v) setEditing(null)
+        }}
+        title={editing ? 'Editar Despesa' : 'Nova Despesa'}
+        fields={fields}
+        onSubmit={handleSubmit}
+        lotConfig={{ required: false }}
+        initialValues={
+          editing
+            ? {
+                date: editing.date,
+                description: editing.description,
+                category: editing.category,
+                quantity: String(editing.quantity),
+                unitValue: String(editing.unitValue),
+                lotId: editing.lotId || '',
+              }
+            : undefined
+        }
+      />
+      <DeleteConfirmDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

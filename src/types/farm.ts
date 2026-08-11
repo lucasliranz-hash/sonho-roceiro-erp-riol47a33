@@ -108,6 +108,8 @@ export interface Expense {
   aplicacao?: 'geral' | 'atividade' | 'lote'
   activity?: string
   notes?: string
+  source_type?: string
+  source_id?: string
 }
 
 export interface InventoryItem {
@@ -280,6 +282,8 @@ export interface Sale {
   paymentMethod: string
   isPaid: boolean
   notes?: string
+  source_type?: string
+  source_id?: string
 }
 
 export interface Customer {

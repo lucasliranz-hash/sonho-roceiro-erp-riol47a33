@@ -74,6 +74,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
         ...exp,
         id: `ex-${Date.now()}`,
         totalValue: Number((exp.quantity * exp.unitValue).toFixed(2)),
+        source_type: exp.source_type || 'MANUAL',
       })
     },
     [expenses],
@@ -148,6 +149,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
         ...sale,
         id: `sal-${Date.now()}`,
         totalPrice: Number((sale.quantity * sale.unitPrice).toFixed(2)),
+        source_type: 'SALE',
       })
     },
     [sales],

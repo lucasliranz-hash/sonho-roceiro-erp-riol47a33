@@ -1,10 +1,74 @@
+import { useState } from 'react'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Package, AlertTriangle } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
+import { RecordActionMenu } from '@/components/RecordActionMenu'
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { NovoItemDialog } from '@/components/estoque/NovoItemDialog'
+import { StockMovementDialog } from '@/components/estoque/StockMovementDialog'
+import { toast } from '@/hooks/use-toast'
+import { Package, AlertTriangle, Plus, ArrowDown, ArrowUp } from 'lucide-react'
+import { InventoryItem } from '@/types/farm'
+
+const fields: FormField[] = [
+  { key: 'name', label: 'Nome', type: 'text', required: true },
+  {
+    key: 'category',
+    label: 'Categoria',
+    type: 'select',
+    options: [
+      'Ração',
+      'Milho',
+      'Farelos',
+      'Medicamentos',
+      'Vacinas',
+      'Maravalha',
+      'Embalagens',
+      'Insumos',
+      'Outros',
+    ],
+  },
+  { key: 'unit', label: 'Unidade', type: 'select', options: ['KG', 'unid', 'L', 'saco'] },
+  { key: 'currentStock', label: 'Estoque Atual', type: 'number', step: '0.1' },
+  { key: 'minStock', label: 'Estoque Mínimo', type: 'number', step: '0.1' },
+  { key: 'averageCost', label: 'Custo Médio (R$)', type: 'number', step: '0.01' },
+]
 
 export default function Estoque() {
-  const { inventory } = useFarmStore()
+  const { inventory, updateInventory, deleteInventory } = useFarmStore()
+  const [novoOpen, setNovoOpen] = useState(false)
+  const [entradaOpen, setEntradaOpen] = useState(false)
+  const [saidaOpen, setSaidaOpen] = useState(false)
+  const [editing, setEditing] = useState<InventoryItem | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [deleting, setDeleting] = useState<InventoryItem | null>(null)
+
+  const handleSubmit = async (values: Record<string, string>) => {
+    if (!editing) return
+    const { error } = await updateInventory(editing.id, {
+      name: values.name,
+      category: values.category as InventoryItem['category'],
+      unit: values.unit,
+      currentStock: Number(values.currentStock) || 0,
+      minStock: Number(values.minStock) || 0,
+      averageCost: Number(values.averageCost) || 0,
+    })
+    if (error) throw new Error(error.message)
+    toast({ title: 'Item atualizado! ✅' })
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    const { error } = await deleteInventory(deleting.id)
+    if (error) {
+      toast({ title: 'Erro', variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Item excluído! 🗑️' })
+    setDeleting(null)
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -13,8 +77,31 @@ export default function Estoque() {
           <Package className="w-6 h-6 text-primary" /> Estoque de Insumos e Ração
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Acompanhamento automático do nível de ração, vacinas e sacos no galpão.
+          Acompanhamento do nível de ração, vacinas e sacos no galpão.
         </p>
+      </div>
+
+      <div className="flex gap-2">
+        <Button
+          onClick={() => setNovoOpen(true)}
+          className="rounded-xl bg-primary text-white text-xs gap-2"
+        >
+          <Plus className="w-4 h-4" /> Novo Item
+        </Button>
+        <Button
+          onClick={() => setEntradaOpen(true)}
+          variant="outline"
+          className="rounded-xl text-xs gap-2"
+        >
+          <ArrowDown className="w-4 h-4" /> Entrada
+        </Button>
+        <Button
+          onClick={() => setSaidaOpen(true)}
+          variant="outline"
+          className="rounded-xl text-xs gap-2"
+        >
+          <ArrowUp className="w-4 h-4" /> Saída
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -23,9 +110,6 @@ export default function Estoque() {
             <CardContent className="p-8 text-center">
               <Package className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
               <p className="text-sm font-semibold text-muted-foreground">Nenhum item cadastrado</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Use "Novo Lançamento" para adicionar itens ao estoque.
-              </p>
             </CardContent>
           </Card>
         )}
@@ -38,18 +122,27 @@ export default function Estoque() {
             >
               <div className="flex items-center justify-between mb-2">
                 <span className="text-xs font-bold text-muted-foreground">{item.category}</span>
-                {isLow ? (
-                  <Badge className="bg-amber-100 text-amber-800 text-[10px] gap-1">
-                    <AlertTriangle className="w-3 h-3" /> Estoque Baixo
-                  </Badge>
-                ) : (
-                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Normal</Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {isLow ? (
+                    <Badge className="bg-amber-100 text-amber-800 text-[10px] gap-1">
+                      <AlertTriangle className="w-3 h-3" /> Baixo
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Normal</Badge>
+                  )}
+                  <RecordActionMenu
+                    onEdit={() => {
+                      setEditing(item)
+                      setEditOpen(true)
+                    }}
+                    onDelete={() => setDeleting(item)}
+                  />
+                </div>
               </div>
               <h3 className="font-bold text-base text-foreground">{item.name}</h3>
               <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
                 <div>
-                  <span className="text-[11px] text-muted-foreground block">Quantidade Atual</span>
+                  <span className="text-[11px] text-muted-foreground block">Atual</span>
                   <span className="text-xl font-extrabold text-foreground">
                     {item.currentStock} {item.unit}
                   </span>
@@ -65,6 +158,37 @@ export default function Estoque() {
           )
         })}
       </div>
+
+      <NovoItemDialog open={novoOpen} onOpenChange={setNovoOpen} />
+      <StockMovementDialog open={entradaOpen} onOpenChange={setEntradaOpen} type="entrada" />
+      <StockMovementDialog open={saidaOpen} onOpenChange={setSaidaOpen} type="saida" />
+      <EntityFormDialog
+        open={editOpen}
+        onOpenChange={(v) => {
+          setEditOpen(v)
+          if (!v) setEditing(null)
+        }}
+        title="Editar Item"
+        fields={fields}
+        onSubmit={handleSubmit}
+        initialValues={
+          editing
+            ? {
+                name: editing.name,
+                category: editing.category,
+                unit: editing.unit,
+                currentStock: String(editing.currentStock),
+                minStock: String(editing.minStock),
+                averageCost: String(editing.averageCost),
+              }
+            : undefined
+        }
+      />
+      <DeleteConfirmDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

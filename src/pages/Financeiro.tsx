@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { GlobalFilterBar } from '@/components/GlobalFilterBar'
 import { TrendingUp, TrendingDown, DollarSign, Wallet, PiggyBank } from 'lucide-react'
 import { computeFinancialSummary } from '@/lib/calculations'
+import { FinanceiroTransactionList } from '@/components/FinanceiroTransactionList'
 
 export default function Financeiro() {
   const { expenses, sales, structures, assets } = useFarmStore()
@@ -135,58 +136,7 @@ export default function Financeiro() {
         </div>
       </div>
 
-      <Card className="rounded-3xl bg-blue-50 border-blue-200 p-5">
-        <h3 className="text-sm font-bold text-blue-900 mb-2">💡 Entenda a diferença</h3>
-        <div className="space-y-2 text-xs text-blue-800">
-          <p>
-            <strong>Resultado Operacional</strong> mostra se a atividade está dando lucro ou
-            prejuízo no dia a dia. Não inclui investimentos em estruturas e equipamentos.
-          </p>
-          <p>
-            <strong>Fluxo de Caixa</strong> mostra o dinheiro real que saiu do bolso, incluindo
-            investimentos (CAPEX). Um investimento na chocadeira não prejudica o resultado do lote,
-            mas diminui o caixa.
-          </p>
-          <div className="mt-3 p-3 rounded-xl bg-white border border-blue-100">
-            <p className="font-semibold">Exemplo:</p>
-            <p>
-              Receita R$ 138 − Despesas R$ 388 = Resultado: <strong>R$ −250</strong>
-            </p>
-            <p>
-              Receita R$ 138 − Despesas R$ 388 − Investimentos R$ 2.860 = Caixa:{' '}
-              <strong>R$ −3.110</strong>
-            </p>
-          </div>
-        </div>
-      </Card>
-
-      <Card className="rounded-3xl bg-white border-border shadow-subtle p-5">
-        <h2 className="text-base font-bold mb-3">Despesas por Lote</h2>
-        <div className="space-y-2">
-          {expenses.length === 0 && (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              Nenhuma despesa registrada ainda.
-            </p>
-          )}
-          {expenses.map((exp) => (
-            <div
-              key={exp.id}
-              className="p-3 rounded-2xl bg-secondary/40 border border-border flex items-center justify-between text-xs"
-            >
-              <div>
-                <span className="font-bold text-foreground">{exp.description}</span>
-                <p className="text-[11px] text-muted-foreground">
-                  {exp.category} {exp.lotName ? `• Lote: ${exp.lotName}` : '• Geral'}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="font-extrabold text-rose-600">R$ {exp.totalValue.toFixed(2)}</p>
-                <span className="text-[10px] text-emerald-600 font-semibold">{exp.date}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </Card>
+      <FinanceiroTransactionList />
     </div>
   )
 }
