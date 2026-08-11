@@ -10,6 +10,7 @@ import {
   Mortality,
   EggProduction,
   Incubation,
+  IncubationStatus,
   Candling,
   EnergyMeasurement,
   Animal,
@@ -232,6 +233,39 @@ export function useFarmStore() {
     enqueueOperation({ table: 'incubations', operation: 'insert', data: newInc })
   }
 
+  const updateIncubation = (id: string, updates: Partial<Incubation>) => {
+    setIncubations((prev) => prev.map((inc) => (inc.id === id ? { ...inc, ...updates } : inc)))
+    enqueueOperation({ table: 'incubations', operation: 'update', data: { id, ...updates } })
+  }
+
+  const deleteIncubation = (id: string) => {
+    setIncubations((prev) => prev.filter((inc) => inc.id !== id))
+    setCandlings((prev) => prev.filter((c) => c.incubationId !== id))
+    enqueueOperation({ table: 'incubations', operation: 'delete', data: { id } })
+  }
+
+  const addCandling = (candling: Omit<Candling, 'id'>) => {
+    const newCandling: Candling = { ...candling, id: `cnd-${Date.now()}` }
+    setCandlings((prev) => [newCandling, ...prev])
+    enqueueOperation({ table: 'candlings', operation: 'insert', data: newCandling })
+  }
+
+  const finalizeIncubation = (
+    id: string,
+    results: Pick<Incubation, 'hatchedCount' | 'unhatchedCount' | 'healthyChicks' | 'deaths'>,
+  ) => {
+    setIncubations((prev) =>
+      prev.map((inc) =>
+        inc.id === id ? { ...inc, ...results, status: 'Concluído' as IncubationStatus } : inc,
+      ),
+    )
+    enqueueOperation({
+      table: 'incubations',
+      operation: 'update',
+      data: { id, ...results, status: 'Concluído' },
+    })
+  }
+
   const addInventoryItem = (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => {
     const newId = `inv-${Date.now()}`
     const lastUpdated = new Date().toISOString().split('T')[0]
@@ -269,8 +303,12 @@ export function useFarmStore() {
     addEggProduction,
     incubations,
     addIncubation,
+    updateIncubation,
+    deleteIncubation,
+    finalizeIncubation,
     candlings,
     setCandlings,
+    addCandling,
     energyLogs,
     setEnergyLogs,
     animals,
