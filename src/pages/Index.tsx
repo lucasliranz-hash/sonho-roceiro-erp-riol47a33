@@ -1,5 +1,7 @@
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { GlobalFilterBar } from '@/components/GlobalFilterBar'
+import { BrandLogo } from '@/components/BrandLogo'
+import { cn } from '@/lib/utils'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Link } from 'react-router-dom'
@@ -34,6 +36,13 @@ export default function Dashboard() {
     assets,
   } = useFarmStore()
 
+  const greeting = (() => {
+    const h = new Date().getHours()
+    if (h < 12) return 'Bom dia!'
+    if (h < 18) return 'Boa tarde!'
+    return 'Boa noite!'
+  })()
+
   const summary = computeFinancialSummary(sales, expenses, structures, assets)
   const totalBirdsAlive = lots.reduce((acc, l) => acc + l.currentQuantity, 0)
   const eggsCollectedToday = eggs.reduce((acc, e) => acc + e.collected, 0)
@@ -46,18 +55,20 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="bg-white p-6 rounded-3xl border border-border shadow-subtle">
-        <h1 className="text-2xl font-extrabold tracking-tight text-foreground">
-          SONHO ROCEIRO — Centro de Controle
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          {new Date().toLocaleDateString('pt-BR', {
-            weekday: 'long',
-            day: 'numeric',
-            month: 'long',
-            year: 'numeric',
-          })}
-        </p>
+      <div className="bg-white p-6 rounded-3xl border border-border shadow-subtle space-y-2">
+        <BrandLogo size="md" showSlogan />
+        <div className="pt-2 border-t border-border/60">
+          <h1 className="text-xl font-bold tracking-tight text-foreground">{greeting}</h1>
+          <p className="text-sm font-semibold text-primary">Sonho Roceiro · Centro de Controle</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {new Date().toLocaleDateString('pt-BR', {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            })}
+          </p>
+        </div>
       </div>
 
       <GlobalFilterBar />
@@ -266,8 +277,4 @@ export default function Dashboard() {
       )}
     </div>
   )
-}
-
-function cn(...args: any[]) {
-  return args.filter(Boolean).join(' ')
 }

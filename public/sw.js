@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sonho-roceiro-v1'
+const CACHE_NAME = 'sr-gestao-v2'
 const APP_SHELL_URLS = ['/', '/manifest.json', '/pwa-icon.svg']
 
 self.addEventListener('install', (event) => {

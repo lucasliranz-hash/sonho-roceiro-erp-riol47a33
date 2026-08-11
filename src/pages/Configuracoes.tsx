@@ -15,7 +15,7 @@ export default function Configuracoes() {
     <div className="space-y-6 animate-fade-in">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
-          <Settings className="w-6 h-6 text-primary" /> Configurações do Sistema
+          <Settings className="w-6 h-6 text-primary" /> Configurações — SR Gestão
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
           Perfil do sítio, backup e status do aplicativo PWA.
@@ -23,9 +23,9 @@ export default function Configuracoes() {
       </div>
 
       <Card className="p-6 rounded-3xl bg-white border-border space-y-4">
-        <h2 className="font-bold text-base">Sítio Sonho Roceiro</h2>
+        <h2 className="font-bold text-base">Propriedade: Sonho Roceiro</h2>
         <p className="text-xs text-muted-foreground">
-          Sistema configurado para Avicultura de Poedeiras e Corte.
+          SR Gestão configurado para Avicultura de Poedeiras e Corte.
         </p>
 
         <div className="pt-4 border-t border-border flex flex-col md:flex-row gap-3">

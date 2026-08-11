@@ -1,31 +1,6 @@
 import { useState } from 'react'
 import { Outlet, Link, useLocation } from 'react-router-dom'
-import {
-  Home,
-  Layers,
-  PlusCircle,
-  Package,
-  Menu,
-  Bell,
-  Building2,
-  DollarSign,
-  Wheat,
-  Scale,
-  Skull,
-  Egg,
-  Flame,
-  Zap,
-  Bird,
-  Dna,
-  ShoppingCart,
-  Users,
-  TrendingUp,
-  Briefcase,
-  AlertTriangle,
-  Settings,
-  ChevronDown,
-  Truck,
-} from 'lucide-react'
+import { Menu, Bell, PlusCircle, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
@@ -33,65 +8,10 @@ import { useFarmStore } from '@/hooks/use-farm-store'
 import { QuickEntryModal } from '@/components/QuickEntryModal'
 import { QuickActionsSheet } from '@/components/QuickActionsSheet'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
+import { BrandLogo } from '@/components/BrandLogo'
+import { PropertySwitcher } from '@/components/PropertySwitcher'
+import { navGroups } from '@/lib/nav-config'
 import { cn } from '@/lib/utils'
-
-interface NavItem {
-  label: string
-  path: string
-  icon: any
-}
-interface NavGroup {
-  label: string
-  items: NavItem[]
-}
-
-const navGroups: NavGroup[] = [
-  { label: 'INÍCIO', items: [{ label: 'Início', path: '/', icon: Home }] },
-  {
-    label: 'PRODUÇÃO',
-    items: [
-      { label: 'Lotes', path: '/lotes', icon: Layers },
-      { label: 'Ração', path: '/racao', icon: Wheat },
-      { label: 'Pesagens', path: '/pesagens', icon: Scale },
-      { label: 'Mortalidade', path: '/mortalidade', icon: Skull },
-      { label: 'Produção', path: '/producao', icon: TrendingUp },
-    ],
-  },
-  {
-    label: 'REPRODUÇÃO',
-    items: [
-      { label: 'Matrizes', path: '/matrizes', icon: Bird },
-      { label: 'Acasalamentos', path: '/acasalamentos', icon: Dna },
-      { label: 'Ovos', path: '/ovos', icon: Egg },
-      { label: 'Chocadeira', path: '/chocadeira', icon: Flame },
-    ],
-  },
-  {
-    label: 'GESTÃO',
-    items: [
-      { label: 'Estoque', path: '/estoque', icon: Package },
-      { label: 'Financeiro', path: '/financeiro', icon: DollarSign },
-      { label: 'Patrimônio', path: '/patrimonio', icon: Truck },
-      { label: 'Estrutura', path: '/estrutura', icon: Building2 },
-      { label: 'Energia', path: '/energia', icon: Zap },
-    ],
-  },
-  {
-    label: 'COMERCIAL',
-    items: [
-      { label: 'Vendas', path: '/vendas', icon: ShoppingCart },
-      { label: 'Clientes', path: '/parceiros', icon: Users },
-    ],
-  },
-  { label: 'RELATÓRIOS', items: [{ label: 'Indicadores', path: '/indicadores', icon: Briefcase }] },
-  {
-    label: 'CONFIGURAÇÕES',
-    items: [
-      { label: 'Alertas', path: '/alertas', icon: AlertTriangle },
-      { label: 'Configurações', path: '/configuracoes', icon: Settings },
-    ],
-  },
-]
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
@@ -178,9 +98,7 @@ export default function Layout() {
 
   const handleQuickModalChange = (open: boolean) => {
     setQuickModalOpen(open)
-    if (!open) {
-      setTimeout(() => setQuickActionType(null), 200)
-    }
+    if (!open) setTimeout(() => setQuickActionType(null), 200)
   }
 
   const handleDesktopNewEntry = () => {
@@ -189,43 +107,34 @@ export default function Layout() {
   }
 
   return (
-    <div className="min-h-screen bg-[#FAF8F4] flex flex-col md:flex-row font-sans antialiased text-foreground">
+    <div className="min-h-screen bg-[#F2F2F2] flex flex-col md:flex-row font-sans antialiased text-foreground">
       <aside className="hidden lg:flex flex-col w-64 bg-white border-r border-border min-h-screen sticky top-0 h-screen z-30 shadow-subtle">
-        <div className="p-5 border-b border-border flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-primary text-white flex items-center justify-center font-bold text-xl shadow-md">
-            🐓
-          </div>
-          <div>
-            <h1 className="font-extrabold text-base tracking-tight text-primary leading-tight">
-              Sonho Roceiro
-            </h1>
-            <p className="text-[11px] font-medium text-muted-foreground">
-              ERP Rural Multi-atividade
-            </p>
-          </div>
+        <div className="p-4 border-b border-border">
+          <BrandLogo size="md" showSlogan />
         </div>
+        <PropertySwitcher />
         <NavLinks />
-        <div className="p-4 border-t border-border bg-secondary/40">
+        <div className="p-4 border-t border-border bg-sand/20">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-emerald-700 text-white text-xs font-bold flex items-center justify-center">
+            <div className="w-8 h-8 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
               SR
             </div>
             <div className="flex-1 truncate">
-              <p className="text-xs font-bold text-foreground truncate">Sítio Sonho Roceiro</p>
-              <p className="text-[10px] text-muted-foreground truncate">Produtor Rural</p>
+              <p className="text-xs font-bold text-foreground truncate">Administrador</p>
+              <p className="text-[10px] text-muted-foreground truncate">SR Gestão · Plano Rural</p>
             </div>
           </div>
         </div>
       </aside>
 
-      <header className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-border px-4 py-3 flex items-center justify-between shadow-subtle">
+      <header className="lg:hidden sticky top-0 z-40 bg-white/90 backdrop-blur border-b border-border px-4 py-2.5 flex items-center justify-between shadow-subtle">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-xl bg-primary text-white flex items-center justify-center font-bold text-base shadow-xs">
-            🐓
-          </div>
-          <span className="font-bold text-sm tracking-tight text-primary">Sonho Roceiro ERP</span>
+          <BrandLogo size="sm" />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[10px] font-bold text-primary bg-primary/10 px-2 py-1 rounded-lg hidden sm:inline-block">
+            Sonho Roceiro
+          </span>
           <Link to="/alertas" className="relative p-2 rounded-xl bg-secondary text-foreground">
             <Bell className="w-4 h-4" />
             {unreadAlertsCount > 0 && (
@@ -241,11 +150,12 @@ export default function Layout() {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-72 p-0 flex flex-col">
-              <SheetHeader className="p-4 border-b border-border text-left">
-                <SheetTitle className="text-base font-bold flex items-center gap-2">
-                  <span>🌾 Menu Completo</span>
+              <SheetHeader className="p-4 border-b border-border text-left space-y-0">
+                <SheetTitle className="text-base font-bold">
+                  <BrandLogo size="sm" showSlogan />
                 </SheetTitle>
               </SheetHeader>
+              <PropertySwitcher />
               <NavLinks onNavigate={() => setMobileMenuOpen(false)} />
             </SheetContent>
           </Sheet>
@@ -262,7 +172,7 @@ export default function Layout() {
           className="h-13 px-5 rounded-full bg-primary hover:bg-primary/90 text-white font-bold shadow-elevation flex items-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm"
         >
           <PlusCircle className="w-5 h-5 text-white" />
-          <span>➕ Novo Lançamento</span>
+          <span>Novo Lançamento</span>
         </Button>
       </div>
 
