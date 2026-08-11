@@ -163,6 +163,11 @@ export default function Financeiro() {
       <Card className="rounded-3xl bg-white border-border shadow-subtle p-5">
         <h2 className="text-base font-bold mb-3">Despesas por Lote</h2>
         <div className="space-y-2">
+          {expenses.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Nenhuma despesa registrada ainda.
+            </p>
+          )}
           {expenses.map((exp) => (
             <div
               key={exp.id}

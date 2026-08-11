@@ -253,6 +253,17 @@ export type Database = {
       can_manage_users: { Args: never; Returns: boolean }
       current_user_org_id: { Args: never; Returns: string }
       current_user_role: { Args: never; Returns: string }
+      log_audit: {
+        Args: {
+          p_action: string
+          p_entity_id?: string
+          p_entity_type: string
+          p_new_data?: Json
+          p_old_data?: Json
+          p_property_id?: string
+        }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never

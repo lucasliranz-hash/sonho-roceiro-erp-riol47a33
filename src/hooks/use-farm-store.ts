@@ -44,6 +44,25 @@ import {
 } from '@/lib/mock-data'
 import { enqueueOperation } from '@/lib/sync-queue'
 
+const DATA_VERSION = 'v3-no-mock'
+const VERSION_KEY = 'sonho_roceiro_data_version'
+
+function clearOldDataIfNeeded() {
+  try {
+    const version = localStorage.getItem(VERSION_KEY)
+    if (version !== DATA_VERSION) {
+      Object.keys(localStorage)
+        .filter((k) => k.startsWith('sonho_roceiro_'))
+        .forEach((k) => localStorage.removeItem(k))
+      localStorage.setItem(VERSION_KEY, DATA_VERSION)
+    }
+  } catch {
+    // ignore
+  }
+}
+
+clearOldDataIfNeeded()
+
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(`sonho_roceiro_${key}`)

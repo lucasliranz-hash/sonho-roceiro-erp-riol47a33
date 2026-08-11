@@ -192,6 +192,19 @@ export default function Dashboard() {
           <h2 className="text-sm font-bold text-foreground">Atividades da Propriedade</h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {activeActivities.length === 0 && (
+            <Card className="rounded-3xl bg-white border-border shadow-subtle">
+              <CardContent className="p-8 text-center">
+                <Bird className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-muted-foreground">
+                  Nenhuma atividade cadastrada
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cadastre uma atividade para começar a gerenciar sua propriedade.
+                </p>
+              </CardContent>
+            </Card>
+          )}
           {activeActivities.map((act) => {
             const actLots = lots.filter((l) => l.activityId === act.id)
             const totalAnimals = actLots.reduce((acc, l) => acc + l.currentQuantity, 0)

@@ -17,6 +17,15 @@ export default function Chocadeira() {
         </p>
       </div>
 
+      {incubations.length === 0 && (
+        <Card className="rounded-3xl bg-white border-border shadow-subtle p-8 text-center">
+          <Flame className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
+          <p className="text-sm font-semibold text-muted-foreground">Nenhuma incubação ativa</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Inicie uma nova incubação através de "Novo Lançamento".
+          </p>
+        </Card>
+      )}
       {incubations.map((inc) => (
         <Card key={inc.id} className="rounded-3xl bg-white border-border p-6 space-y-4">
           <div className="flex items-center justify-between">

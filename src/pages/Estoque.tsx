@@ -18,6 +18,17 @@ export default function Estoque() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {inventory.length === 0 && (
+          <Card className="rounded-3xl bg-white border-border shadow-subtle col-span-full">
+            <CardContent className="p-8 text-center">
+              <Package className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
+              <p className="text-sm font-semibold text-muted-foreground">Nenhum item cadastrado</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Use "Novo Lançamento" para adicionar itens ao estoque.
+              </p>
+            </CardContent>
+          </Card>
+        )}
         {inventory.map((item) => {
           const isLow = item.currentStock <= item.minStock
           return (

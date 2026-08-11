@@ -19,6 +19,11 @@ export default function ClientesFornecedores() {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-5 rounded-3xl bg-white border-border space-y-3">
           <h2 className="font-bold text-base">Clientes Cadastrados</h2>
+          {customers.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Nenhum cliente cadastrado
+            </p>
+          )}
           {customers.map((c) => (
             <div key={c.id} className="p-3 rounded-2xl bg-secondary/30 text-xs space-y-1">
               <p className="font-bold text-foreground">{c.name}</p>
@@ -31,6 +36,11 @@ export default function ClientesFornecedores() {
 
         <Card className="p-5 rounded-3xl bg-white border-border space-y-3">
           <h2 className="font-bold text-base">Fornecedores</h2>
+          {suppliers.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">
+              Nenhum fornecedor cadastrado
+            </p>
+          )}
           {suppliers.map((s) => (
             <div key={s.id} className="p-3 rounded-2xl bg-secondary/30 text-xs space-y-1">
               <p className="font-bold text-foreground">{s.name}</p>

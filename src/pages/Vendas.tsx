@@ -24,6 +24,15 @@ export default function Vendas() {
       </Card>
 
       <div className="space-y-2">
+        {sales.length === 0 && (
+          <Card className="p-8 text-center rounded-2xl bg-white border-border">
+            <ShoppingCart className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
+            <p className="text-sm font-semibold text-muted-foreground">Nenhuma venda</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Registre vendas através de "Novo Lançamento".
+            </p>
+          </Card>
+        )}
         {sales.map((s) => (
           <Card
             key={s.id}
