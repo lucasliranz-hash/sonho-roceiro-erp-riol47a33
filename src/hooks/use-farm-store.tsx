@@ -48,8 +48,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const [selectedLotId, setSelectedLotId] = useState('todos')
 
   const addLot = useCallback(
-    (lot: Omit<Lot, 'id' | 'code' | 'currentQuantity'>) => {
-      lots.add({
+    async (lot: Omit<Lot, 'id' | 'code' | 'currentQuantity'>) => {
+      return lots.add({
         ...lot,
         id: `l-${Date.now()}`,
         code: `L-${String(lots.items.length + 1).padStart(4, '0')}`,
@@ -60,8 +60,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addExpense = useCallback(
-    (exp: Omit<Expense, 'id' | 'totalValue'>) => {
-      expenses.add({
+    async (exp: Omit<Expense, 'id' | 'totalValue'>) => {
+      return expenses.add({
         ...exp,
         id: `ex-${Date.now()}`,
         totalValue: Number((exp.quantity * exp.unitValue).toFixed(2)),
@@ -71,8 +71,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addStructure = useCallback(
-    (st: Omit<StructureCost, 'id' | 'totalValue'>) => {
-      structures.add({
+    async (st: Omit<StructureCost, 'id' | 'totalValue'>) => {
+      return structures.add({
         ...st,
         id: `st-${Date.now()}`,
         totalValue: Number((st.quantity * st.unitValue).toFixed(2)),
@@ -82,24 +82,27 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addFeedConsumption = useCallback(
-    (feed: Omit<FeedConsumption, 'id' | 'totalCost'>) => {
+    async (feed: Omit<FeedConsumption, 'id' | 'totalCost'>) => {
       const totalCost = Number((feed.quantityKg * feed.costPerKg).toFixed(2))
-      feedLogs.add({ ...feed, id: `fc-${Date.now()}`, totalCost })
+      const { error } = await feedLogs.add({ ...feed, id: `fc-${Date.now()}`, totalCost })
+      if (error) return { error }
       if (feed.inventoryItemId) {
         const item = inventory.items.find((i) => i.id === feed.inventoryItemId)
-        if (item)
-          inventory.update(feed.inventoryItemId, {
+        if (item) {
+          await inventory.update(feed.inventoryItemId, {
             currentStock: Math.max(0, item.currentStock - feed.quantityKg),
             lastUpdated: new Date().toISOString().split('T')[0],
           })
+        }
       }
+      return { error: null }
     },
     [feedLogs, inventory],
   )
 
   const addWeighing = useCallback(
-    (w: Omit<Weighing, 'id' | 'averageWeightKg'>) => {
-      weighings.add({
+    async (w: Omit<Weighing, 'id' | 'averageWeightKg'>) => {
+      return weighings.add({
         ...w,
         id: `w-${Date.now()}`,
         averageWeightKg: Number((w.totalWeightKg / w.weighedCount).toFixed(2)),
@@ -109,25 +112,30 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addMortality = useCallback(
-    (m: Omit<Mortality, 'id'>) => {
-      mortality.add({ ...m, id: `m-${Date.now()}` })
+    async (m: Omit<Mortality, 'id'>) => {
+      const { error } = await mortality.add({ ...m, id: `m-${Date.now()}` })
+      if (error) return { error }
       const lot = lots.items.find((l) => l.id === m.lotId)
-      if (lot)
-        lots.update(m.lotId, { currentQuantity: Math.max(0, lot.currentQuantity - m.quantity) })
+      if (lot) {
+        await lots.update(m.lotId, {
+          currentQuantity: Math.max(0, lot.currentQuantity - m.quantity),
+        })
+      }
+      return { error: null }
     },
     [mortality, lots],
   )
 
   const addEggProduction = useCallback(
-    (egg: Omit<EggProduction, 'id'>) => {
-      eggs.add({ ...egg, id: `egg-${Date.now()}` })
+    async (egg: Omit<EggProduction, 'id'>) => {
+      return eggs.add({ ...egg, id: `egg-${Date.now()}` })
     },
     [eggs],
   )
 
   const addSale = useCallback(
-    (sale: Omit<Sale, 'id' | 'totalPrice'>) => {
-      sales.add({
+    async (sale: Omit<Sale, 'id' | 'totalPrice'>) => {
+      return sales.add({
         ...sale,
         id: `sal-${Date.now()}`,
         totalPrice: Number((sale.quantity * sale.unitPrice).toFixed(2)),
@@ -137,8 +145,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addIncubation = useCallback(
-    (inc: Omit<Incubation, 'id' | 'code' | 'status'>) => {
-      incubations.add({
+    async (inc: Omit<Incubation, 'id' | 'code' | 'status'>) => {
+      return incubations.add({
         ...inc,
         id: `inc-${Date.now()}`,
         code: `I-${String(incubations.items.length + 1).padStart(4, '0')}`,
@@ -149,42 +157,45 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const updateIncubation = useCallback(
-    (id: string, updates: Partial<Incubation>) => {
-      incubations.update(id, updates)
+    async (id: string, updates: Partial<Incubation>) => {
+      return incubations.update(id, updates)
     },
     [incubations],
   )
 
   const deleteIncubation = useCallback(
-    (id: string) => {
-      incubations.remove(id)
-      candlings.items.forEach((c) => {
-        if (c.incubationId === id) candlings.remove(c.id)
-      })
+    async (id: string) => {
+      const { error } = await incubations.remove(id)
+      if (error) return { error }
+      const related = candlings.items.filter((c) => c.incubationId === id)
+      for (const c of related) {
+        await candlings.remove(c.id)
+      }
+      return { error: null }
     },
     [incubations, candlings],
   )
 
   const finalizeIncubation = useCallback(
-    (
+    async (
       id: string,
       results: Pick<Incubation, 'hatchedCount' | 'unhatchedCount' | 'healthyChicks' | 'deaths'>,
     ) => {
-      incubations.update(id, { ...results, status: 'Concluído' as IncubationStatus })
+      return incubations.update(id, { ...results, status: 'Concluído' as IncubationStatus })
     },
     [incubations],
   )
 
   const addCandling = useCallback(
-    (candling: Omit<Candling, 'id'>) => {
-      candlings.add({ ...candling, id: `cnd-${Date.now()}` })
+    async (candling: Omit<Candling, 'id'>) => {
+      return candlings.add({ ...candling, id: `cnd-${Date.now()}` })
     },
     [candlings],
   )
 
   const addInventoryItem = useCallback(
-    (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => {
-      inventory.add({
+    async (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => {
+      return inventory.add({
         ...item,
         id: `inv-${Date.now()}`,
         lastUpdated: new Date().toISOString().split('T')[0],
@@ -194,15 +205,15 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const markAlertAsRead = useCallback(
-    (id: string) => {
-      alerts.update(id, { isRead: true })
+    async (id: string) => {
+      return alerts.update(id, { isRead: true })
     },
     [alerts],
   )
 
   const addAsset = useCallback(
-    (asset: Asset) => {
-      assets.add(asset)
+    async (asset: Asset) => {
+      return assets.add(asset)
     },
     [assets],
   )

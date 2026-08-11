@@ -225,13 +225,25 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
     onOpenChange(false)
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     const targetLot = lots.find((l) => l.id === selectedLotId) || lots[0]
 
+    const handleError = (error: any) => {
+      if (error) {
+        toast({
+          title: 'Erro ao salvar ❌',
+          description: error?.message || 'Falha na operação. Verifique sua conexão.',
+          variant: 'destructive',
+        })
+        return true
+      }
+      return false
+    }
+
     switch (actionType) {
       case 'despesa': {
-        addExpense({
+        const { error } = await addExpense({
           date,
           category: expCategory,
           description: expDesc || `Despesa rápida ${expCategory}`,
@@ -243,6 +255,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           paymentMethod: 'Pix',
           isPaid: true,
         })
+        if (handleError(error)) return
         toast({
           title: 'Lançado com sucesso! ✅',
           description: 'Despesa registrada no financeiro.',
@@ -251,7 +264,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
       }
       case 'racao': {
         const invItem = inventory.find((i) => i.id === feedItemId)
-        addFeedConsumption({
+        const { error } = await addFeedConsumption({
           date,
           lotId: targetLot?.id || '',
           lotName: targetLot?.name || '',
@@ -259,6 +272,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           inventoryItemId: feedItemId,
           costPerKg: invItem?.averageCost || 3.0,
         })
+        if (handleError(error)) return
         toast({
           title: 'Lançado com sucesso! ✅',
           description: 'Consumo de ração computado e estoque reduzido.',
@@ -266,7 +280,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
         break
       }
       case 'pesagem': {
-        addWeighing({
+        const { error } = await addWeighing({
           date,
           lotId: targetLot?.id || '',
           lotName: targetLot?.name || '',
@@ -274,6 +288,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           totalWeightKg: Number(totalWeight) || 0,
           ageDays: 30,
         })
+        if (handleError(error)) return
         toast({
           title: 'Lançado com sucesso! ✅',
           description: 'Peso médio e amostragem calculados.',
@@ -281,13 +296,14 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
         break
       }
       case 'mortalidade': {
-        addMortality({
+        const { error } = await addMortality({
           date,
           lotId: targetLot?.id || '',
           lotName: targetLot?.name || '',
           quantity: Number(mortQty) || 1,
           cause: mortCause,
         })
+        if (handleError(error)) return
         toast({
           title: 'Lançado com sucesso! ✅',
           description: 'Mortalidade atualizada e lote decrementado.',
@@ -295,7 +311,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
         break
       }
       case 'ovos': {
-        addEggProduction({
+        const { error } = await addEggProduction({
           date,
           lotId: targetLot?.id || '',
           lotName: targetLot?.name || '',
@@ -306,11 +322,12 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           incubated: 0,
           discarded: 0,
         })
+        if (handleError(error)) return
         toast({ title: 'Lançado com sucesso! ✅', description: 'Coleta diária de ovos salva.' })
         break
       }
       case 'venda': {
-        addSale({
+        const { error } = await addSale({
           date,
           customerName: saleCustomer || 'Cliente Avulso',
           product: saleProduct,
@@ -321,11 +338,12 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           paymentMethod: 'Pix',
           isPaid: true,
         })
+        if (handleError(error)) return
         toast({ title: 'Lançado com sucesso! ✅', description: 'Venda e receita geradas.' })
         break
       }
       case 'chocadeira': {
-        addIncubation({
+        const { error } = await addIncubation({
           startDate: date,
           eggCount: Number(incEggCount) || 30,
           origin: 'Produção Própria',
@@ -338,6 +356,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           autoTurning: true,
           expectedHatchDate: new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0],
         })
+        if (handleError(error)) return
         toast({
           title: 'Lançado com sucesso! ✅',
           description: 'Nova incubação iniciada (21 dias).',
@@ -345,7 +364,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
         break
       }
       case 'investimento': {
-        addStructure({
+        const { error } = await addStructure({
           date,
           category: invCategory,
           description: invDescription || `Investimento em ${invCategory}`,
@@ -357,6 +376,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           isPaid: true,
           center: 'Patrimônio',
         })
+        if (handleError(error)) return
         toast({
           title: 'Investimento registrado! 🏗️',
           description: 'Bem patrimonial adicionado ao CAPEX.',
@@ -364,7 +384,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
         break
       }
       case 'estoque': {
-        addInventoryItem({
+        const { error } = await addInventoryItem({
           name: stkName || 'Novo Item',
           category: stkCategory,
           unit: stkUnit,
@@ -372,6 +392,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           minStock: Number(stkMinStock) || 0,
           averageCost: Number(stkCost) || 0,
         })
+        if (handleError(error)) return
         toast({ title: 'Item adicionado! 📦', description: 'Novo item registrado no estoque.' })
         break
       }

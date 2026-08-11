@@ -54,13 +54,17 @@ export function ObservationDialog({
   onOpenChange,
   currentNotes,
   onSave,
-}: BaseProps & { currentNotes?: string; onSave: (notes: string) => void }) {
+}: BaseProps & {
+  currentNotes?: string
+  onSave: (notes: string) => Promise<{ error: any } | void>
+}) {
   const [notes, setNotes] = useState(currentNotes || '')
   useEffect(() => {
     if (open) setNotes(currentNotes || '')
   }, [open, currentNotes])
-  const handleSave = () => {
-    onSave(notes)
+  const handleSave = async () => {
+    const result = await onSave(notes)
+    if (result?.error) return
     onOpenChange(false)
   }
   return (
@@ -100,7 +104,7 @@ export function TempHumidityDialog({
 }: BaseProps & {
   currentTemp: number
   currentHumidity: number
-  onSave: (temp: number, humidity: number) => void
+  onSave: (temp: number, humidity: number) => Promise<{ error: any } | void>
 }) {
   const [temp, setTemp] = useState(String(currentTemp))
   const [humidity, setHumidity] = useState(String(currentHumidity))
@@ -110,8 +114,9 @@ export function TempHumidityDialog({
       setHumidity(String(currentHumidity))
     }
   }, [open, currentTemp, currentHumidity])
-  const handleSave = () => {
-    onSave(Number(temp) || 0, Number(humidity) || 0)
+  const handleSave = async () => {
+    const result = await onSave(Number(temp) || 0, Number(humidity) || 0)
+    if (result?.error) return
     onOpenChange(false)
   }
   return (
@@ -164,7 +169,7 @@ export function HatchingDialog({
     unhatchedCount: number
     healthyChicks: number
     deaths: number
-  }) => void
+  }) => Promise<{ error: any } | void>
 }) {
   const [hatched, setHatched] = useState('')
   const [unhatched, setUnhatched] = useState('')
@@ -178,13 +183,14 @@ export function HatchingDialog({
       setDeaths('')
     }
   }, [open])
-  const handleSave = () => {
-    onSave({
+  const handleSave = async () => {
+    const result = await onSave({
       hatchedCount: Number(hatched) || 0,
       unhatchedCount: Number(unhatched) || 0,
       healthyChicks: Number(healthy) || 0,
       deaths: Number(deaths) || 0,
     })
+    if (result?.error) return
     onOpenChange(false)
   }
   return (

@@ -19,7 +19,7 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   incubation: Incubation
-  onSave: (updates: Partial<Incubation>) => void
+  onSave: (updates: Partial<Incubation>) => Promise<{ error: any } | void>
 }
 
 export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }: Props) {
@@ -51,12 +51,12 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
     }
   }, [open, incubation])
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     const expectedHatchDate = new Date(new Date(startDate).getTime() + 21 * 86400000)
       .toISOString()
       .split('T')[0]
-    onSave({
+    const result = await onSave({
       incubatorName,
       origin,
       breed,
@@ -70,6 +70,14 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
       status,
       expectedHatchDate,
     })
+    if (result?.error) {
+      toast({
+        title: 'Erro ao salvar ❌',
+        description: result.error?.message || 'Falha ao salvar alterações.',
+        variant: 'destructive',
+      })
+      return
+    }
     toast({ title: 'Incubação atualizada! ✅', description: 'As alterações foram salvas.' })
     onOpenChange(false)
   }

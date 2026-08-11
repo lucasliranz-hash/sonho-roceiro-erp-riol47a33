@@ -55,19 +55,35 @@ export function IncubationDetail({ incubation, onBack }: Props) {
       ? ((incubation.hatchedCount / incubation.eggCount) * 100).toFixed(1)
       : null
 
-  const handleDelete = () => {
-    deleteIncubation(incubation.id)
+  const handleDelete = async () => {
+    const { error } = await deleteIncubation(incubation.id)
+    if (error) {
+      toast({
+        title: 'Erro ao excluir ❌',
+        description: error?.message || 'Falha ao excluir incubação.',
+        variant: 'destructive',
+      })
+      return
+    }
     toast({ title: 'Incubação excluída', description: `${incubation.code} foi removida.` })
     onBack()
   }
 
-  const handleFinalize = () => {
-    finalizeIncubation(incubation.id, {
+  const handleFinalize = async () => {
+    const { error } = await finalizeIncubation(incubation.id, {
       hatchedCount: incubation.hatchedCount || 0,
       unhatchedCount: incubation.unhatchedCount || 0,
       healthyChicks: incubation.healthyChicks || 0,
       deaths: incubation.deaths || 0,
     })
+    if (error) {
+      toast({
+        title: 'Erro ao finalizar ❌',
+        description: error?.message || 'Falha ao finalizar incubação.',
+        variant: 'destructive',
+      })
+      return
+    }
     toast({
       title: 'Incubação finalizada',
       description: `${incubation.code} marcada como concluída.`,
@@ -269,14 +285,14 @@ export function IncubationDetail({ incubation, onBack }: Props) {
         open={editOpen}
         onOpenChange={setEditOpen}
         incubation={incubation}
-        onSave={(updates) => updateIncubation(incubation.id, updates)}
+        onSave={async (updates) => await updateIncubation(incubation.id, updates)}
       />
       <CandlingDialog
         open={candlingOpen}
         onOpenChange={setCandlingOpen}
         incubationId={incubation.id}
         currentDay={currentDay}
-        onSave={(data) => addCandling({ ...data, incubationId: incubation.id })}
+        onSave={async (data) => await addCandling({ ...data, incubationId: incubation.id })}
       />
       <DeleteIncubationDialog
         open={deleteOpen}
@@ -287,22 +303,30 @@ export function IncubationDetail({ incubation, onBack }: Props) {
         open={obsOpen}
         onOpenChange={setObsOpen}
         currentNotes={incubation.notes}
-        onSave={(notes) => updateIncubation(incubation.id, { notes })}
+        onSave={async (notes) => await updateIncubation(incubation.id, { notes })}
       />
       <TempHumidityDialog
         open={tempHumOpen}
         onOpenChange={setTempHumOpen}
         currentTemp={incubation.targetTemp}
         currentHumidity={incubation.targetHumidity}
-        onSave={(temp, humidity) =>
-          updateIncubation(incubation.id, { targetTemp: temp, targetHumidity: humidity })
+        onSave={async (temp, humidity) =>
+          await updateIncubation(incubation.id, { targetTemp: temp, targetHumidity: humidity })
         }
       />
       <HatchingDialog
         open={hatchOpen}
         onOpenChange={setHatchOpen}
-        onSave={(results) => {
-          updateIncubation(incubation.id, results)
+        onSave={async (results) => {
+          const { error } = await updateIncubation(incubation.id, results)
+          if (error) {
+            toast({
+              title: 'Erro ao salvar ❌',
+              description: error?.message || 'Falha ao registrar nascimento.',
+              variant: 'destructive',
+            })
+            return
+          }
           toast({ title: 'Nascimento registrado! 🐥', description: 'Resultados salvos.' })
         }}
       />

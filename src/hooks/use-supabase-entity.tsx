@@ -42,20 +42,13 @@ export function useSupabaseEntity<T extends { id: string }>(
     let cancelled = false
     fetchEntity(orgId, table).then(({ data, error }) => {
       if (cancelled) return
-      if (data && data.length > 0) {
-        setItems(data as T[])
-        saveCache(cacheKey, data)
-      } else if (!error) {
-        const cached = loadCache(cacheKey)
-        if (cached.length > 0) {
-          setItems(cached as T[])
-          cached.forEach((item) => {
-            insertEntity(table, orgId, item)
-          })
-        } else {
-          setItems([])
-        }
+      if (error) {
+        console.error('[useSupabaseEntity] fetch error', { table, error })
+        return
       }
+      const rows = (data || []) as T[]
+      setItems(rows)
+      saveCache(cacheKey, rows)
     })
     return () => {
       cancelled = true
@@ -67,41 +60,105 @@ export function useSupabaseEntity<T extends { id: string }>(
   }, [cacheKey, items])
 
   const add = useCallback(
-    async (item: T) => {
-      if (!orgId) return
-      setItems((prev) => [item, ...prev])
+    async (item: T): Promise<{ error: any }> => {
+      if (!orgId) {
+        console.error('[useSupabaseEntity] add: no orgId', { table })
+        return { error: { message: 'Organização não carregada. Tente novamente.' } }
+      }
+
+      console.log('[useSupabaseEntity] add: inserting', {
+        table,
+        orgId,
+        itemId: item.id,
+        payload: { id: item.id, organization_id: orgId, data: item },
+      })
+
       const { error } = await insertEntity(table, orgId, item as unknown as Record<string, unknown>)
+
+      console.log('[useSupabaseEntity] add: result', {
+        table,
+        itemId: item.id,
+        error,
+        success: !error,
+      })
+
       if (error) {
+        console.error('[useSupabaseEntity] add: FAILED', { table, itemId: item.id, error })
         enqueueOperation({
           table,
           operation: 'insert',
           data: { id: item.id, organization_id: orgId, data: item },
         })
+        return { error }
       }
+
+      setItems((prev) => [item, ...prev])
+      return { error: null }
     },
     [orgId, table],
   )
 
   const update = useCallback(
-    async (id: string, updates: Partial<T>) => {
-      if (!orgId) return
-      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)))
-      const { error } = await updateEntity(table, id, updates as unknown as Record<string, unknown>)
-      if (error) {
-        enqueueOperation({ table, operation: 'update', data: { id, data: updates } })
+    async (id: string, updates: Partial<T>): Promise<{ error: any }> => {
+      if (!orgId) {
+        console.error('[useSupabaseEntity] update: no orgId', { table })
+        return { error: { message: 'Organização não carregada.' } }
       }
+
+      console.log('[useSupabaseEntity] update: start', {
+        table,
+        id,
+        updates,
+        orgId,
+      })
+
+      const { error } = await updateEntity(table, id, updates as unknown as Record<string, unknown>)
+
+      console.log('[useSupabaseEntity] update: result', {
+        table,
+        id,
+        error,
+        success: !error,
+      })
+
+      if (error) {
+        console.error('[useSupabaseEntity] update: FAILED', { table, id, error })
+        enqueueOperation({ table, operation: 'update', data: { id, data: updates } })
+        return { error }
+      }
+
+      setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...updates } : i)))
+      return { error: null }
     },
     [orgId, table],
   )
 
   const remove = useCallback(
-    async (id: string) => {
-      if (!orgId) return
-      setItems((prev) => prev.filter((i) => i.id !== id))
-      const { error } = await softDeleteEntity(table, orgId, id)
-      if (error) {
-        enqueueOperation({ table, operation: 'delete', data: { id, organization_id: orgId } })
+    async (id: string): Promise<{ error: any }> => {
+      if (!orgId) {
+        console.error('[useSupabaseEntity] remove: no orgId', { table })
+        return { error: { message: 'Organização não carregada.' } }
       }
+
+      console.log('[useSupabaseEntity] remove: start', { table, id, orgId })
+
+      const { error } = await softDeleteEntity(table, orgId, id)
+
+      console.log('[useSupabaseEntity] remove: result', {
+        table,
+        id,
+        error,
+        success: !error,
+      })
+
+      if (error) {
+        console.error('[useSupabaseEntity] remove: FAILED', { table, id, error })
+        enqueueOperation({ table, operation: 'delete', data: { id, organization_id: orgId } })
+        return { error }
+      }
+
+      setItems((prev) => prev.filter((i) => i.id !== id))
+      return { error: null }
     },
     [orgId, table],
   )
