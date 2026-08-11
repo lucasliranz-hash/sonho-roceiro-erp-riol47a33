@@ -17,6 +17,7 @@ import {
   TrendingUp,
   ArrowRight,
   Clock,
+  Fish,
 } from 'lucide-react'
 import { computeFinancialSummary } from '@/lib/calculations'
 
@@ -203,7 +204,11 @@ export default function Dashboard() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-2xl bg-primary/10 flex items-center justify-center">
-                        <Bird className="w-5 h-5 text-primary" />
+                        {act.type === 'Piscicultura' ? (
+                          <Fish className="w-5 h-5 text-primary" />
+                        ) : (
+                          <Bird className="w-5 h-5 text-primary" />
+                        )}
                       </div>
                       <div>
                         <h3 className="font-bold text-base text-foreground">{act.name}</h3>
