@@ -17,7 +17,7 @@ import { toast } from '@/hooks/use-toast'
 import { Asset } from '@/types/farm'
 
 export default function Patrimonio() {
-  const { assets, setAssets, structures } = useFarmStore()
+  const { assets, addAsset, structures } = useFarmStore()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [name, setName] = useState('')
   const [category, setCategory] = useState<Asset['category']>('Equipamentos')
@@ -44,7 +44,7 @@ export default function Patrimonio() {
       location: location || 'Não especificado',
       status: 'Em uso',
     }
-    setAssets((prev) => [newAsset, ...prev])
+    addAsset(newAsset)
     toast({
       title: 'Patrimônio registrado! 🏗️',
       description: `${name} adicionado aos bens da propriedade.`,

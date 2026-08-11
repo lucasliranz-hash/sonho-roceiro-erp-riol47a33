@@ -7,6 +7,7 @@ import { OnlineStatusProvider } from '@/hooks/use-online-status'
 import { useSyncQueue } from '@/hooks/use-sync-queue'
 import { OfflineIndicator } from '@/components/OfflineIndicator'
 import { AuthProvider } from '@/hooks/use-auth'
+import { FarmStoreProvider } from '@/hooks/use-farm-store'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 import Layout from './components/Layout'
@@ -51,47 +52,49 @@ function App() {
   return (
     <OnlineStatusProvider>
       <AuthProvider>
-        <BrowserRouter>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
-            <OfflineIndicator />
-            <SyncManager />
-            <Routes>
-              <Route path="/login" element={<Auth />} />
+        <FarmStoreProvider>
+          <BrowserRouter>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <OfflineIndicator />
+              <SyncManager />
+              <Routes>
+                <Route path="/login" element={<Auth />} />
 
-              <Route element={<ProtectedRoute />}>
-                <Route element={<Layout />}>
-                  <Route path="/" element={<Index />} />
-                  <Route path="/lotes" element={<Lotes />} />
-                  <Route path="/estrutura" element={<Estrutura />} />
-                  <Route path="/despesas" element={<Despesas />} />
-                  <Route path="/estoque" element={<Estoque />} />
-                  <Route path="/racao" element={<Racao />} />
-                  <Route path="/pesagens" element={<Pesagens />} />
-                  <Route path="/mortalidade" element={<Mortalidade />} />
-                  <Route path="/ovos" element={<Ovos />} />
-                  <Route path="/chocadeira" element={<Chocadeira />} />
-                  <Route path="/energia" element={<Energia />} />
-                  <Route path="/matrizes" element={<Matrizes />} />
-                  <Route path="/acasalamentos" element={<Acasalamentos />} />
-                  <Route path="/vendas" element={<Vendas />} />
-                  <Route path="/parceiros" element={<ClientesFornecedores />} />
-                  <Route path="/financeiro" element={<Financeiro />} />
-                  <Route path="/producao" element={<Producao />} />
-                  <Route path="/indicadores" element={<Indicadores />} />
-                  <Route path="/patrimonio" element={<Patrimonio />} />
-                  <Route path="/alertas" element={<Alertas />} />
-                  <Route path="/equipe" element={<Equipe />} />
-                  <Route path="/minha-conta" element={<MinhaConta />} />
-                  <Route path="/configuracoes" element={<Configuracoes />} />
+                <Route element={<ProtectedRoute />}>
+                  <Route element={<Layout />}>
+                    <Route path="/" element={<Index />} />
+                    <Route path="/lotes" element={<Lotes />} />
+                    <Route path="/estrutura" element={<Estrutura />} />
+                    <Route path="/despesas" element={<Despesas />} />
+                    <Route path="/estoque" element={<Estoque />} />
+                    <Route path="/racao" element={<Racao />} />
+                    <Route path="/pesagens" element={<Pesagens />} />
+                    <Route path="/mortalidade" element={<Mortalidade />} />
+                    <Route path="/ovos" element={<Ovos />} />
+                    <Route path="/chocadeira" element={<Chocadeira />} />
+                    <Route path="/energia" element={<Energia />} />
+                    <Route path="/matrizes" element={<Matrizes />} />
+                    <Route path="/acasalamentos" element={<Acasalamentos />} />
+                    <Route path="/vendas" element={<Vendas />} />
+                    <Route path="/parceiros" element={<ClientesFornecedores />} />
+                    <Route path="/financeiro" element={<Financeiro />} />
+                    <Route path="/producao" element={<Producao />} />
+                    <Route path="/indicadores" element={<Indicadores />} />
+                    <Route path="/patrimonio" element={<Patrimonio />} />
+                    <Route path="/alertas" element={<Alertas />} />
+                    <Route path="/equipe" element={<Equipe />} />
+                    <Route path="/minha-conta" element={<MinhaConta />} />
+                    <Route path="/configuracoes" element={<Configuracoes />} />
+                  </Route>
                 </Route>
-              </Route>
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </TooltipProvider>
-        </BrowserRouter>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </TooltipProvider>
+          </BrowserRouter>
+        </FarmStoreProvider>
       </AuthProvider>
     </OnlineStatusProvider>
   )

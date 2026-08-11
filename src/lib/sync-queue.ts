@@ -49,15 +49,20 @@ export async function processQueue(): Promise<{ processed: number; remaining: nu
       if (op.operation === 'insert') {
         res = await supabase.from(op.table).insert(op.data)
       } else if (op.operation === 'update') {
-        res = await supabase
-          .from(op.table)
-          .update(op.data)
-          .eq('id', op.data.id as string)
+        const { id, data } = op.data as { id: string; data: Record<string, unknown> }
+        res = await supabase.rpc('update_farm_record', {
+          p_table_name: op.table,
+          p_id: id,
+          p_updates: data,
+        })
       } else if (op.operation === 'delete') {
-        res = await supabase
+        const { id, organization_id } = op.data as { id: string; organization_id?: string }
+        let query = supabase
           .from(op.table)
-          .delete()
-          .eq('id', op.data.id as string)
+          .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .eq('id', id)
+        if (organization_id) query = query.eq('organization_id', organization_id)
+        res = await query
       }
       if (res && res.error) throw res.error
       processed++
