@@ -31,6 +31,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/co
 import { Badge } from '@/components/ui/badge'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { QuickEntryModal } from '@/components/QuickEntryModal'
+import { QuickActionsSheet } from '@/components/QuickActionsSheet'
+import { MobileBottomNav } from '@/components/MobileBottomNav'
 import { cn } from '@/lib/utils'
 
 interface NavItem {
@@ -44,10 +46,7 @@ interface NavGroup {
 }
 
 const navGroups: NavGroup[] = [
-  {
-    label: 'INÍCIO',
-    items: [{ label: 'Início', path: '/', icon: Home }],
-  },
+  { label: 'INÍCIO', items: [{ label: 'Início', path: '/', icon: Home }] },
   {
     label: 'PRODUÇÃO',
     items: [
@@ -84,10 +83,7 @@ const navGroups: NavGroup[] = [
       { label: 'Clientes', path: '/parceiros', icon: Users },
     ],
   },
-  {
-    label: 'RELATÓRIOS',
-    items: [{ label: 'Indicadores', path: '/indicadores', icon: Briefcase }],
-  },
+  { label: 'RELATÓRIOS', items: [{ label: 'Indicadores', path: '/indicadores', icon: Briefcase }] },
   {
     label: 'CONFIGURAÇÕES',
     items: [
@@ -167,18 +163,30 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function Layout() {
-  const location = useLocation()
   const { alerts } = useFarmStore()
   const [quickModalOpen, setQuickModalOpen] = useState(false)
+  const [quickActionsOpen, setQuickActionsOpen] = useState(false)
+  const [quickActionType, setQuickActionType] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const unreadAlertsCount = alerts.filter((a) => !a.isRead).length
-  const mobileBottomNav = [
-    { label: 'Início', path: '/', icon: Home },
-    { label: 'Lotes', path: '/lotes', icon: Layers },
-    { label: 'Estoque', path: '/estoque', icon: Package },
-    { label: 'Financeiro', path: '/financeiro', icon: TrendingUp },
-  ]
+
+  const handleQuickActionSelect = (action: string) => {
+    setQuickActionType(action)
+    setTimeout(() => setQuickModalOpen(true), 150)
+  }
+
+  const handleQuickModalChange = (open: boolean) => {
+    setQuickModalOpen(open)
+    if (!open) {
+      setTimeout(() => setQuickActionType(null), 200)
+    }
+  }
+
+  const handleDesktopNewEntry = () => {
+    setQuickActionType(null)
+    setQuickModalOpen(true)
+  }
 
   return (
     <div className="min-h-screen bg-[#FAF8F4] flex flex-col md:flex-row font-sans antialiased text-foreground">
@@ -248,9 +256,9 @@ export default function Layout() {
         <Outlet />
       </main>
 
-      <div className="fixed bottom-18 lg:bottom-6 right-4 lg:right-8 z-50">
+      <div className="hidden lg:block fixed bottom-6 right-8 z-50">
         <Button
-          onClick={() => setQuickModalOpen(true)}
+          onClick={handleDesktopNewEntry}
           className="h-13 px-5 rounded-full bg-primary hover:bg-primary/90 text-white font-bold shadow-elevation flex items-center gap-2 hover:scale-105 active:scale-95 transition-all text-sm"
         >
           <PlusCircle className="w-5 h-5 text-white" />
@@ -258,34 +266,22 @@ export default function Layout() {
         </Button>
       </div>
 
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-border px-3 py-2 flex items-center justify-around shadow-elevation">
-        {mobileBottomNav.map((item) => {
-          const Icon = item.icon
-          const isActive = location.pathname === item.path
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                'flex flex-col items-center justify-center py-1 px-3 rounded-xl transition-all',
-                isActive ? 'text-primary font-bold' : 'text-muted-foreground font-medium',
-              )}
-            >
-              <Icon className="w-5 h-5 mb-0.5" />
-              <span className="text-[10px]">{item.label}</span>
-            </Link>
-          )
-        })}
-        <button
-          onClick={() => setMobileMenuOpen(true)}
-          className="flex flex-col items-center justify-center py-1 px-3 text-muted-foreground font-medium"
-        >
-          <Menu className="w-5 h-5 mb-0.5" />
-          <span className="text-[10px]">Mais</span>
-        </button>
-      </nav>
+      <MobileBottomNav
+        onNewEntry={() => setQuickActionsOpen(true)}
+        onMore={() => setMobileMenuOpen(true)}
+      />
 
-      <QuickEntryModal open={quickModalOpen} onOpenChange={setQuickModalOpen} />
+      <QuickActionsSheet
+        open={quickActionsOpen}
+        onOpenChange={setQuickActionsOpen}
+        onSelect={handleQuickActionSelect}
+      />
+
+      <QuickEntryModal
+        open={quickModalOpen}
+        onOpenChange={handleQuickModalChange}
+        initialActionType={quickActionType}
+      />
     </div>
   )
 }

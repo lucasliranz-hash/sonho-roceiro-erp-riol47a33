@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -18,11 +18,22 @@ import {
 } from '@/components/ui/select'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { toast } from '@/hooks/use-toast'
-import { DollarSign, Wheat, Scale, Skull, Egg, ShoppingCart, Flame, Briefcase } from 'lucide-react'
+import {
+  DollarSign,
+  Wheat,
+  Scale,
+  Skull,
+  Egg,
+  ShoppingCart,
+  Flame,
+  Briefcase,
+  Package,
+} from 'lucide-react'
 
 interface QuickEntryModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  initialActionType?: string | null
 }
 
 type QuickActionType =
@@ -34,9 +45,12 @@ type QuickActionType =
   | 'venda'
   | 'chocadeira'
   | 'investimento'
+  | 'estoque'
   | null
 
-export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
+const DRAFT_KEY = 'sonho_roceiro_quick_draft'
+
+export function QuickEntryModal({ open, onOpenChange, initialActionType }: QuickEntryModalProps) {
   const [actionType, setActionType] = useState<QuickActionType>(null)
   const {
     lots,
@@ -49,40 +63,34 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
     addSale,
     addIncubation,
     addStructure,
+    addInventoryItem,
   } = useFarmStore()
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedLotId, setSelectedLotId] = useState<string>(lots[0]?.id || '')
 
-  // Expense states
   const [expCategory, setExpCategory] = useState<'Ração' | 'Medicamentos' | 'Outros'>('Ração')
   const [expDesc, setExpDesc] = useState('')
   const [expQty, setExpQty] = useState('1')
   const [expUnitVal, setExpUnitVal] = useState('')
 
-  // Feed states
   const [feedQty, setFeedQty] = useState('')
   const [feedItemId, setFeedItemId] = useState(inventory[0]?.id || '')
 
-  // Weighing states
   const [weighQty, setWeighQty] = useState('10')
   const [totalWeight, setTotalWeight] = useState('')
 
-  // Mortality states
   const [mortQty, setMortQty] = useState('1')
   const [mortCause, setMortCause] = useState('Aparentemente natural')
 
-  // Egg states
   const [collected, setCollected] = useState('')
   const [broken, setBroken] = useState('0')
 
-  // Sale states
   const [saleProduct, setSaleProduct] = useState<'Ovos' | 'Frangos vivos' | 'Pintinhos'>('Ovos')
   const [saleCustomer, setSaleCustomer] = useState('')
   const [saleQty, setSaleQty] = useState('')
   const [saleUnitPrice, setSaleUnitPrice] = useState('')
 
-  // Incubation states
   const [incEggCount, setIncEggCount] = useState('30')
   const [incBreed, setIncBreed] = useState('Caipira')
 
@@ -91,6 +99,109 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
     'Equipamentos' | 'Chocadeira' | 'Estruturas' | 'Outros'
   >('Equipamentos')
   const [invValue, setInvValue] = useState('')
+
+  const [stkName, setStkName] = useState('')
+  const [stkCategory, setStkCategory] = useState<
+    | 'Ração'
+    | 'Milho'
+    | 'Farelos'
+    | 'Medicamentos'
+    | 'Vacinas'
+    | 'Maravalha'
+    | 'Embalagens'
+    | 'Insumos'
+    | 'Outros'
+  >('Ração')
+  const [stkUnit, setStkUnit] = useState('KG')
+  const [stkQty, setStkQty] = useState('')
+  const [stkMinStock, setStkMinStock] = useState('')
+  const [stkCost, setStkCost] = useState('')
+
+  const prevOpenRef = useRef(false)
+
+  useEffect(() => {
+    if (open && !prevOpenRef.current) {
+      if (initialActionType) {
+        setActionType(initialActionType as QuickActionType)
+      } else {
+        try {
+          const draft = localStorage.getItem(DRAFT_KEY)
+          if (draft) {
+            const data = JSON.parse(draft)
+            if (data.actionType) {
+              setActionType(data.actionType)
+              if (data.date) setDate(data.date)
+              if (data.selectedLotId) setSelectedLotId(data.selectedLotId)
+              if (data.expCategory) setExpCategory(data.expCategory)
+              if (data.expDesc) setExpDesc(data.expDesc)
+              if (data.expUnitVal) setExpUnitVal(data.expUnitVal)
+              if (data.feedQty) setFeedQty(data.feedQty)
+              if (data.weighQty) setWeighQty(data.weighQty)
+              if (data.totalWeight) setTotalWeight(data.totalWeight)
+              if (data.mortQty) setMortQty(data.mortQty)
+              if (data.mortCause) setMortCause(data.mortCause)
+              if (data.collected) setCollected(data.collected)
+              if (data.saleQty) setSaleQty(data.saleQty)
+              if (data.saleUnitPrice) setSaleUnitPrice(data.saleUnitPrice)
+              if (data.saleCustomer) setSaleCustomer(data.saleCustomer)
+              if (data.stkName) setStkName(data.stkName)
+              if (data.stkQty) setStkQty(data.stkQty)
+              if (data.stkCost) setStkCost(data.stkCost)
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    prevOpenRef.current = open
+  }, [open, initialActionType])
+
+  useEffect(() => {
+    if (open && actionType) {
+      const draft = {
+        actionType,
+        date,
+        selectedLotId,
+        expCategory,
+        expDesc,
+        expUnitVal,
+        feedQty,
+        weighQty,
+        totalWeight,
+        mortQty,
+        mortCause,
+        collected,
+        saleQty,
+        saleUnitPrice,
+        saleCustomer,
+        stkName,
+        stkQty,
+        stkCost,
+      }
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+    }
+  }, [
+    open,
+    actionType,
+    date,
+    selectedLotId,
+    expCategory,
+    expDesc,
+    expUnitVal,
+    feedQty,
+    weighQty,
+    totalWeight,
+    mortQty,
+    mortCause,
+    collected,
+    saleQty,
+    saleUnitPrice,
+    saleCustomer,
+    stkName,
+    stkQty,
+    stkCost,
+  ])
 
   const resetForm = () => {
     setActionType(null)
@@ -103,6 +214,10 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
     setSaleUnitPrice('')
     setInvDescription('')
     setInvValue('')
+    setStkName('')
+    setStkQty('')
+    setStkCost('')
+    localStorage.removeItem(DRAFT_KEY)
   }
 
   const handleClose = () => {
@@ -114,117 +229,152 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
     e.preventDefault()
     const targetLot = lots.find((l) => l.id === selectedLotId) || lots[0]
 
-    if (actionType === 'despesa') {
-      addExpense({
-        date,
-        category: expCategory,
-        description: expDesc || `Despesa rápida ${expCategory}`,
-        lotId: targetLot?.id,
-        lotName: targetLot?.name,
-        quantity: Number(expQty) || 1,
-        unitValue: Number(expUnitVal) || 0,
-        supplier: 'Geral',
-        paymentMethod: 'Pix',
-        isPaid: true,
-      })
-      toast({ title: 'Lançado com sucesso! ✅', description: 'Despesa registrada no financeiro.' })
-    } else if (actionType === 'racao') {
-      const invItem = inventory.find((i) => i.id === feedItemId)
-      addFeedConsumption({
-        date,
-        lotId: targetLot?.id || '',
-        lotName: targetLot?.name || '',
-        quantityKg: Number(feedQty) || 0,
-        inventoryItemId: feedItemId,
-        costPerKg: invItem?.averageCost || 3.0,
-      })
-      toast({
-        title: 'Lançado com sucesso! ✅',
-        description: 'Consumo de ração computado e estoque reduzido.',
-      })
-    } else if (actionType === 'pesagem') {
-      addWeighing({
-        date,
-        lotId: targetLot?.id || '',
-        lotName: targetLot?.name || '',
-        weighedCount: Number(weighQty) || 10,
-        totalWeightKg: Number(totalWeight) || 0,
-        ageDays: 30,
-      })
-      toast({
-        title: 'Lançado com sucesso! ✅',
-        description: 'Peso médio e amostragem calculados.',
-      })
-    } else if (actionType === 'mortalidade') {
-      addMortality({
-        date,
-        lotId: targetLot?.id || '',
-        lotName: targetLot?.name || '',
-        quantity: Number(mortQty) || 1,
-        cause: mortCause,
-      })
-      toast({
-        title: 'Lançado com sucesso! ✅',
-        description: 'Mortalidade atualizada e lote decrementado.',
-      })
-    } else if (actionType === 'ovos') {
-      addEggProduction({
-        date,
-        lotId: targetLot?.id || '',
-        lotName: targetLot?.name || '',
-        collected: Number(collected) || 0,
-        broken: Number(broken) || 0,
-        consumed: 0,
-        sold: 0,
-        incubated: 0,
-        discarded: 0,
-      })
-      toast({ title: 'Lançado com sucesso! ✅', description: 'Coleta diária de ovos salva.' })
-    } else if (actionType === 'venda') {
-      addSale({
-        date,
-        customerName: saleCustomer || 'Cliente Avulso',
-        product: saleProduct,
-        lotId: targetLot?.id,
-        lotName: targetLot?.name,
-        quantity: Number(saleQty) || 1,
-        unitPrice: Number(saleUnitPrice) || 0,
-        paymentMethod: 'Pix',
-        isPaid: true,
-      })
-      toast({ title: 'Lançado com sucesso! ✅', description: 'Venda e receita geradas.' })
-    } else if (actionType === 'chocadeira') {
-      addIncubation({
-        startDate: date,
-        eggCount: Number(incEggCount) || 30,
-        origin: 'Produção Própria',
-        supplier: 'Galinheiro Principal',
-        breed: incBreed,
-        eggCost: 45,
-        incubatorName: 'Chocadeira Principal',
-        targetTemp: 37.7,
-        targetHumidity: 55,
-        autoTurning: true,
-        expectedHatchDate: new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0],
-      })
-      toast({ title: 'Lançado com sucesso! ✅', description: 'Nova incubação iniciada (21 dias).' })
-    } else if (actionType === 'investimento') {
-      addStructure({
-        date,
-        category: invCategory,
-        description: invDescription || `Investimento em ${invCategory}`,
-        quantity: 1,
-        unit: 'unid',
-        unitValue: Number(invValue) || 0,
-        supplier: 'Fornecedor Local',
-        paymentMethod: 'Pix',
-        isPaid: true,
-        center: 'Patrimônio',
-      })
-      toast({
-        title: 'Investimento registrado! 🏗️',
-        description: 'Bem patrimonial adicionado ao CAPEX.',
-      })
+    switch (actionType) {
+      case 'despesa': {
+        addExpense({
+          date,
+          category: expCategory,
+          description: expDesc || `Despesa rápida ${expCategory}`,
+          lotId: targetLot?.id,
+          lotName: targetLot?.name,
+          quantity: Number(expQty) || 1,
+          unitValue: Number(expUnitVal) || 0,
+          supplier: 'Geral',
+          paymentMethod: 'Pix',
+          isPaid: true,
+        })
+        toast({
+          title: 'Lançado com sucesso! ✅',
+          description: 'Despesa registrada no financeiro.',
+        })
+        break
+      }
+      case 'racao': {
+        const invItem = inventory.find((i) => i.id === feedItemId)
+        addFeedConsumption({
+          date,
+          lotId: targetLot?.id || '',
+          lotName: targetLot?.name || '',
+          quantityKg: Number(feedQty) || 0,
+          inventoryItemId: feedItemId,
+          costPerKg: invItem?.averageCost || 3.0,
+        })
+        toast({
+          title: 'Lançado com sucesso! ✅',
+          description: 'Consumo de ração computado e estoque reduzido.',
+        })
+        break
+      }
+      case 'pesagem': {
+        addWeighing({
+          date,
+          lotId: targetLot?.id || '',
+          lotName: targetLot?.name || '',
+          weighedCount: Number(weighQty) || 10,
+          totalWeightKg: Number(totalWeight) || 0,
+          ageDays: 30,
+        })
+        toast({
+          title: 'Lançado com sucesso! ✅',
+          description: 'Peso médio e amostragem calculados.',
+        })
+        break
+      }
+      case 'mortalidade': {
+        addMortality({
+          date,
+          lotId: targetLot?.id || '',
+          lotName: targetLot?.name || '',
+          quantity: Number(mortQty) || 1,
+          cause: mortCause,
+        })
+        toast({
+          title: 'Lançado com sucesso! ✅',
+          description: 'Mortalidade atualizada e lote decrementado.',
+        })
+        break
+      }
+      case 'ovos': {
+        addEggProduction({
+          date,
+          lotId: targetLot?.id || '',
+          lotName: targetLot?.name || '',
+          collected: Number(collected) || 0,
+          broken: Number(broken) || 0,
+          consumed: 0,
+          sold: 0,
+          incubated: 0,
+          discarded: 0,
+        })
+        toast({ title: 'Lançado com sucesso! ✅', description: 'Coleta diária de ovos salva.' })
+        break
+      }
+      case 'venda': {
+        addSale({
+          date,
+          customerName: saleCustomer || 'Cliente Avulso',
+          product: saleProduct,
+          lotId: targetLot?.id,
+          lotName: targetLot?.name,
+          quantity: Number(saleQty) || 1,
+          unitPrice: Number(saleUnitPrice) || 0,
+          paymentMethod: 'Pix',
+          isPaid: true,
+        })
+        toast({ title: 'Lançado com sucesso! ✅', description: 'Venda e receita geradas.' })
+        break
+      }
+      case 'chocadeira': {
+        addIncubation({
+          startDate: date,
+          eggCount: Number(incEggCount) || 30,
+          origin: 'Produção Própria',
+          supplier: 'Galinheiro Principal',
+          breed: incBreed,
+          eggCost: 45,
+          incubatorName: 'Chocadeira Principal',
+          targetTemp: 37.7,
+          targetHumidity: 55,
+          autoTurning: true,
+          expectedHatchDate: new Date(Date.now() + 21 * 86400000).toISOString().split('T')[0],
+        })
+        toast({
+          title: 'Lançado com sucesso! ✅',
+          description: 'Nova incubação iniciada (21 dias).',
+        })
+        break
+      }
+      case 'investimento': {
+        addStructure({
+          date,
+          category: invCategory,
+          description: invDescription || `Investimento em ${invCategory}`,
+          quantity: 1,
+          unit: 'unid',
+          unitValue: Number(invValue) || 0,
+          supplier: 'Fornecedor Local',
+          paymentMethod: 'Pix',
+          isPaid: true,
+          center: 'Patrimônio',
+        })
+        toast({
+          title: 'Investimento registrado! 🏗️',
+          description: 'Bem patrimonial adicionado ao CAPEX.',
+        })
+        break
+      }
+      case 'estoque': {
+        addInventoryItem({
+          name: stkName || 'Novo Item',
+          category: stkCategory,
+          unit: stkUnit,
+          currentStock: Number(stkQty) || 0,
+          minStock: Number(stkMinStock) || 0,
+          averageCost: Number(stkCost) || 0,
+        })
+        toast({ title: 'Item adicionado! 📦', description: 'Novo item registrado no estoque.' })
+        break
+      }
     }
 
     handleClose()
@@ -232,58 +382,64 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
 
   const actions = [
     {
-      type: 'despesa',
+      type: 'despesa' as const,
       label: 'Despesa',
       icon: DollarSign,
       color: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     },
     {
-      type: 'racao',
+      type: 'racao' as const,
       label: 'Ração',
       icon: Wheat,
       color: 'bg-amber-100 text-amber-800 border-amber-200',
     },
     {
-      type: 'pesagem',
+      type: 'pesagem' as const,
       label: 'Pesagem',
       icon: Scale,
       color: 'bg-blue-100 text-blue-800 border-blue-200',
     },
     {
-      type: 'mortalidade',
+      type: 'mortalidade' as const,
       label: 'Mortalidade',
       icon: Skull,
       color: 'bg-rose-100 text-rose-800 border-rose-200',
     },
     {
-      type: 'ovos',
+      type: 'ovos' as const,
       label: 'Coleta de Ovos',
       icon: Egg,
       color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
     },
     {
-      type: 'venda',
+      type: 'venda' as const,
       label: 'Venda',
       icon: ShoppingCart,
       color: 'bg-purple-100 text-purple-800 border-purple-200',
     },
     {
-      type: 'chocadeira',
+      type: 'chocadeira' as const,
       label: 'Chocadeira',
       icon: Flame,
       color: 'bg-orange-100 text-orange-800 border-orange-200',
     },
     {
-      type: 'investimento',
+      type: 'investimento' as const,
       label: 'Investimento',
       icon: Briefcase,
       color: 'bg-indigo-100 text-indigo-800 border-indigo-200',
+    },
+    {
+      type: 'estoque' as const,
+      label: 'Estoque',
+      icon: Package,
+      color: 'bg-teal-100 text-teal-800 border-teal-200',
     },
   ]
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md rounded-2xl p-6">
+      <DialogContent className="max-w-md rounded-2xl p-6 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
             ✨ Novo Lançamento Rápido
@@ -301,7 +457,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                 <button
                   key={act.type}
                   type="button"
-                  onClick={() => setActionType(act.type as QuickActionType)}
+                  onClick={() => setActionType(act.type)}
                   className={`flex items-center gap-3 p-3 rounded-2xl border text-left font-medium transition-all hover:scale-[1.02] active:scale-[0.98] ${act.color}`}
                 >
                   <div className="p-2 rounded-xl bg-white/80 shadow-xs">
@@ -340,7 +496,6 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                   required
                 />
               </div>
-
               <div>
                 <Label className="text-xs font-medium">Lote</Label>
                 <Select value={selectedLotId} onValueChange={setSelectedLotId}>
@@ -360,14 +515,13 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
 
             {actionType === 'despesa' && (
               <>
-                <div className="p-2 rounded-xl bg-emerald-50 text-[11px] text-emerald-800 font-medium">
-                  💡 Para qual criação? Selecione o lote acima. Se for um gasto geral, escolha
-                  qualquer lote.
-                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Categoria</Label>
-                    <Select value={expCategory} onValueChange={(v) => setExpCategory(v as any)}>
+                    <Select
+                      value={expCategory}
+                      onValueChange={(v) => setExpCategory(v as typeof expCategory)}
+                    >
                       <SelectTrigger className="h-10 text-xs rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
@@ -449,7 +603,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Peso Total da Amostra (KG)</Label>
+                  <Label className="text-xs">Peso Total (KG)</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -466,7 +620,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
             {actionType === 'mortalidade' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs">Quantidade de Aves Mortas</Label>
+                  <Label className="text-xs">Aves Mortas</Label>
                   <Input
                     type="number"
                     min="1"
@@ -479,7 +633,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                 <div>
                   <Label className="text-xs">Provável Causa</Label>
                   <Input
-                    placeholder="Ex: Calor / Adaptação"
+                    placeholder="Ex: Calor"
                     value={mortCause}
                     onChange={(e) => setMortCause(e.target.value)}
                     className="h-10 text-xs rounded-xl"
@@ -491,7 +645,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
             {actionType === 'ovos' && (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label className="text-xs font-bold text-amber-700">Ovos Coletados Hoje 🥚</Label>
+                  <Label className="text-xs font-bold text-amber-700">Ovos Coletados 🥚</Label>
                   <Input
                     type="number"
                     placeholder="Ex: 85"
@@ -502,7 +656,7 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Ovos Quebrados/Perdidos</Label>
+                  <Label className="text-xs">Quebrados/Perdidos</Label>
                   <Input
                     type="number"
                     value={broken}
@@ -518,7 +672,10 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Produto</Label>
-                    <Select value={saleProduct} onValueChange={(v) => setSaleProduct(v as any)}>
+                    <Select
+                      value={saleProduct}
+                      onValueChange={(v) => setSaleProduct(v as typeof saleProduct)}
+                    >
                       <SelectTrigger className="h-10 text-xs rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
@@ -590,10 +747,6 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
 
             {actionType === 'investimento' && (
               <>
-                <div className="p-2 rounded-xl bg-indigo-50 text-[11px] text-indigo-800 font-medium">
-                  💡 Este é um investimento (CAPEX), não um custo de criação. Será registrado como
-                  patrimônio.
-                </div>
                 <div>
                   <Label className="text-xs">O que foi comprado?</Label>
                   <Input
@@ -607,7 +760,10 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <Label className="text-xs">Categoria</Label>
-                    <Select value={invCategory} onValueChange={(v) => setInvCategory(v as any)}>
+                    <Select
+                      value={invCategory}
+                      onValueChange={(v) => setInvCategory(v as typeof invCategory)}
+                    >
                       <SelectTrigger className="h-10 text-xs rounded-xl">
                         <SelectValue />
                       </SelectTrigger>
@@ -627,6 +783,95 @@ export function QuickEntryModal({ open, onOpenChange }: QuickEntryModalProps) {
                       placeholder="0.00"
                       value={invValue}
                       onChange={(e) => setInvValue(e.target.value)}
+                      className="h-10 text-xs rounded-xl"
+                      required
+                    />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {actionType === 'estoque' && (
+              <>
+                <div>
+                  <Label className="text-xs">Nome do Item</Label>
+                  <Input
+                    placeholder="Ex: Ração Inicial 25kg"
+                    value={stkName}
+                    onChange={(e) => setStkName(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Categoria</Label>
+                    <Select
+                      value={stkCategory}
+                      onValueChange={(v) => setStkCategory(v as typeof stkCategory)}
+                    >
+                      <SelectTrigger className="h-10 text-xs rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Ração">Ração</SelectItem>
+                        <SelectItem value="Milho">Milho</SelectItem>
+                        <SelectItem value="Farelos">Farelos</SelectItem>
+                        <SelectItem value="Medicamentos">Medicamentos</SelectItem>
+                        <SelectItem value="Vacinas">Vacinas</SelectItem>
+                        <SelectItem value="Maravalha">Maravalha</SelectItem>
+                        <SelectItem value="Insumos">Insumos</SelectItem>
+                        <SelectItem value="Outros">Outros</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Unidade</Label>
+                    <Select value={stkUnit} onValueChange={setStkUnit}>
+                      <SelectTrigger className="h-10 text-xs rounded-xl">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="KG">KG</SelectItem>
+                        <SelectItem value="unid">unid</SelectItem>
+                        <SelectItem value="L">L</SelectItem>
+                        <SelectItem value="saco">saco</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">Qtd Atual</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="0"
+                      value={stkQty}
+                      onChange={(e) => setStkQty(e.target.value)}
+                      className="h-10 text-xs rounded-xl"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Estoque Mín</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      placeholder="0"
+                      value={stkMinStock}
+                      onChange={(e) => setStkMinStock(e.target.value)}
+                      className="h-10 text-xs rounded-xl"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Custo (R$)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      placeholder="0.00"
+                      value={stkCost}
+                      onChange={(e) => setStkCost(e.target.value)}
                       className="h-10 text-xs rounded-xl"
                       required
                     />

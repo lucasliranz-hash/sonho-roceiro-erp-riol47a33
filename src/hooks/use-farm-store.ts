@@ -42,12 +42,13 @@ import {
   initialAssets,
   initialAlerts,
 } from '@/lib/mock-data'
+import { enqueueOperation } from '@/lib/sync-queue'
 
 function loadFromStorage<T>(key: string, defaultValue: T): T {
   try {
     const item = localStorage.getItem(`sonho_roceiro_${key}`)
     return item ? JSON.parse(item) : defaultValue
-  } catch (e) {
+  } catch {
     return defaultValue
   }
 }
@@ -128,49 +129,45 @@ export function useFarmStore() {
   useEffect(() => saveToStorage('assets', assets), [assets])
   useEffect(() => saveToStorage('alerts', alerts), [alerts])
 
-  // Mutation Helper Functions
   const addLot = (lot: Omit<Lot, 'id' | 'code' | 'currentQuantity'>) => {
     const newId = `l-${Date.now()}`
     const code = `L-${String(lots.length + 1).padStart(4, '0')}`
-    const newLot: Lot = {
-      ...lot,
-      id: newId,
-      code,
-      currentQuantity: lot.initialQuantity,
-    }
+    const newLot: Lot = { ...lot, id: newId, code, currentQuantity: lot.initialQuantity }
     setLots((prev) => [newLot, ...prev])
+    enqueueOperation({ table: 'lots', operation: 'insert', data: newLot })
   }
 
   const addExpense = (exp: Omit<Expense, 'id' | 'totalValue'>) => {
     const totalValue = Number((exp.quantity * exp.unitValue).toFixed(2))
     const newExp: Expense = { ...exp, id: `ex-${Date.now()}`, totalValue }
     setExpenses((prev) => [newExp, ...prev])
+    enqueueOperation({ table: 'expenses', operation: 'insert', data: newExp })
   }
 
   const addStructure = (st: Omit<StructureCost, 'id' | 'totalValue'>) => {
     const totalValue = Number((st.quantity * st.unitValue).toFixed(2))
     const newSt: StructureCost = { ...st, id: `st-${Date.now()}`, totalValue }
     setStructures((prev) => [newSt, ...prev])
+    enqueueOperation({ table: 'structures', operation: 'insert', data: newSt })
   }
 
   const addFeedConsumption = (feed: Omit<FeedConsumption, 'id' | 'totalCost'>) => {
     const totalCost = Number((feed.quantityKg * feed.costPerKg).toFixed(2))
     const newFeed: FeedConsumption = { ...feed, id: `fc-${Date.now()}`, totalCost }
     setFeedLogs((prev) => [newFeed, ...prev])
+    enqueueOperation({ table: 'feed_logs', operation: 'insert', data: newFeed })
 
     if (feed.inventoryItemId) {
       setInventory((prev) =>
-        prev.map((item) => {
-          if (item.id === feed.inventoryItemId) {
-            const updatedStock = Math.max(0, item.currentStock - feed.quantityKg)
-            return {
-              ...item,
-              currentStock: updatedStock,
-              lastUpdated: new Date().toISOString().split('T')[0],
-            }
-          }
-          return item
-        }),
+        prev.map((item) =>
+          item.id === feed.inventoryItemId
+            ? {
+                ...item,
+                currentStock: Math.max(0, item.currentStock - feed.quantityKg),
+                lastUpdated: new Date().toISOString().split('T')[0],
+              }
+            : item,
+        ),
       )
     }
   }
@@ -179,42 +176,49 @@ export function useFarmStore() {
     const averageWeightKg = Number((w.totalWeightKg / w.weighedCount).toFixed(2))
     const newW: Weighing = { ...w, id: `w-${Date.now()}`, averageWeightKg }
     setWeighings((prev) => [newW, ...prev])
+    enqueueOperation({ table: 'weighings', operation: 'insert', data: newW })
   }
 
   const addMortality = (m: Omit<Mortality, 'id'>) => {
     const newM: Mortality = { ...m, id: `m-${Date.now()}` }
     setMortality((prev) => [newM, ...prev])
+    enqueueOperation({ table: 'mortality', operation: 'insert', data: newM })
 
     setLots((prev) =>
-      prev.map((lot) => {
-        if (lot.id === m.lotId) {
-          return { ...lot, currentQuantity: Math.max(0, lot.currentQuantity - m.quantity) }
-        }
-        return lot
-      }),
+      prev.map((lot) =>
+        lot.id === m.lotId
+          ? { ...lot, currentQuantity: Math.max(0, lot.currentQuantity - m.quantity) }
+          : lot,
+      ),
     )
   }
 
   const addEggProduction = (egg: Omit<EggProduction, 'id'>) => {
     const newEgg: EggProduction = { ...egg, id: `egg-${Date.now()}` }
     setEggs((prev) => [newEgg, ...prev])
+    enqueueOperation({ table: 'eggs', operation: 'insert', data: newEgg })
   }
 
   const addSale = (sale: Omit<Sale, 'id' | 'totalPrice'>) => {
     const totalPrice = Number((sale.quantity * sale.unitPrice).toFixed(2))
     const newSale: Sale = { ...sale, id: `sal-${Date.now()}`, totalPrice }
     setSales((prev) => [newSale, ...prev])
+    enqueueOperation({ table: 'sales', operation: 'insert', data: newSale })
   }
 
   const addIncubation = (inc: Omit<Incubation, 'id' | 'code' | 'status'>) => {
     const code = `I-${String(incubations.length + 1).padStart(4, '0')}`
-    const newInc: Incubation = {
-      ...inc,
-      id: `inc-${Date.now()}`,
-      code,
-      status: 'Em andamento',
-    }
+    const newInc: Incubation = { ...inc, id: `inc-${Date.now()}`, code, status: 'Em andamento' }
     setIncubations((prev) => [newInc, ...prev])
+    enqueueOperation({ table: 'incubations', operation: 'insert', data: newInc })
+  }
+
+  const addInventoryItem = (item: Omit<InventoryItem, 'id' | 'lastUpdated'>) => {
+    const newId = `inv-${Date.now()}`
+    const lastUpdated = new Date().toISOString().split('T')[0]
+    const newItem: InventoryItem = { ...item, id: newId, lastUpdated }
+    setInventory((prev) => [newItem, ...prev])
+    enqueueOperation({ table: 'inventory', operation: 'insert', data: newItem })
   }
 
   const markAlertAsRead = (id: string) => {
@@ -235,6 +239,7 @@ export function useFarmStore() {
     addExpense,
     inventory,
     setInventory,
+    addInventoryItem,
     feedLogs,
     addFeedConsumption,
     weighings,

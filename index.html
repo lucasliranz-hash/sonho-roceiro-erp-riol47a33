@@ -4,14 +4,28 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Um incrível projeto do Skip</title>
-    <meta name="description" content="Projeto gerado usando Skip (https://goskip.dev)" />
-    <meta name="author" content="Skip (https://goskip.dev)" />
+    <title>Sonho Roceiro — Gestão Rural</title>
+    <meta name="description" content="Sistema de gestão rural para avicultura, com foco em simplicidade e uso mobile." />
+    <meta name="author" content="Sonho Roceiro" />
+    <meta name="theme-color" content="#3d6b35" />
     <meta property="og:image" content="/og-image.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="apple-touch-icon" href="/pwa-icon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/pwa-icon.svg" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Sonho Roceiro" />
   </head>
 
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="splash" style="position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#3d6b35;color:white;font-family:system-ui,-apple-system,sans-serif;z-index:9999">
+        <div style="font-size:4rem;line-height:1">🐓</div>
+        <div style="font-size:1.5rem;font-weight:800;margin-top:0.5rem">Sonho Roceiro</div>
+        <div style="font-size:0.75rem;opacity:0.7;margin-top:0.25rem">Carregando seu ERP rural...</div>
+      </div>
+    </div>
     <!-- @skip-protected: Do not remove. Required for app features. -->
     <script src="https://goskip.dev/skip.js"></script>
     <!-- @skip-protected: Do not remove. App entrypoint. -->

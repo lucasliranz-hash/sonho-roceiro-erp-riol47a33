@@ -1,7 +1,11 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import { Toaster } from '@/components/ui/toaster'
 import { Toaster as Sonner } from '@/components/ui/sonner'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { OnlineStatusProvider } from '@/hooks/use-online-status'
+import { useSyncQueue } from '@/hooks/use-sync-queue'
+import { OfflineIndicator } from '@/components/OfflineIndicator'
 
 import Layout from './components/Layout'
 import Index from './pages/Index'
@@ -28,42 +32,59 @@ import Alertas from './pages/Alertas'
 import Configuracoes from './pages/Configuracoes'
 import NotFound from './pages/NotFound'
 
-const App = () => (
-  <BrowserRouter>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <Routes>
-        <Route path="/login" element={<Auth />} />
+function SyncManager() {
+  useSyncQueue()
+  return null
+}
 
-        <Route element={<Layout />}>
-          <Route path="/" element={<Index />} />
-          <Route path="/lotes" element={<Lotes />} />
-          <Route path="/estrutura" element={<Estrutura />} />
-          <Route path="/despesas" element={<Despesas />} />
-          <Route path="/estoque" element={<Estoque />} />
-          <Route path="/racao" element={<Racao />} />
-          <Route path="/pesagens" element={<Pesagens />} />
-          <Route path="/mortalidade" element={<Mortalidade />} />
-          <Route path="/ovos" element={<Ovos />} />
-          <Route path="/chocadeira" element={<Chocadeira />} />
-          <Route path="/energia" element={<Energia />} />
-          <Route path="/matrizes" element={<Matrizes />} />
-          <Route path="/acasalamentos" element={<Acasalamentos />} />
-          <Route path="/vendas" element={<Vendas />} />
-          <Route path="/parceiros" element={<ClientesFornecedores />} />
-          <Route path="/financeiro" element={<Financeiro />} />
-          <Route path="/producao" element={<Producao />} />
-          <Route path="/indicadores" element={<Indicadores />} />
-          <Route path="/patrimonio" element={<Patrimonio />} />
-          <Route path="/alertas" element={<Alertas />} />
-          <Route path="/configuracoes" element={<Configuracoes />} />
-        </Route>
+function App() {
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {})
+    }
+  }, [])
 
-        <Route path="*" element={<NotFound />} />
-      </Routes>
-    </TooltipProvider>
-  </BrowserRouter>
-)
+  return (
+    <OnlineStatusProvider>
+      <BrowserRouter>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <OfflineIndicator />
+          <SyncManager />
+          <Routes>
+            <Route path="/login" element={<Auth />} />
+
+            <Route element={<Layout />}>
+              <Route path="/" element={<Index />} />
+              <Route path="/lotes" element={<Lotes />} />
+              <Route path="/estrutura" element={<Estrutura />} />
+              <Route path="/despesas" element={<Despesas />} />
+              <Route path="/estoque" element={<Estoque />} />
+              <Route path="/racao" element={<Racao />} />
+              <Route path="/pesagens" element={<Pesagens />} />
+              <Route path="/mortalidade" element={<Mortalidade />} />
+              <Route path="/ovos" element={<Ovos />} />
+              <Route path="/chocadeira" element={<Chocadeira />} />
+              <Route path="/energia" element={<Energia />} />
+              <Route path="/matrizes" element={<Matrizes />} />
+              <Route path="/acasalamentos" element={<Acasalamentos />} />
+              <Route path="/vendas" element={<Vendas />} />
+              <Route path="/parceiros" element={<ClientesFornecedores />} />
+              <Route path="/financeiro" element={<Financeiro />} />
+              <Route path="/producao" element={<Producao />} />
+              <Route path="/indicadores" element={<Indicadores />} />
+              <Route path="/patrimonio" element={<Patrimonio />} />
+              <Route path="/alertas" element={<Alertas />} />
+              <Route path="/configuracoes" element={<Configuracoes />} />
+            </Route>
+
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </TooltipProvider>
+      </BrowserRouter>
+    </OnlineStatusProvider>
+  )
+}
 
 export default App
