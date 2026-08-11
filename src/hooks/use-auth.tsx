@@ -112,7 +112,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             status: 'ativo',
             accepted_at: new Date().toISOString(),
           })
-          await supabase.from('properties').insert({ organization_id: org.id, name: farmName })
+          const { data: newProp } = await supabase
+            .from('properties')
+            .insert({ organization_id: org.id, name: farmName })
+            .select()
+            .single()
+          if (newProp) {
+            await supabase.from('user_property_access').insert({
+              user_id: user.id,
+              organization_id: org.id,
+              property_id: newProp.id,
+              can_access_all: true,
+            })
+          }
           const { data: newMember } = await supabase
             .from('organization_members')
             .select('*')

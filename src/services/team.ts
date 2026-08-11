@@ -94,6 +94,15 @@ export async function blockMember(memberId: string) {
     .from('organization_members')
     .update({ status: 'bloqueado' })
     .eq('id', memberId)
+  if (!error) {
+    await logAudit(
+      'block',
+      'organization_member',
+      memberId,
+      { status: 'ativo' },
+      { status: 'bloqueado' },
+    )
+  }
   return { error }
 }
 
@@ -102,12 +111,44 @@ export async function unblockMember(memberId: string) {
     .from('organization_members')
     .update({ status: 'ativo' })
     .eq('id', memberId)
+  if (!error) {
+    await logAudit(
+      'unblock',
+      'organization_member',
+      memberId,
+      { status: 'bloqueado' },
+      { status: 'ativo' },
+    )
+  }
   return { error }
 }
 
 export async function removeMember(memberId: string) {
+  const { data: member } = await supabase
+    .from('organization_members')
+    .select('user_id, organization_id, invited_email')
+    .eq('id', memberId)
+    .single()
+
   const { error } = await supabase.from('organization_members').delete().eq('id', memberId)
-  return { error }
+  if (error) return { error }
+
+  if (member?.user_id && member?.organization_id) {
+    await supabase
+      .from('user_property_access')
+      .delete()
+      .eq('user_id', member.user_id)
+      .eq('organization_id', member.organization_id)
+  }
+
+  await logAudit(
+    'remove',
+    'organization_member',
+    memberId,
+    { invited_email: member?.invited_email },
+    null,
+  )
+  return { error: null }
 }
 
 export async function resendInvite(params: {

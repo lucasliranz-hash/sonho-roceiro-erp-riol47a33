@@ -12,6 +12,8 @@ import { BrandLogo } from '@/components/BrandLogo'
 import { PropertySwitcher } from '@/components/PropertySwitcher'
 import { navGroups } from '@/lib/nav-config'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/hooks/use-auth'
+import { roleLabels } from '@/types/auth'
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
@@ -84,6 +86,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
 export default function Layout() {
   const { alerts } = useFarmStore()
+  const { profile, orgMember } = useAuth()
   const [quickModalOpen, setQuickModalOpen] = useState(false)
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
   const [quickActionType, setQuickActionType] = useState<string | null>(null)
@@ -115,15 +118,26 @@ export default function Layout() {
         <PropertySwitcher />
         <NavLinks />
         <div className="p-4 border-t border-border bg-sand/20">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center">
-              SR
+          <Link
+            to="/minha-conta"
+            className="flex items-center gap-3 hover:bg-secondary/50 rounded-xl p-1 -m-1 transition-colors"
+          >
+            <div className="w-8 h-8 rounded-full bg-primary text-white text-xs font-bold flex items-center justify-center overflow-hidden shrink-0">
+              {profile?.avatar_url ? (
+                <img src={profile.avatar_url} className="w-full h-full object-cover" alt="" />
+              ) : (
+                <span>{(profile?.full_name || 'U')[0].toUpperCase()}</span>
+              )}
             </div>
             <div className="flex-1 truncate">
-              <p className="text-xs font-bold text-foreground truncate">Administrador</p>
-              <p className="text-[10px] text-muted-foreground truncate">SR Gestão · Plano Rural</p>
+              <p className="text-xs font-bold text-foreground truncate">
+                {profile?.full_name || 'Usuário'}
+              </p>
+              <p className="text-[10px] text-muted-foreground truncate">
+                {orgMember ? roleLabels[orgMember.role] : 'SR Gestão'}
+              </p>
             </div>
-          </div>
+          </Link>
         </div>
       </aside>
 

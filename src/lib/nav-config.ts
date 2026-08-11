@@ -19,6 +19,8 @@ import {
   AlertTriangle,
   Settings,
   Truck,
+  UserCog,
+  CircleUser,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -74,7 +76,9 @@ export const navGroups: NavGroup[] = [
   {
     label: 'CONFIGURAÇÕES',
     items: [
+      { label: 'Equipe', path: '/equipe', icon: UserCog },
       { label: 'Alertas', path: '/alertas', icon: AlertTriangle },
+      { label: 'Minha Conta', path: '/minha-conta', icon: CircleUser },
       { label: 'Configurações', path: '/configuracoes', icon: Settings },
     ],
   },

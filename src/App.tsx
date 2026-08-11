@@ -6,6 +6,8 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { OnlineStatusProvider } from '@/hooks/use-online-status'
 import { useSyncQueue } from '@/hooks/use-sync-queue'
 import { OfflineIndicator } from '@/components/OfflineIndicator'
+import { AuthProvider } from '@/hooks/use-auth'
+import { ProtectedRoute } from '@/components/ProtectedRoute'
 
 import Layout from './components/Layout'
 import Index from './pages/Index'
@@ -30,6 +32,8 @@ import Indicadores from './pages/Indicadores'
 import Patrimonio from './pages/Patrimonio'
 import Alertas from './pages/Alertas'
 import Configuracoes from './pages/Configuracoes'
+import Equipe from './pages/Equipe'
+import MinhaConta from './pages/MinhaConta'
 import NotFound from './pages/NotFound'
 
 function SyncManager() {
@@ -46,43 +50,49 @@ function App() {
 
   return (
     <OnlineStatusProvider>
-      <BrowserRouter>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <OfflineIndicator />
-          <SyncManager />
-          <Routes>
-            <Route path="/login" element={<Auth />} />
+      <AuthProvider>
+        <BrowserRouter>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
+            <OfflineIndicator />
+            <SyncManager />
+            <Routes>
+              <Route path="/login" element={<Auth />} />
 
-            <Route element={<Layout />}>
-              <Route path="/" element={<Index />} />
-              <Route path="/lotes" element={<Lotes />} />
-              <Route path="/estrutura" element={<Estrutura />} />
-              <Route path="/despesas" element={<Despesas />} />
-              <Route path="/estoque" element={<Estoque />} />
-              <Route path="/racao" element={<Racao />} />
-              <Route path="/pesagens" element={<Pesagens />} />
-              <Route path="/mortalidade" element={<Mortalidade />} />
-              <Route path="/ovos" element={<Ovos />} />
-              <Route path="/chocadeira" element={<Chocadeira />} />
-              <Route path="/energia" element={<Energia />} />
-              <Route path="/matrizes" element={<Matrizes />} />
-              <Route path="/acasalamentos" element={<Acasalamentos />} />
-              <Route path="/vendas" element={<Vendas />} />
-              <Route path="/parceiros" element={<ClientesFornecedores />} />
-              <Route path="/financeiro" element={<Financeiro />} />
-              <Route path="/producao" element={<Producao />} />
-              <Route path="/indicadores" element={<Indicadores />} />
-              <Route path="/patrimonio" element={<Patrimonio />} />
-              <Route path="/alertas" element={<Alertas />} />
-              <Route path="/configuracoes" element={<Configuracoes />} />
-            </Route>
+              <Route element={<ProtectedRoute />}>
+                <Route element={<Layout />}>
+                  <Route path="/" element={<Index />} />
+                  <Route path="/lotes" element={<Lotes />} />
+                  <Route path="/estrutura" element={<Estrutura />} />
+                  <Route path="/despesas" element={<Despesas />} />
+                  <Route path="/estoque" element={<Estoque />} />
+                  <Route path="/racao" element={<Racao />} />
+                  <Route path="/pesagens" element={<Pesagens />} />
+                  <Route path="/mortalidade" element={<Mortalidade />} />
+                  <Route path="/ovos" element={<Ovos />} />
+                  <Route path="/chocadeira" element={<Chocadeira />} />
+                  <Route path="/energia" element={<Energia />} />
+                  <Route path="/matrizes" element={<Matrizes />} />
+                  <Route path="/acasalamentos" element={<Acasalamentos />} />
+                  <Route path="/vendas" element={<Vendas />} />
+                  <Route path="/parceiros" element={<ClientesFornecedores />} />
+                  <Route path="/financeiro" element={<Financeiro />} />
+                  <Route path="/producao" element={<Producao />} />
+                  <Route path="/indicadores" element={<Indicadores />} />
+                  <Route path="/patrimonio" element={<Patrimonio />} />
+                  <Route path="/alertas" element={<Alertas />} />
+                  <Route path="/equipe" element={<Equipe />} />
+                  <Route path="/minha-conta" element={<MinhaConta />} />
+                  <Route path="/configuracoes" element={<Configuracoes />} />
+                </Route>
+              </Route>
 
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </TooltipProvider>
-      </BrowserRouter>
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </TooltipProvider>
+        </BrowserRouter>
+      </AuthProvider>
     </OnlineStatusProvider>
   )
 }
