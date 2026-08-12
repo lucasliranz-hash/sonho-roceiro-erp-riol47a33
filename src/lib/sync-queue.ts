@@ -8,6 +8,12 @@ export interface QueuedOperation {
   timestamp: number
 }
 
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
+
+function toJson(v: Record<string, unknown>): Json {
+  return v as unknown as Json
+}
+
 export function getQueue(): QueuedOperation[] {
   try {
     const item = localStorage.getItem(QUEUE_KEY)
@@ -54,7 +60,7 @@ export async function processQueue(): Promise<{ processed: number; remaining: nu
         res = await supabase.rpc('update_farm_record', {
           p_table_name: op.table,
           p_id: id,
-          p_updates: data,
+          p_updates: toJson(data),
         })
       } else if (op.operation === 'delete') {
         const { id, organization_id } = op.data as { id: string; organization_id?: string }

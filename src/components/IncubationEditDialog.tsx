@@ -69,8 +69,8 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
       notes,
       status,
       expectedHatchDate,
-    })
-    if (result?.error) {
+    })) as { error?: any } | void
+    if (result && typeof result === 'object' && 'error' in result && result.error) {
       toast({
         title: 'Erro ao salvar ❌',
         description: result.error?.message || 'Falha ao salvar alterações.',

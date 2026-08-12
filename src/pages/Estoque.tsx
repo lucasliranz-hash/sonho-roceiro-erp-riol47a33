@@ -39,9 +39,23 @@ const fields: FormField[] = [
   { key: 'averageCost', label: 'Custo Médio (R$)', type: 'number', step: '0.01' },
 ]
 
+const MOV_FIELDS: FormField[] = [
+  { key: 'date', label: 'Data', type: 'date', required: true },
+  { key: 'quantity', label: 'Quantidade', type: 'number', required: true, step: '0.1' },
+  {
+    key: 'movementType',
+    label: 'Tipo de Movimento',
+    type: 'select',
+    options: ['Compra', 'Consumo', 'Ajuste', 'Perda', 'Transferência'],
+  },
+  { key: 'notes', label: 'Observação', type: 'textarea' },
+]
+
 export default function Estoque() {
-  const { inventory, updateInventory, deleteInventory } = useFarmStore()
+  const { inventory, updateInventory, deleteInventory, stockMovements, deleteStockMovement } =
+    useFarmStore()
   const { canEdit, canDelete } = usePermissions()
+  const [tab, setTab] = useState<'itens' | 'movimentacoes'>('itens')
   const [novoOpen, setNovoOpen] = useState(false)
   const [entradaOpen, setEntradaOpen] = useState(false)
   const [saidaOpen, setSaidaOpen] = useState(false)
@@ -49,6 +63,20 @@ export default function Estoque() {
   const [editOpen, setEditOpen] = useState(false)
   const [deleting, setDeleting] = useState<InventoryItem | null>(null)
   const [details, setDetails] = useState<InventoryItem | null>(null)
+  const [deletingMov, setDeletingMov] = useState<any | null>(null)
+  const [detailsMov, setDetailsMov] = useState<any | null>(null)
+
+  const handleDeleteMov = async () => {
+    if (!deletingMov) return
+    const { error } = await deleteStockMovement(deletingMov.id)
+    if (error) {
+      toast({ title: 'Erro', variant: 'destructive' })
+      return
+    }
+    await logAudit('DELETE', 'farm_stock_movements', deletingMov.id, deletingMov as any, null)
+    toast({ title: 'Movimentação excluída! 🗑️', description: 'Saldo recalculado.' })
+    setDeletingMov(null)
+  }
 
   const handleSubmit = async (values: Record<string, string>) => {
     if (!editing) return
@@ -118,70 +146,177 @@ export default function Estoque() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {inventory.length === 0 && (
-          <Card className="rounded-3xl bg-white border-border shadow-subtle col-span-full">
-            <CardContent className="p-8 text-center">
-              <Package className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-sm font-semibold text-muted-foreground">Nenhum item cadastrado</p>
-            </CardContent>
-          </Card>
-        )}
-        {inventory.map((item) => {
-          const isLow = item.currentStock <= item.minStock
-          return (
-            <Card
-              key={item.id}
-              className={`rounded-3xl bg-white border-border shadow-subtle p-5 ${isLow ? 'border-amber-300 bg-amber-50/20' : ''}`}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-bold text-muted-foreground">{item.category}</span>
-                <div className="flex items-center gap-2">
-                  {isLow ? (
-                    <Badge className="bg-amber-100 text-amber-800 text-[10px] gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Baixo
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Normal</Badge>
-                  )}
-                  <RecordActionMenu
-                    onView={() => setDetails(item)}
-                    onEdit={
-                      canEdit
-                        ? () => {
-                            setEditing(item)
-                            setEditOpen(true)
-                          }
-                        : undefined
-                    }
-                    onDelete={canDelete ? () => setDeleting(item) : undefined}
-                    disabled={!canEdit}
-                  />
-                </div>
-              </div>
-              <h3 className="font-bold text-base text-foreground">{item.name}</h3>
-              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] text-muted-foreground block">Atual</span>
-                  <span className="text-xl font-extrabold text-foreground">
-                    {item.currentStock} {item.unit}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] text-muted-foreground block">Custo Médio</span>
-                  <span className="text-sm font-bold text-primary">
-                    R$ {item.averageCost.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </Card>
-          )
-        })}
+      <div className="flex gap-2">
+        <Button
+          variant={tab === 'itens' ? 'default' : 'outline'}
+          onClick={() => setTab('itens')}
+          className="rounded-xl text-xs"
+        >
+          Itens
+        </Button>
+        <Button
+          variant={tab === 'movimentacoes' ? 'default' : 'outline'}
+          onClick={() => setTab('movimentacoes')}
+          className="rounded-xl text-xs"
+        >
+          Movimentações
+        </Button>
       </div>
+
+      {tab === 'itens' && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {inventory.length === 0 && (
+            <Card className="rounded-3xl bg-white border-border shadow-subtle col-span-full">
+              <CardContent className="p-8 text-center">
+                <Package className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
+                <p className="text-sm font-semibold text-muted-foreground">
+                  Nenhum item cadastrado
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {inventory.map((item) => {
+            const isLow = item.currentStock <= item.minStock
+            return (
+              <Card
+                key={item.id}
+                className={`rounded-3xl bg-white border-border shadow-subtle p-5 ${isLow ? 'border-amber-300 bg-amber-50/20' : ''}`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-muted-foreground">{item.category}</span>
+                  <div className="flex items-center gap-2">
+                    {isLow ? (
+                      <Badge className="bg-amber-100 text-amber-800 text-[10px] gap-1">
+                        <AlertTriangle className="w-3 h-3" /> Baixo
+                      </Badge>
+                    ) : (
+                      <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Normal</Badge>
+                    )}
+                    <RecordActionMenu
+                      onView={() => setDetails(item)}
+                      onEdit={
+                        canEdit
+                          ? () => {
+                              setEditing(item)
+                              setEditOpen(true)
+                            }
+                          : undefined
+                      }
+                      onDelete={canDelete ? () => setDeleting(item) : undefined}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                </div>
+                <h3 className="font-bold text-base text-foreground">{item.name}</h3>
+                <div className="mt-4 pt-3 border-t border-border flex items-center justify-between">
+                  <div>
+                    <span className="text-[11px] text-muted-foreground block">Atual</span>
+                    <span className="text-xl font-extrabold text-foreground">
+                      {item.currentStock} {item.unit}
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[11px] text-muted-foreground block">Custo Médio</span>
+                    <span className="text-sm font-bold text-primary">
+                      R$ {item.averageCost.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </Card>
+            )
+          })}
+        </div>
+      )}
+
+      {tab === 'movimentacoes' && (
+        <Card className="rounded-3xl bg-white border-border shadow-subtle p-5">
+          <h2 className="text-base font-bold mb-3">Movimentações de Estoque</h2>
+          <div className="space-y-2">
+            {stockMovements.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-4">
+                Nenhuma movimentação registrada.
+              </p>
+            )}
+            {stockMovements.map((m: any) => {
+              const isEntrada = m.type === 'entrada'
+              return (
+                <div
+                  key={m.id}
+                  className="p-3 rounded-2xl bg-secondary/40 border border-border flex items-center justify-between text-xs"
+                >
+                  <div className="min-w-0">
+                    <p className="font-bold text-foreground truncate">
+                      {m.inventoryItemName || 'Item'}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      {m.date} • {m.movementType} •{' '}
+                      {isEntrada ? (
+                        <span className="text-emerald-700">+{m.quantity}</span>
+                      ) : (
+                        <span className="text-rose-600">−{m.quantity}</span>
+                      )}{' '}
+                      {m.unit}
+                      {m.notes ? ` • ${m.notes}` : ''}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-right">
+                      <p className="font-bold text-primary">Saldo: {m.balanceAfter}</p>
+                      <p className="text-[10px] text-muted-foreground">
+                        R$ {(m.totalValue || 0).toFixed(2)}
+                      </p>
+                    </div>
+                    <RecordActionMenu
+                      onView={() => setDetailsMov(m)}
+                      onDelete={canDelete ? () => setDeletingMov(m) : undefined}
+                      disabled={!canEdit}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
 
       <NovoItemDialog open={novoOpen} onOpenChange={setNovoOpen} />
       <StockMovementDialog open={entradaOpen} onOpenChange={setEntradaOpen} type="entrada" />
       <StockMovementDialog open={saidaOpen} onOpenChange={setSaidaOpen} type="saida" />
+      <DeleteConfirmDialog
+        open={!!deletingMov}
+        onOpenChange={(v) => !v && setDeletingMov(null)}
+        onConfirm={handleDeleteMov}
+      />
+      <RecordDetailsDialog
+        open={!!detailsMov}
+        onOpenChange={(v) => !v && setDetailsMov(null)}
+        title={`Movimentação — ${detailsMov?.inventoryItemName || ''}`}
+        badge={
+          detailsMov
+            ? {
+                label: detailsMov.type === 'entrada' ? 'Entrada' : 'Saída',
+                className:
+                  detailsMov.type === 'entrada'
+                    ? 'bg-emerald-100 text-emerald-800 text-[10px]'
+                    : 'bg-rose-100 text-rose-800 text-[10px]',
+              }
+            : null
+        }
+        rows={
+          detailsMov
+            ? [
+                { label: 'Item', value: detailsMov.inventoryItemName },
+                { label: 'Data', value: detailsMov.date },
+                { label: 'Tipo', value: detailsMov.movementType },
+                { label: 'Direção', value: detailsMov.type === 'entrada' ? 'Entrada' : 'Saída' },
+                { label: 'Quantidade', value: `${detailsMov.quantity} ${detailsMov.unit}` },
+                { label: 'Saldo após', value: detailsMov.balanceAfter },
+                { label: 'Valor total (R$)', value: detailsMov.totalValue },
+                { label: 'Observação', value: detailsMov.notes || '—' },
+              ]
+            : []
+        }
+      />
       <EntityFormDialog
         open={editOpen}
         onOpenChange={(v) => {

@@ -1,6 +1,12 @@
 import { supabase } from '@/lib/supabase/client'
 import { OrganizationMember, MemberRole, Property } from '@/types/auth'
 
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
+
+function toJson(v: Record<string, unknown> | undefined | null): Json {
+  return (v ?? null) as unknown as Json
+}
+
 export interface TeamMember extends OrganizationMember {
   profile?: {
     full_name: string
@@ -174,7 +180,7 @@ export async function logAudit(
     p_action: action,
     p_entity_type: entityType,
     p_entity_id: entityId || null,
-    p_old_data: oldData || null,
-    p_new_data: newData || null,
+    p_old_data: toJson(oldData),
+    p_new_data: toJson(newData),
   })
 }

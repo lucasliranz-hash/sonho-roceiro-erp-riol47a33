@@ -343,6 +343,34 @@ function useFarmStoreImpl(orgId: string | undefined) {
     [stockMovements],
   )
 
+  const updateStockMovement = useCallback(
+    async (id: string, updates: Partial<StockMovement>) => {
+      return stockMovements.update(id, updates)
+    },
+    [stockMovements],
+  )
+
+  const deleteStockMovement = useCallback(
+    async (id: string) => {
+      const m = stockMovements.items.find((item) => item.id === id)
+      const { error } = await stockMovements.remove(id)
+      if (error) return { error }
+      // Recalculate stock: reverse the movement's effect
+      if (m && m.inventoryItemId) {
+        const item = inventory.items.find((i) => i.id === m.inventoryItemId)
+        if (item) {
+          const adjust = m.type === 'entrada' ? -m.quantity : m.quantity
+          await inventory.update(m.inventoryItemId, {
+            currentStock: Math.max(0, item.currentStock + adjust),
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+        }
+      }
+      return { error: null }
+    },
+    [stockMovements, inventory],
+  )
+
   const addEnergyLog = useCallback(
     async (e: Omit<EnergyMeasurement, 'id'>) => {
       return energyLogs.add({ ...e, id: `en-${Date.now()}` })
@@ -541,6 +569,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
     markAlertAsRead,
     stockMovements: stockMovements.items,
     addStockMovement,
+    updateStockMovement,
+    deleteStockMovement,
     selectedPeriod,
     setSelectedPeriod,
     selectedLotId,

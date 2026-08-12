@@ -46,12 +46,22 @@ export async function fetchEntity(orgId: string, table: FarmTableName) {
   return { data: rows as Record<string, unknown>[], error: null }
 }
 
+type Json = string | number | boolean | null | Json[] | { [key: string]: Json }
+
+function toJson(v: Record<string, unknown>): Json {
+  return v as unknown as Json
+}
+
 export async function insertEntity(
   table: FarmTableName,
   orgId: string,
   record: Record<string, unknown>,
 ) {
-  const payload = { id: record.id, organization_id: orgId, data: record }
+  const payload = {
+    id: record.id as string,
+    organization_id: orgId,
+    data: toJson(record),
+  }
   console.log('[farm] insertEntity: start', {
     table,
     orgId,
@@ -81,7 +91,7 @@ export async function updateEntity(
   const { data, error } = await supabase.rpc('update_farm_record', {
     p_table_name: table,
     p_id: id,
-    p_updates: updates,
+    p_updates: toJson(updates),
   })
   console.log('[farm] updateEntity: result', { table, id, error, success: !error })
   return { error }

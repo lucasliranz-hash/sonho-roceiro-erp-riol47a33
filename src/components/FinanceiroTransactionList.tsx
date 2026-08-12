@@ -336,6 +336,8 @@ export function FinanceiroTransactionList() {
                     {t.isPositive ? '+' : '−'} R$ {t.amount.toFixed(2)}
                   </p>
                   <RecordActionMenu
+                    sourceType={t.source_type}
+                    sourceLabel={SOURCE_LABELS[t.source_type]}
                     onEdit={manual ? () => setEditing(t) : undefined}
                     onDelete={manual ? () => setDeleting(t) : undefined}
                     onViewDetails={() => setDetails(t)}
@@ -427,7 +429,7 @@ export function FinanceiroTransactionList() {
           onSubmit={handleCreate}
           lotConfig={
             createType === 'expense'
-              ? { required: false, showWhen: (aplicacao?: string) => aplicacao === 'lote' }
+              ? { required: false, showWhen: (v) => v.aplicacao === 'lote' }
               : undefined
           }
         />

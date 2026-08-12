@@ -54,6 +54,10 @@ export default function Configuracoes() {
           </Button>
         </div>
       </Card>
+
+      <p className="text-[10px] text-muted-foreground/70 text-center">
+        Sonho Roceiro ERP — v0.0.24
+      </p>
     </div>
   )
 }

@@ -282,7 +282,7 @@ export default function Chocadeira() {
                 { label: 'Custo dos ovos (R$)', value: details.eggCost },
                 { label: 'Temperatura alvo (°C)', value: details.targetTemp },
                 { label: 'Umidade alvo (%)', value: details.targetHumidity },
-                { label: 'Viragem automática', value: details.autoTurning },
+                { label: 'Viragem automática', value: details.autoTurning ? 'Sim' : 'Não' },
                 { label: 'Nascidos', value: details.hatchedCount },
                 { label: 'Não eclodidos', value: details.unhatchedCount },
                 { label: 'Saudáveis', value: details.healthyChicks },

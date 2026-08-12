@@ -186,7 +186,7 @@ export default function Despesas() {
         title={editing ? 'Editar Despesa' : 'Nova Despesa'}
         fields={fields}
         onSubmit={handleSubmit}
-        lotConfig={{ required: false, showWhen: (aplicacao?: string) => aplicacao === 'lote' }}
+        lotConfig={{ required: false, showWhen: (v) => v.aplicacao === 'lote' }}
         initialValues={
           editing
             ? {

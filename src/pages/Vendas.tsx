@@ -39,15 +39,8 @@ const fields: FormField[] = [
 ]
 
 export default function Vendas() {
-  const {
-    sales,
-    addSale,
-    updateSale,
-    deleteSale,
-    expenses,
-    updateExpense,
-    deleteExpense,
-  } = useFarmStore()
+  const { sales, addSale, updateSale, deleteSale, expenses, updateExpense, deleteExpense } =
+    useFarmStore()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState<Sale | null>(null)
@@ -217,7 +210,7 @@ export default function Vendas() {
                 { label: 'Preço unitário', value: details.unitPrice },
                 { label: 'Total', value: `R$ ${details.totalPrice.toFixed(2)}` },
                 { label: 'Pagamento', value: details.paymentMethod },
-                { label: 'Pago', value: details.isPaid },
+                { label: 'Pago', value: details.isPaid ? 'Sim' : 'Não' },
                 { label: 'Lote', value: details.lotName },
               ]
             : []
