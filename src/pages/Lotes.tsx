@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useFarmStore } from '@/hooks/use-farm-store'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { usePermissions } from '@/hooks/use-permissions'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -12,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Dialog,
   DialogContent,
@@ -20,26 +22,34 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import {
-  Layers,
-  Plus,
-  Search,
-  Calendar,
-  Bird,
-  Scale,
-  Skull,
-  DollarSign,
-  ArrowLeft,
-} from 'lucide-react'
-import { Lot, LotType } from '@/types/farm'
+import { RecordActionMenu } from '@/components/RecordActionMenu'
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { Layers, Plus, Search, ArrowLeft } from 'lucide-react'
+import { Lot, LotType, LotStatus } from '@/types/farm'
 import { computeLotCosts } from '@/lib/calculations'
 import { toast } from '@/hooks/use-toast'
 
+const LOT_TYPES: LotType[] = [
+  'Poedeiras',
+  'Frango de corte',
+  'Frango caipira',
+  'Pintinhos',
+  'Matrizes',
+  'Reprodutores',
+]
+const LOT_STATUSES: LotStatus[] = ['Ativo', 'Finalizado', 'Vendido', 'Abatido', 'Transferido']
+
 export default function Lotes() {
-  const { lots, addLot, weighings, mortality, expenses, sales } = useFarmStore()
+  const { lots, addLot, updateLot, deleteLot, weighings, mortality, expenses, sales } =
+    useFarmStore()
+  const { canEdit, canDelete } = usePermissions()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState<Lot | null>(null)
+  const [deleting, setDeleting] = useState<Lot | null>(null)
 
   // New lot form states
   const [name, setName] = useState('')
@@ -50,6 +60,21 @@ export default function Lotes() {
   const [breed, setBreed] = useState('Caipira')
   const [initialQuantity, setInitialQuantity] = useState('100')
   const [acquisitionCost, setAcquisitionCost] = useState('500')
+
+  // Edit form states
+  const [editForm, setEditForm] = useState({
+    name: '',
+    type: 'Poedeiras' as LotType,
+    startDate: new Date().toISOString().split('T')[0],
+    origin: '',
+    supplier: '',
+    breed: '',
+    initialQuantity: '1',
+    acquisitionCost: '0',
+    purpose: 'Criação Rural',
+    status: 'Ativo' as LotStatus,
+    notes: '',
+  })
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -69,6 +94,61 @@ export default function Lotes() {
     toast({ title: 'Lote criado com sucesso! 🐥', description: `Lote "${name}" foi cadastrado.` })
     setCreateDialogOpen(false)
     setName('')
+  }
+
+  const openEdit = (lot: Lot) => {
+    setEditing(lot)
+    setEditForm({
+      name: lot.name,
+      type: lot.type,
+      startDate: lot.startDate,
+      origin: lot.origin,
+      supplier: lot.supplier,
+      breed: lot.breed,
+      initialQuantity: String(lot.initialQuantity),
+      acquisitionCost: String(lot.acquisitionCost),
+      purpose: lot.purpose,
+      status: lot.status,
+      notes: lot.notes || '',
+    })
+    setEditOpen(true)
+  }
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!editing) return
+    const updates: Partial<Lot> = {
+      name: editForm.name,
+      type: editForm.type,
+      startDate: editForm.startDate,
+      origin: editForm.origin,
+      supplier: editForm.supplier,
+      breed: editForm.breed,
+      initialQuantity: Number(editForm.initialQuantity) || 1,
+      acquisitionCost: Number(editForm.acquisitionCost) || 0,
+      purpose: editForm.purpose,
+      status: editForm.status,
+      notes: editForm.notes,
+    }
+    const { error } = await updateLot(editing.id, updates)
+    if (error) {
+      toast({ title: 'Erro ao salvar', description: error.message, variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Lote atualizado! ✅' })
+    setEditOpen(false)
+    setEditing(null)
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    const { error } = await deleteLot(deleting.id)
+    if (error) {
+      toast({ title: 'Erro ao excluir', description: error.message, variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Lote excluído! 🗑️', description: 'Registro arquivado (soft delete).' })
+    setDeleting(null)
   }
 
   const filteredLots = lots.filter(
@@ -300,6 +380,42 @@ export default function Lotes() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => openEdit(selectedLot)}
+            className="rounded-xl text-xs"
+          >
+            Editar Lote
+          </Button>
+          <Button
+            variant="outline"
+            className="rounded-xl text-xs text-rose-600"
+            onClick={() => setDeleting(selectedLot)}
+          >
+            Excluir Lote
+          </Button>
+        </div>
+
+        {/* Edit dialog (shared with list) */}
+        <EditLotDialog
+          open={editOpen}
+          onOpenChange={(v) => {
+            setEditOpen(v)
+            if (!v) setEditing(null)
+          }}
+          editing={editing}
+          editForm={editForm}
+          setEditForm={setEditForm}
+          onSubmit={handleEditSubmit}
+        />
+
+        <DeleteConfirmDialog
+          open={!!deleting}
+          onOpenChange={(v) => !v && setDeleting(null)}
+          onConfirm={handleDelete}
+        />
       </div>
     )
   }
@@ -346,10 +462,11 @@ export default function Lotes() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Poedeiras">Poedeiras</SelectItem>
-                      <SelectItem value="Frango de corte">Frango de Corte</SelectItem>
-                      <SelectItem value="Frango caipira">Frango Caipira</SelectItem>
-                      <SelectItem value="Pintinhos">Pintinhos</SelectItem>
+                      {LOT_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>
+                          {t}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -434,9 +551,17 @@ export default function Lotes() {
                 <span className="text-xs font-bold text-primary px-2.5 py-1 rounded-xl bg-primary/10">
                   {lot.code}
                 </span>
-                <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
-                  {lot.status}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
+                    {lot.status}
+                  </Badge>
+                  <RecordActionMenu
+                    onView={() => setSelectedLot(lot)}
+                    onEdit={canEdit ? () => openEdit(lot) : undefined}
+                    onDelete={canDelete ? () => setDeleting(lot) : undefined}
+                    disabled={!canEdit}
+                  />
+                </div>
               </div>
 
               <div>
@@ -464,6 +589,180 @@ export default function Lotes() {
           </Card>
         ))}
       </div>
+
+      <EditLotDialog
+        open={editOpen}
+        onOpenChange={(v) => {
+          setEditOpen(v)
+          if (!v) setEditing(null)
+        }}
+        editing={editing}
+        editForm={editForm}
+        setEditForm={setEditForm}
+        onSubmit={handleEditSubmit}
+      />
+
+      <DeleteConfirmDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        onConfirm={handleDelete}
+      />
     </div>
+  )
+}
+
+function EditLotDialog({
+  open,
+  onOpenChange,
+  editing,
+  editForm,
+  setEditForm,
+  onSubmit,
+}: {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  editing: Lot | null
+  editForm: any
+  setEditForm: (f: any) => void
+  onSubmit: (e: React.FormEvent) => void
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md rounded-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold">
+            {editing ? `Editar Lote ${editing.code}` : 'Editar Lote'}
+          </DialogTitle>
+        </DialogHeader>
+        <form onSubmit={onSubmit} className="space-y-3 mt-2">
+          <div>
+            <Label className="text-xs">Nome do Lote</Label>
+            <Input
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              className="h-10 text-xs rounded-xl"
+              required
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Tipo</Label>
+              <Select
+                value={editForm.type}
+                onValueChange={(v) => setEditForm({ ...editForm, type: v as LotType })}
+              >
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOT_TYPES.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">Status</Label>
+              <Select
+                value={editForm.status}
+                onValueChange={(v) => setEditForm({ ...editForm, status: v as LotStatus })}
+              >
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {LOT_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Data de Início</Label>
+              <Input
+                type="date"
+                value={editForm.startDate}
+                onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Raça</Label>
+              <Input
+                value={editForm.breed}
+                onChange={(e) => setEditForm({ ...editForm, breed: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Origem</Label>
+              <Input
+                value={editForm.origin}
+                onChange={(e) => setEditForm({ ...editForm, origin: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Fornecedor</Label>
+              <Input
+                value={editForm.supplier}
+                onChange={(e) => setEditForm({ ...editForm, supplier: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+              />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Qtd Inicial</Label>
+              <Input
+                type="number"
+                value={editForm.initialQuantity}
+                onChange={(e) => setEditForm({ ...editForm, initialQuantity: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Custo Aquisição (R$)</Label>
+              <Input
+                type="number"
+                value={editForm.acquisitionCost}
+                onChange={(e) => setEditForm({ ...editForm, acquisitionCost: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+              />
+            </div>
+          </div>
+          <div>
+            <Label className="text-xs">Finalidade</Label>
+            <Input
+              value={editForm.purpose}
+              onChange={(e) => setEditForm({ ...editForm, purpose: e.target.value })}
+              className="h-10 text-xs rounded-xl"
+            />
+          </div>
+          <div>
+            <Label className="text-xs">Observações</Label>
+            <Textarea
+              value={editForm.notes}
+              onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+              className="text-xs rounded-xl"
+            />
+          </div>
+          <Button
+            type="submit"
+            className="w-full h-11 text-xs font-bold rounded-xl bg-primary text-white"
+          >
+            Salvar Alterações
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }

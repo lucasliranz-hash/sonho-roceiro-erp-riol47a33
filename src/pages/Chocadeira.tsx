@@ -1,18 +1,80 @@
 import { useState } from 'react'
 import { useFarmStore } from '@/hooks/use-farm-store'
+import { usePermissions } from '@/hooks/use-permissions'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Flame, Thermometer, Droplets, ChevronRight, Egg, Calendar } from 'lucide-react'
+import {
+  Flame,
+  Thermometer,
+  Droplets,
+  ChevronRight,
+  Eye,
+  Pencil,
+  Trash2,
+  Search as SearchIcon,
+  CheckCircle2,
+  Sparkles,
+} from 'lucide-react'
 import { IncubationDetail } from '@/components/IncubationDetail'
+import { RecordActionMenu } from '@/components/RecordActionMenu'
+import {
+  DeleteIncubationDialog,
+  HatchingDialog,
+  FinalizeDialog,
+} from '@/components/IncubationActionDialogs'
+import { CandlingDialog } from '@/components/CandlingDialog'
+import { IncubationEditDialog } from '@/components/IncubationEditDialog'
+import { toast } from '@/hooks/use-toast'
+import { Incubation } from '@/types/farm'
 
 export default function Chocadeira() {
-  const { incubations } = useFarmStore()
+  const { incubations, deleteIncubation, updateIncubation, finalizeIncubation, addCandling } =
+    useFarmStore()
+  const { canEdit, canDelete } = usePermissions()
   const [selectedId, setSelectedId] = useState<string | null>(null)
+
+  // Action dialog state
+  const [details, setDetails] = useState<Incubation | null>(null)
+  const [editing, setEditing] = useState<Incubation | null>(null)
+  const [deleting, setDeleting] = useState<Incubation | null>(null)
+  const [candling, setCandling] = useState<Incubation | null>(null)
+  const [hatching, setHatching] = useState<Incubation | null>(null)
+  const [finalizing, setFinalizing] = useState<Incubation | null>(null)
 
   const selected = incubations.find((i) => i.id === selectedId) || null
 
   if (selected) {
     return <IncubationDetail incubation={selected} onBack={() => setSelectedId(null)} />
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    const { error } = await deleteIncubation(deleting.id)
+    if (error) {
+      toast({ title: 'Erro ao excluir', variant: 'destructive' })
+      return
+    }
+    toast({ title: 'Incubação excluída! 🗑️', description: `${deleting.code} foi removida.` })
+    setDeleting(null)
+  }
+
+  const handleFinalize = async () => {
+    if (!finalizing) return
+    const { error } = await finalizeIncubation(finalizing.id, {
+      hatchedCount: finalizing.hatchedCount || 0,
+      unhatchedCount: finalizing.unhatchedCount || 0,
+      healthyChicks: finalizing.healthyChicks || 0,
+      deaths: finalizing.deaths || 0,
+    })
+    if (error) {
+      toast({ title: 'Erro ao finalizar', variant: 'destructive' })
+      return
+    }
+    toast({
+      title: 'Incubação finalizada! ✅',
+      description: `${finalizing.code} marcada como concluída.`,
+    })
+    setFinalizing(null)
   }
 
   return (
@@ -22,7 +84,8 @@ export default function Chocadeira() {
           <Flame className="w-6 h-6 text-orange-600" /> Chocadeira e Incubações
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Toque em uma incubação para ver detalhes, editar, excluir e registrar ovoscopias.
+          Toque em uma incubação para ver detalhes. Use o menu ⋮ para editar, excluir, registrar
+          ovoscopia, nascimento e finalizar.
         </p>
       </div>
 
@@ -47,6 +110,7 @@ export default function Chocadeira() {
                 : inc.status === 'Concluído'
                   ? 'bg-emerald-100 text-emerald-800 text-xs'
                   : 'bg-gray-100 text-gray-800 text-xs'
+            const isActive = inc.status === 'Em andamento'
             return (
               <Card
                 key={inc.id}
@@ -58,7 +122,35 @@ export default function Chocadeira() {
                     <span className="font-bold text-primary text-sm">
                       {inc.code} • {inc.incubatorName}
                     </span>
-                    <Badge className={badgeClass}>{inc.status}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge className={badgeClass}>{inc.status}</Badge>
+                      <RecordActionMenu
+                        onView={() => setSelectedId(inc.id)}
+                        onEdit={canEdit ? () => setEditing(inc) : undefined}
+                        onDelete={canDelete ? () => setDeleting(inc) : undefined}
+                        disabled={!canEdit}
+                        extraItems={[
+                          {
+                            label: 'Registrar ovoscopia',
+                            icon: SearchIcon,
+                            onClick: () => setCandling(inc),
+                            disabled: !canEdit || !isActive,
+                          },
+                          {
+                            label: 'Registrar nascimento',
+                            icon: Sparkles,
+                            onClick: () => setHatching(inc),
+                            disabled: !canEdit || !isActive,
+                          },
+                          {
+                            label: 'Finalizar incubação',
+                            icon: CheckCircle2,
+                            onClick: () => setFinalizing(inc),
+                            disabled: !canEdit || !isActive,
+                          },
+                        ]}
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-xs bg-secondary/30 p-3 rounded-2xl">
                     <div>
@@ -95,6 +187,73 @@ export default function Chocadeira() {
           })}
         </div>
       )}
+
+      {/* Edit */}
+      <IncubationEditDialog
+        open={!!editing}
+        onOpenChange={(v) => !v && setEditing(null)}
+        incubation={editing || ({} as Incubation)}
+        onSave={async (updates) => {
+          if (!editing) return { error: null }
+          return updateIncubation(editing.id, updates)
+        }}
+      />
+
+      {/* Delete */}
+      <DeleteIncubationDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        onConfirm={handleDelete}
+      />
+
+      {/* Candling */}
+      <CandlingDialog
+        open={!!candling}
+        onOpenChange={(v) => !v && setCandling(null)}
+        incubationId={candling?.id || ''}
+        currentDay={
+          candling
+            ? Math.max(
+                1,
+                Math.floor((Date.now() - new Date(candling.startDate).getTime()) / 86400000) + 1,
+              )
+            : 1
+        }
+        onSave={async (data) => {
+          if (!candling) return
+          const { error } = await addCandling({ ...data, incubationId: candling.id })
+          if (error) {
+            toast({ title: 'Erro ao salvar ovoscopia', variant: 'destructive' })
+            return
+          }
+          toast({ title: 'Ovoscopia registrada! 🔍' })
+          setCandling(null)
+        }}
+      />
+
+      {/* Hatching */}
+      <HatchingDialog
+        open={!!hatching}
+        onOpenChange={(v) => !v && setHatching(null)}
+        onSave={async (results) => {
+          if (!hatching) return { error: null }
+          const { error } = await updateIncubation(hatching.id, results as any)
+          if (error) {
+            toast({ title: 'Erro ao registrar nascimento', variant: 'destructive' })
+            return { error }
+          }
+          toast({ title: 'Nascimento registrado! 🐥' })
+          setHatching(null)
+          return { error: null }
+        }}
+      />
+
+      {/* Finalize */}
+      <FinalizeDialog
+        open={!!finalizing}
+        onOpenChange={(v) => !v && setFinalizing(null)}
+        onConfirm={handleFinalize}
+      />
     </div>
   )
 }

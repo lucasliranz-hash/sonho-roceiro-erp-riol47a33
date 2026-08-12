@@ -37,6 +37,8 @@ export default function ClientesFornecedores() {
   const [editingSup, setEditingSup] = useState<Supplier | null>(null)
   const [deletingCust, setDeletingCust] = useState<Customer | null>(null)
   const [deletingSup, setDeletingSup] = useState<Supplier | null>(null)
+  const [detailsCust, setDetailsCust] = useState<Customer | null>(null)
+  const [detailsSup, setDetailsSup] = useState<Supplier | null>(null)
 
   const emptyCust = {
     name: '',
@@ -192,6 +194,7 @@ export default function ClientesFornecedores() {
                 </p>
               </div>
               <RecordActionMenu
+                onViewDetails={() => setDetailsCust(c)}
                 onEdit={() => openCustEdit(c)}
                 onDelete={() => setDeletingCust(c)}
               />
@@ -222,7 +225,11 @@ export default function ClientesFornecedores() {
                   {s.suppliedProduct} • {s.city}
                 </p>
               </div>
-              <RecordActionMenu onEdit={() => openSupEdit(s)} onDelete={() => setDeletingSup(s)} />
+              <RecordActionMenu
+                onViewDetails={() => setDetailsSup(s)}
+                onEdit={() => openSupEdit(s)}
+                onDelete={() => setDeletingSup(s)}
+              />
             </div>
           ))}
         </Card>
@@ -371,6 +378,66 @@ export default function ClientesFornecedores() {
         onOpenChange={(v) => !v && setDeletingSup(null)}
         onConfirm={handleDeleteSup}
       />
+
+      {/* Detalhes Cliente */}
+      <Dialog open={!!detailsCust} onOpenChange={(v) => !v && setDetailsCust(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Detalhes do Cliente</DialogTitle>
+          </DialogHeader>
+          {detailsCust && (
+            <div className="space-y-2 text-xs">
+              <p>
+                <strong>Nome:</strong> {detailsCust.name}
+              </p>
+              <p>
+                <strong>Telefone:</strong> {detailsCust.phone || '—'}
+              </p>
+              <p>
+                <strong>WhatsApp:</strong> {detailsCust.whatsapp || '—'}
+              </p>
+              <p>
+                <strong>Cidade:</strong> {detailsCust.city || '—'}
+              </p>
+              {detailsCust.notes && (
+                <p>
+                  <strong>Observações:</strong> {detailsCust.notes}
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Detalhes Fornecedor */}
+      <Dialog open={!!detailsSup} onOpenChange={(v) => !v && setDetailsSup(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Detalhes do Fornecedor</DialogTitle>
+          </DialogHeader>
+          {detailsSup && (
+            <div className="space-y-2 text-xs">
+              <p>
+                <strong>Nome:</strong> {detailsSup.name}
+              </p>
+              <p>
+                <strong>Produto fornecido:</strong> {detailsSup.suppliedProduct || '—'}
+              </p>
+              <p>
+                <strong>Telefone:</strong> {detailsSup.phone || '—'}
+              </p>
+              <p>
+                <strong>Cidade:</strong> {detailsSup.city || '—'}
+              </p>
+              {detailsSup.notes && (
+                <p>
+                  <strong>Observações:</strong> {detailsSup.notes}
+                </p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

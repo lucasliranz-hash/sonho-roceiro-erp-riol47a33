@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { DollarSign, Plus } from 'lucide-react'
 import { Expense } from '@/types/farm'
@@ -52,6 +54,8 @@ export default function Despesas() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Expense | null>(null)
   const [deleting, setDeleting] = useState<Expense | null>(null)
+  const [details, setDetails] = useState<Expense | null>(null)
+  const { canEdit, canDelete } = usePermissions()
 
   const totalExp = expenses.reduce((acc, e) => acc + e.totalValue, 0)
 
@@ -149,11 +153,21 @@ export default function Despesas() {
                   <span className="text-[10px] text-emerald-600 font-semibold">{exp.date}</span>
                 </div>
                 <RecordActionMenu
-                  onEdit={() => {
-                    setEditing(exp)
-                    setOpen(true)
-                  }}
-                  onDelete={() => setDeleting(exp)}
+                  onView={() => setDetails(exp)}
+                  onEdit={
+                    canEdit
+                      ? () => {
+                          setEditing(exp)
+                          setOpen(true)
+                        }
+                      : undefined
+                  }
+                  onDelete={canDelete ? () => setDeleting(exp) : undefined}
+                  sourceType={exp.source_type || 'MANUAL'}
+                  sourceLabel={
+                    exp.source_type && exp.source_type !== 'MANUAL' ? exp.source_type : undefined
+                  }
+                  disabled={!canEdit}
                 />
               </div>
             </div>
@@ -190,6 +204,30 @@ export default function Despesas() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Despesa — ${details?.description || ''}`}
+        rows={
+          details
+            ? [
+                { label: 'Descrição', value: details.description },
+                { label: 'Categoria', value: details.category },
+                { label: 'Data', value: details.date },
+                { label: 'Quantidade', value: details.quantity },
+                { label: 'Valor unitário', value: details.unitValue },
+                { label: 'Total', value: `R$ ${details.totalValue.toFixed(2)}` },
+                { label: 'Fornecedor', value: details.supplier },
+                { label: 'Pagamento', value: details.paymentMethod },
+                { label: 'Pago', value: details.isPaid },
+                { label: 'Lote', value: details.lotName },
+                { label: 'Atividade', value: details.activity },
+                { label: 'Origem', value: details.source_type },
+                { label: 'Observação', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

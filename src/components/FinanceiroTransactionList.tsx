@@ -169,7 +169,7 @@ export function FinanceiroTransactionList() {
     )
   }, [expenses, sales, structures, assets])
 
-  const isManual = (t: Txn) => t.source_type === 'MANUAL'
+  const isManual = (t: Txn) => !t.source_type || t.source_type === 'MANUAL'
 
   const handleCreate = async (values: Record<string, string>) => {
     if (createType === 'expense') {
@@ -323,7 +323,7 @@ export function FinanceiroTransactionList() {
                       </span>
                       {!manual && (
                         <Badge className="bg-blue-100 text-blue-800 text-[9px] py-0">
-                          {SOURCE_LABELS[t.source_type]}
+                          Gerado por {SOURCE_LABELS[t.source_type]}
                         </Badge>
                       )}
                     </div>
@@ -368,7 +368,10 @@ export function FinanceiroTransactionList() {
                 <strong>Categoria:</strong> {details.category}
               </p>
               <p>
-                <strong>Origem:</strong> {SOURCE_LABELS[details.source_type] || details.source_type}
+                <strong>Origem:</strong>{' '}
+                {isManual(details)
+                  ? 'Manual'
+                  : SOURCE_LABELS[details.source_type] || details.source_type}
               </p>
               {!isManual(details) && (
                 <p className="text-blue-600">

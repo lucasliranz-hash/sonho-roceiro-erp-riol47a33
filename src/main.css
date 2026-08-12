@@ -116,4 +116,10 @@
       sans-serif;
     -webkit-tap-highlight-color: transparent;
   }
+
+  /* Garante área de toque mínima de 44px em alvos interativos (mobile) */
+  .touch-target {
+    min-width: 44px;
+    min-height: 44px;
+  }
 }

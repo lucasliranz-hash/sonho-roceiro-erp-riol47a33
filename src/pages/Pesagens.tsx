@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Scale, Plus } from 'lucide-react'
 import { Weighing } from '@/types/farm'
@@ -22,6 +24,8 @@ export default function Pesagens() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Weighing | null>(null)
   const [deleting, setDeleting] = useState<Weighing | null>(null)
+  const [details, setDetails] = useState<Weighing | null>(null)
+  const { canEdit, canDelete } = usePermissions()
 
   const handleSubmit = async (values: Record<string, string>) => {
     const lot = lots.find((l) => l.id === values.lotId)
@@ -100,11 +104,17 @@ export default function Pesagens() {
                 </span>
               </div>
               <RecordActionMenu
-                onEdit={() => {
-                  setEditing(w)
-                  setOpen(true)
-                }}
-                onDelete={() => setDeleting(w)}
+                onView={() => setDetails(w)}
+                onEdit={
+                  canEdit
+                    ? () => {
+                        setEditing(w)
+                        setOpen(true)
+                      }
+                    : undefined
+                }
+                onDelete={canDelete ? () => setDeleting(w) : undefined}
+                disabled={!canEdit}
               />
             </div>
           </Card>
@@ -138,6 +148,25 @@ export default function Pesagens() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Pesagem — ${details?.lotName || ''}`}
+        rows={
+          details
+            ? [
+                { label: 'Lote', value: details.lotName },
+                { label: 'Data', value: details.date },
+                { label: 'Idade (dias)', value: details.ageDays },
+                { label: 'Aves pesadas', value: details.weighedCount },
+                { label: 'Peso total (kg)', value: details.totalWeightKg },
+                { label: 'Peso médio (kg)', value: details.averageWeightKg },
+                { label: 'GMD (g/dia)', value: details.dailyGainGrams },
+                { label: 'Observação', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

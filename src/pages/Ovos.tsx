@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Egg, Plus } from 'lucide-react'
 import { EggProduction } from '@/types/farm'
@@ -24,6 +26,8 @@ export default function Ovos() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<EggProduction | null>(null)
   const [deleting, setDeleting] = useState<EggProduction | null>(null)
+  const [details, setDetails] = useState<EggProduction | null>(null)
+  const { canEdit, canDelete } = usePermissions()
 
   const totalCollected = eggs.reduce((acc, e) => acc + e.collected, 0)
 
@@ -110,11 +114,17 @@ export default function Ovos() {
                 <p className="text-[10px] text-muted-foreground">Quebrados: {e.broken}</p>
               </div>
               <RecordActionMenu
-                onEdit={() => {
-                  setEditing(e)
-                  setOpen(true)
-                }}
-                onDelete={() => setDeleting(e)}
+                onView={() => setDetails(e)}
+                onEdit={
+                  canEdit
+                    ? () => {
+                        setEditing(e)
+                        setOpen(true)
+                      }
+                    : undefined
+                }
+                onDelete={canDelete ? () => setDeleting(e) : undefined}
+                disabled={!canEdit}
               />
             </div>
           </Card>
@@ -150,6 +160,25 @@ export default function Ovos() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Produção de Ovos — ${details?.lotName || ''}`}
+        rows={
+          details
+            ? [
+                { label: 'Lote', value: details.lotName },
+                { label: 'Data', value: details.date },
+                { label: 'Coletados', value: details.collected },
+                { label: 'Quebrados', value: details.broken },
+                { label: 'Consumidos', value: details.consumed },
+                { label: 'Vendidos', value: details.sold },
+                { label: 'Incubados', value: details.incubated },
+                { label: 'Observação', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

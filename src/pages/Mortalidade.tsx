@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Skull, Plus } from 'lucide-react'
 import { Mortality } from '@/types/farm'
@@ -21,6 +23,8 @@ export default function Mortalidade() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Mortality | null>(null)
   const [deleting, setDeleting] = useState<Mortality | null>(null)
+  const [details, setDetails] = useState<Mortality | null>(null)
+  const { canEdit, canDelete } = usePermissions()
 
   const handleSubmit = async (values: Record<string, string>) => {
     const lot = lots.find((l) => l.id === values.lotId)
@@ -94,11 +98,17 @@ export default function Mortalidade() {
                 <span className="text-muted-foreground">{m.date}</span>
               </div>
               <RecordActionMenu
-                onEdit={() => {
-                  setEditing(m)
-                  setOpen(true)
-                }}
-                onDelete={() => setDeleting(m)}
+                onView={() => setDetails(m)}
+                onEdit={
+                  canEdit
+                    ? () => {
+                        setEditing(m)
+                        setOpen(true)
+                      }
+                    : undefined
+                }
+                onDelete={canDelete ? () => setDeleting(m) : undefined}
+                disabled={!canEdit}
               />
             </div>
           </Card>
@@ -131,6 +141,22 @@ export default function Mortalidade() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Mortalidade — ${details?.lotName || ''}`}
+        rows={
+          details
+            ? [
+                { label: 'Lote', value: details.lotName },
+                { label: 'Data', value: details.date },
+                { label: 'Quantidade', value: details.quantity },
+                { label: 'Causa', value: details.cause },
+                { label: 'Observação', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

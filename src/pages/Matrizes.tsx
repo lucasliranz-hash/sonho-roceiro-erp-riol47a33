@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Bird, Plus } from 'lucide-react'
 import { Animal } from '@/types/farm'
@@ -31,6 +33,8 @@ export default function Matrizes() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Animal | null>(null)
   const [deleting, setDeleting] = useState<Animal | null>(null)
+  const [details, setDetails] = useState<Animal | null>(null)
+  const { canEdit, canDelete } = usePermissions()
 
   const handleSubmit = async (values: Record<string, string>) => {
     const data = {
@@ -104,11 +108,17 @@ export default function Matrizes() {
                   {an.sex}
                 </span>
                 <RecordActionMenu
-                  onEdit={() => {
-                    setEditing(an)
-                    setOpen(true)
-                  }}
-                  onDelete={() => setDeleting(an)}
+                  onView={() => setDetails(an)}
+                  onEdit={
+                    canEdit
+                      ? () => {
+                          setEditing(an)
+                          setOpen(true)
+                        }
+                      : undefined
+                  }
+                  onDelete={canDelete ? () => setDeleting(an) : undefined}
+                  disabled={!canEdit}
                 />
               </div>
             </div>
@@ -149,6 +159,26 @@ export default function Matrizes() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Matriz — ${details?.code || ''}`}
+        rows={
+          details
+            ? [
+                { label: 'Código', value: details.code },
+                { label: 'Sexo', value: details.sex },
+                { label: 'Raça', value: details.breed },
+                { label: 'Linhagem', value: details.lineage },
+                { label: 'Nascimento', value: details.birthDate },
+                { label: 'Origem', value: details.origin },
+                { label: 'Peso (kg)', value: details.weightKg },
+                { label: 'Status', value: details.status },
+                { label: 'Observação', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

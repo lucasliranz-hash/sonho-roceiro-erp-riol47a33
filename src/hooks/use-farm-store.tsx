@@ -249,7 +249,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
         ...sale,
         id: `sal-${Date.now()}`,
         totalPrice: Number((sale.quantity * sale.unitPrice).toFixed(2)),
-        source_type: 'SALE',
+        source_type: sale.source_type || 'SALE',
       })
     },
     [sales],

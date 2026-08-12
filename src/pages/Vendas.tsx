@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { logAudit } from '@/services/audit'
 import { ShoppingCart, Plus } from 'lucide-react'
@@ -41,6 +43,8 @@ export default function Vendas() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState<Sale | null>(null)
+  const [details, setDetails] = useState<Sale | null>(null)
+  const { canEdit, canDelete } = usePermissions()
 
   const totalRev = sales.reduce((acc, s) => acc + s.totalPrice, 0)
 
@@ -135,11 +139,17 @@ export default function Vendas() {
                 <p className="text-[10px] text-muted-foreground">{s.paymentMethod}</p>
               </div>
               <RecordActionMenu
-                onEdit={() => {
-                  setEditing(s)
-                  setOpen(true)
-                }}
-                onDelete={() => setDeleting(s)}
+                onView={() => setDetails(s)}
+                onEdit={
+                  canEdit
+                    ? () => {
+                        setEditing(s)
+                        setOpen(true)
+                      }
+                    : undefined
+                }
+                onDelete={canDelete ? () => setDeleting(s) : undefined}
+                disabled={!canEdit}
               />
             </div>
           </Card>
@@ -173,6 +183,26 @@ export default function Vendas() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Venda — ${details?.customerName || ''}`}
+        rows={
+          details
+            ? [
+                { label: 'Cliente', value: details.customerName },
+                { label: 'Data', value: details.date },
+                { label: 'Produto', value: details.product },
+                { label: 'Quantidade', value: details.quantity },
+                { label: 'Preço unitário', value: details.unitPrice },
+                { label: 'Total', value: `R$ ${details.totalPrice.toFixed(2)}` },
+                { label: 'Pagamento', value: details.paymentMethod },
+                { label: 'Pago', value: details.isPaid },
+                { label: 'Lote', value: details.lotName },
+              ]
+            : []
+        }
       />
     </div>
   )
