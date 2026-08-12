@@ -29,6 +29,7 @@ import { Layers, Plus, Search, ArrowLeft } from 'lucide-react'
 import { Lot, LotType, LotStatus } from '@/types/farm'
 import { computeLotCosts } from '@/lib/calculations'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 
 const LOT_TYPES: LotType[] = [
   'Poedeiras',
@@ -50,6 +51,7 @@ export default function Lotes() {
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Lot | null>(null)
   const [deleting, setDeleting] = useState<Lot | null>(null)
+  const [details, setDetails] = useState<Lot | null>(null)
 
   // New lot form states
   const [name, setName] = useState('')
@@ -556,7 +558,7 @@ export default function Lotes() {
                     {lot.status}
                   </Badge>
                   <RecordActionMenu
-                    onView={() => setSelectedLot(lot)}
+                    onView={() => setDetails(lot)}
                     onEdit={canEdit ? () => openEdit(lot) : undefined}
                     onDelete={canDelete ? () => setDeleting(lot) : undefined}
                     disabled={!canEdit}
@@ -606,6 +608,35 @@ export default function Lotes() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Lote — ${details?.code || ''} ${details?.name ? '• ' + details.name : ''}`}
+        badge={
+          details
+            ? { label: details.status, className: 'bg-emerald-100 text-emerald-800 text-[10px]' }
+            : null
+        }
+        rows={
+          details
+            ? [
+                { label: 'Código', value: details.code },
+                { label: 'Nome', value: details.name },
+                { label: 'Tipo', value: details.type },
+                { label: 'Raça', value: details.breed },
+                { label: 'Data de início', value: details.startDate },
+                { label: 'Origem', value: details.origin },
+                { label: 'Fornecedor', value: details.supplier },
+                { label: 'Qtd. inicial', value: details.initialQuantity },
+                { label: 'Qtd. viva', value: details.currentQuantity },
+                { label: 'Custo de aquisição (R$)', value: details.acquisitionCost },
+                { label: 'Finalidade', value: details.purpose },
+                { label: 'Status', value: details.status },
+                { label: 'Observações', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

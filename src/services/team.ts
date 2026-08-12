@@ -45,9 +45,9 @@ export async function inviteUser(params: {
 }) {
   const { error } = await supabase.functions.invoke('invite-user', {
     body: {
-      email,
-      name,
-      role,
+      email: params.email,
+      name: params.name,
+      role: params.role,
       property_ids: params.propertyIds,
       permissions: params.permissions || {},
     },

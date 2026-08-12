@@ -12,6 +12,13 @@ import { logAudit } from '@/services/audit'
 import { Zap, Plus } from 'lucide-react'
 import { EnergyMeasurement } from '@/types/farm'
 
+// measurementType form value → display label
+const MEASUREMENT_LABELS: Record<string, string> = {
+  propriedade: 'Propriedade',
+  atividade: 'Atividade',
+  lote: 'Lote',
+}
+
 const fields: FormField[] = [
   { key: 'date', label: 'Data', type: 'date', required: true },
   {
@@ -69,6 +76,7 @@ export default function Energia() {
       toast({ title: 'Erro', variant: 'destructive' })
       return
     }
+    await logAudit('DELETE', 'farm_energy', deleting.id, deleting as any, null)
     toast({ title: 'Leitura excluída! 🗑️' })
     setDeleting(null)
   }

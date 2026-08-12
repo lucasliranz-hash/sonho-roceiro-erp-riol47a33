@@ -8,6 +8,7 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
 import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 import { Scale, Plus } from 'lucide-react'
 import { Weighing } from '@/types/farm'
 

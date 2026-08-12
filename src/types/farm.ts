@@ -73,7 +73,7 @@ export interface Expense {
   supplier: string
   paymentMethod: string
   isPaid: boolean
-  aplicacao?: 'geral' | 'atividade' | 'lote'
+  aplicacao?: 'geral' | 'atividade' | 'lote' | 'propriedade'
   activity?: string
   notes?: string
   source_type?: string

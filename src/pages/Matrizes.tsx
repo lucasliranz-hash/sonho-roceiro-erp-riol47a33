@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Bird, Plus } from 'lucide-react'
 import { Animal } from '@/types/farm'
+import { logAudit } from '@/services/audit'
 
 const fields: FormField[] = [
   { key: 'code', label: 'Código', type: 'text', required: true },
@@ -51,6 +52,7 @@ export default function Matrizes() {
     if (editing) {
       const { error } = await updateAnimal(editing.id, data)
       if (error) throw new Error(error.message)
+      await logAudit('UPDATE', 'farm_animals', editing.id, editing as any, data as any)
       toast({ title: 'Matriz atualizada! ✅' })
     } else {
       const { error } = await addAnimal(data as any)

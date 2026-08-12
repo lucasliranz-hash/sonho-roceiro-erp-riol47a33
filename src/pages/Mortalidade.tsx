@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Skull, Plus } from 'lucide-react'
 import { Mortality } from '@/types/farm'
+import { logAudit } from '@/services/audit'
 
 const fields: FormField[] = [
   { key: 'date', label: 'Data', type: 'date', required: true },
@@ -39,6 +40,7 @@ export default function Mortalidade() {
     if (editing) {
       const { error } = await updateMortality(editing.id, data)
       if (error) throw new Error(error.message)
+      await logAudit('UPDATE', 'farm_mortality', editing.id, editing as any, data as any)
       toast({ title: 'Mortalidade atualizada! ✅' })
     } else {
       const { error } = await addMortality(data as any)

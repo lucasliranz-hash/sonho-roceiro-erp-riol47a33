@@ -39,7 +39,15 @@ const fields: FormField[] = [
 ]
 
 export default function Vendas() {
-  const { sales, addSale, updateSale, deleteSale } = useFarmStore()
+  const {
+    sales,
+    addSale,
+    updateSale,
+    deleteSale,
+    expenses,
+    updateExpense,
+    deleteExpense,
+  } = useFarmStore()
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Sale | null>(null)
   const [deleting, setDeleting] = useState<Sale | null>(null)
@@ -66,6 +74,17 @@ export default function Vendas() {
       })
       if (error) throw new Error(error.message)
       await logAudit('UPDATE', 'farm_sales', editing.id, editing as any, data as any)
+      // Atualiza receita vinculada (se houver) — sincroniza com a venda editada
+      const linkedRev = expenses.find((e) => e.source_type === 'SALE' && e.source_id === editing.id)
+      if (linkedRev) {
+        await updateExpense(linkedRev.id, {
+          date: data.date,
+          description: `Venda — ${data.product} (${data.quantity} un)`,
+          quantity: data.quantity,
+          unitValue: data.unitPrice,
+          totalValue: Number((data.quantity * data.unitPrice).toFixed(2)),
+        })
+      }
       toast({ title: 'Venda atualizada! ✅' })
     } else {
       const { error } = await addSale(data as any)

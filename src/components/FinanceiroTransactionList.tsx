@@ -392,7 +392,7 @@ export function FinanceiroTransactionList() {
           onSubmit={handleEdit}
           lotConfig={
             editing.recordType === 'expense'
-              ? { required: false, showWhen: (aplicacao?: string) => aplicacao === 'lote' }
+              ? { required: false, showWhen: (v: Record<string, string>) => v.aplicacao === 'lote' }
               : undefined
           }
           initialValues={

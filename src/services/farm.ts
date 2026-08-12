@@ -91,7 +91,10 @@ export async function softDeleteEntity(table: FarmTableName, orgId: string, id: 
   console.log('[farm] softDeleteEntity: start', { table, id, orgId })
   const { data, error } = await supabase
     .from(table)
-    .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+    .update({
+      deleted_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    } as any)
     .eq('id', id)
     .eq('organization_id', orgId)
     .select()

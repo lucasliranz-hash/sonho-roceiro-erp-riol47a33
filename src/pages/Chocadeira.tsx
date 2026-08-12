@@ -17,6 +17,7 @@ import {
 } from 'lucide-react'
 import { IncubationDetail } from '@/components/IncubationDetail'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
 import {
   DeleteIncubationDialog,
   HatchingDialog,
@@ -26,6 +27,7 @@ import { CandlingDialog } from '@/components/CandlingDialog'
 import { IncubationEditDialog } from '@/components/IncubationEditDialog'
 import { toast } from '@/hooks/use-toast'
 import { Incubation } from '@/types/farm'
+import { logAudit } from '@/services/audit'
 
 export default function Chocadeira() {
   const { incubations, deleteIncubation, updateIncubation, finalizeIncubation, addCandling } =
@@ -34,12 +36,12 @@ export default function Chocadeira() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
 
   // Action dialog state
-  const [details, setDetails] = useState<Incubation | null>(null)
   const [editing, setEditing] = useState<Incubation | null>(null)
   const [deleting, setDeleting] = useState<Incubation | null>(null)
   const [candling, setCandling] = useState<Incubation | null>(null)
   const [hatching, setHatching] = useState<Incubation | null>(null)
   const [finalizing, setFinalizing] = useState<Incubation | null>(null)
+  const [details, setDetails] = useState<Incubation | null>(null)
 
   const selected = incubations.find((i) => i.id === selectedId) || null
 
@@ -54,6 +56,7 @@ export default function Chocadeira() {
       toast({ title: 'Erro ao excluir', variant: 'destructive' })
       return
     }
+    await logAudit('DELETE', 'farm_incubations', deleting.id, deleting as any, null)
     toast({ title: 'Incubação excluída! 🗑️', description: `${deleting.code} foi removida.` })
     setDeleting(null)
   }
@@ -125,7 +128,7 @@ export default function Chocadeira() {
                     <div className="flex items-center gap-2">
                       <Badge className={badgeClass}>{inc.status}</Badge>
                       <RecordActionMenu
-                        onView={() => setSelectedId(inc.id)}
+                        onView={() => setDetails(inc)}
                         onEdit={canEdit ? () => setEditing(inc) : undefined}
                         onDelete={canDelete ? () => setDeleting(inc) : undefined}
                         disabled={!canEdit}
@@ -253,6 +256,42 @@ export default function Chocadeira() {
         open={!!finalizing}
         onOpenChange={(v) => !v && setFinalizing(null)}
         onConfirm={handleFinalize}
+      />
+
+      {/* Details */}
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Incubação — ${details?.code || ''}`}
+        badge={
+          details
+            ? { label: details.status, className: 'bg-orange-100 text-orange-800 text-[10px]' }
+            : null
+        }
+        rows={
+          details
+            ? [
+                { label: 'Código', value: details.code },
+                { label: 'Incubadora', value: details.incubatorName },
+                { label: 'Início', value: details.startDate },
+                { label: 'Previsão de nascimento', value: details.expectedHatchDate },
+                { label: 'Raça', value: details.breed },
+                { label: 'Origem', value: details.origin },
+                { label: 'Fornecedor', value: details.supplier },
+                { label: 'Ovos', value: details.eggCount },
+                { label: 'Custo dos ovos (R$)', value: details.eggCost },
+                { label: 'Temperatura alvo (°C)', value: details.targetTemp },
+                { label: 'Umidade alvo (%)', value: details.targetHumidity },
+                { label: 'Viragem automática', value: details.autoTurning },
+                { label: 'Nascidos', value: details.hatchedCount },
+                { label: 'Não eclodidos', value: details.unhatchedCount },
+                { label: 'Saudáveis', value: details.healthyChicks },
+                { label: 'Mortes', value: details.deaths },
+                { label: 'Custo de energia (R$)', value: details.energyCost },
+                { label: 'Observação', value: details.notes },
+              ]
+            : []
+        }
       />
     </div>
   )

@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { Egg, Plus } from 'lucide-react'
 import { EggProduction } from '@/types/farm'
+import { logAudit } from '@/services/audit'
 
 const fields: FormField[] = [
   { key: 'date', label: 'Data', type: 'date', required: true },
@@ -63,6 +64,7 @@ export default function Ovos() {
       toast({ title: 'Erro', variant: 'destructive' })
       return
     }
+    await logAudit('DELETE', 'farm_egg_production', deleting.id, deleting as any, null)
     toast({ title: 'Registro excluído! 🗑️' })
     setDeleting(null)
   }

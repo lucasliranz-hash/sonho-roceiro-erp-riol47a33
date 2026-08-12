@@ -12,8 +12,8 @@ export async function logAudit(
       p_action: action,
       p_entity_type: entityType,
       p_entity_id: entityId || null,
-      p_old_data: oldData || null,
-      p_new_data: newData || null,
+      p_old_data: (oldData || null) as any,
+      p_new_data: (newData || null) as any,
     })
     if (error) console.error('[audit] logAudit error:', error)
   } catch (e) {

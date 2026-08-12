@@ -46,8 +46,9 @@ export async function processQueue(): Promise<{ processed: number; remaining: nu
     try {
       const { supabase } = await import('@/lib/supabase/client')
       let res
+      const table = op.table as any
       if (op.operation === 'insert') {
-        res = await supabase.from(op.table).insert(op.data)
+        res = await supabase.from(table).insert(op.data as any)
       } else if (op.operation === 'update') {
         const { id, data } = op.data as { id: string; data: Record<string, unknown> }
         res = await supabase.rpc('update_farm_record', {
@@ -58,8 +59,11 @@ export async function processQueue(): Promise<{ processed: number; remaining: nu
       } else if (op.operation === 'delete') {
         const { id, organization_id } = op.data as { id: string; organization_id?: string }
         let query = supabase
-          .from(op.table)
-          .update({ deleted_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          .from(table)
+          .update({
+            deleted_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          } as any)
           .eq('id', id)
         if (organization_id) query = query.eq('organization_id', organization_id)
         res = await query

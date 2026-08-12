@@ -63,7 +63,7 @@ export function ObservationDialog({
     if (open) setNotes(currentNotes || '')
   }, [open, currentNotes])
   const handleSave = async () => {
-    const result = await onSave(notes)
+    const result = (await onSave(notes)) as { error: any } | undefined
     if (result?.error) return
     onOpenChange(false)
   }
@@ -115,7 +115,9 @@ export function TempHumidityDialog({
     }
   }, [open, currentTemp, currentHumidity])
   const handleSave = async () => {
-    const result = await onSave(Number(temp) || 0, Number(humidity) || 0)
+    const result = (await onSave(Number(temp) || 0, Number(humidity) || 0)) as
+      | { error: any }
+      | undefined
     if (result?.error) return
     onOpenChange(false)
   }
@@ -184,12 +186,12 @@ export function HatchingDialog({
     }
   }, [open])
   const handleSave = async () => {
-    const result = await onSave({
+    const result = (await onSave({
       hatchedCount: Number(hatched) || 0,
       unhatchedCount: Number(unhatched) || 0,
       healthyChicks: Number(healthy) || 0,
       deaths: Number(deaths) || 0,
-    })
+    })) as { error: any } | undefined
     if (result?.error) return
     onOpenChange(false)
   }

@@ -6,9 +6,12 @@ import { Button } from '@/components/ui/button'
 import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
 import { NovoItemDialog } from '@/components/estoque/NovoItemDialog'
 import { StockMovementDialog } from '@/components/estoque/StockMovementDialog'
+import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 import { Package, AlertTriangle, Plus, ArrowDown, ArrowUp } from 'lucide-react'
 import { InventoryItem } from '@/types/farm'
 
@@ -38,24 +41,34 @@ const fields: FormField[] = [
 
 export default function Estoque() {
   const { inventory, updateInventory, deleteInventory } = useFarmStore()
+  const { canEdit, canDelete } = usePermissions()
   const [novoOpen, setNovoOpen] = useState(false)
   const [entradaOpen, setEntradaOpen] = useState(false)
   const [saidaOpen, setSaidaOpen] = useState(false)
   const [editing, setEditing] = useState<InventoryItem | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const [deleting, setDeleting] = useState<InventoryItem | null>(null)
+  const [details, setDetails] = useState<InventoryItem | null>(null)
 
   const handleSubmit = async (values: Record<string, string>) => {
     if (!editing) return
+    const oldStock = editing.currentStock
+    const newStock = Number(values.currentStock) || 0
     const { error } = await updateInventory(editing.id, {
       name: values.name,
       category: values.category as InventoryItem['category'],
       unit: values.unit,
-      currentStock: Number(values.currentStock) || 0,
+      currentStock: newStock,
       minStock: Number(values.minStock) || 0,
       averageCost: Number(values.averageCost) || 0,
+      lastUpdated: new Date().toISOString().split('T')[0],
     })
     if (error) throw new Error(error.message)
+    await logAudit('UPDATE', 'farm_inventory', editing.id, editing as any, {
+      ...values,
+      oldStock,
+      newStock,
+    })
     toast({ title: 'Item atualizado! ✅' })
   }
 
@@ -66,6 +79,7 @@ export default function Estoque() {
       toast({ title: 'Erro', variant: 'destructive' })
       return
     }
+    await logAudit('DELETE', 'farm_inventory', deleting.id, deleting as any, null)
     toast({ title: 'Item excluído! 🗑️' })
     setDeleting(null)
   }
@@ -131,11 +145,17 @@ export default function Estoque() {
                     <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">Normal</Badge>
                   )}
                   <RecordActionMenu
-                    onEdit={() => {
-                      setEditing(item)
-                      setEditOpen(true)
-                    }}
-                    onDelete={() => setDeleting(item)}
+                    onView={() => setDetails(item)}
+                    onEdit={
+                      canEdit
+                        ? () => {
+                            setEditing(item)
+                            setEditOpen(true)
+                          }
+                        : undefined
+                    }
+                    onDelete={canDelete ? () => setDeleting(item) : undefined}
+                    disabled={!canEdit}
                   />
                 </div>
               </div>
@@ -188,6 +208,35 @@ export default function Estoque() {
         open={!!deleting}
         onOpenChange={(v) => !v && setDeleting(null)}
         onConfirm={handleDelete}
+      />
+      <RecordDetailsDialog
+        open={!!details}
+        onOpenChange={(v) => !v && setDetails(null)}
+        title={`Estoque — ${details?.name || ''}`}
+        badge={
+          details
+            ? details.currentStock <= details.minStock
+              ? { label: 'Baixo', className: 'bg-amber-100 text-amber-800 text-[10px]' }
+              : { label: 'Normal', className: 'bg-emerald-100 text-emerald-800 text-[10px]' }
+            : null
+        }
+        rows={
+          details
+            ? [
+                { label: 'Nome', value: details.name },
+                { label: 'Categoria', value: details.category },
+                { label: 'Unidade', value: details.unit },
+                { label: 'Estoque atual', value: details.currentStock },
+                { label: 'Estoque mínimo', value: details.minStock },
+                { label: 'Custo médio (R$)', value: details.averageCost },
+                { label: 'Fornecedor', value: details.supplier || '—' },
+                { label: 'Marca', value: details.brand || '—' },
+                { label: 'Peso da embalagem', value: details.packageWeight || '—' },
+                { label: 'Última atualização', value: details.lastUpdated || '—' },
+                { label: 'Observação', value: details.notes || '—' },
+              ]
+            : []
+        }
       />
     </div>
   )

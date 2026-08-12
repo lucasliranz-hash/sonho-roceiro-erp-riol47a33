@@ -56,7 +56,7 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
     const expectedHatchDate = new Date(new Date(startDate).getTime() + 21 * 86400000)
       .toISOString()
       .split('T')[0]
-    const result = await onSave({
+    const result = (await onSave({
       incubatorName,
       origin,
       breed,

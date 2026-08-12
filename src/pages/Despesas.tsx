@@ -10,6 +10,7 @@ import { usePermissions } from '@/hooks/use-permissions'
 import { toast } from '@/hooks/use-toast'
 import { DollarSign, Plus } from 'lucide-react'
 import { Expense } from '@/types/farm'
+import { logAudit } from '@/services/audit'
 
 const EXPENSE_SUGGESTIONS = [
   'Ração',
@@ -82,6 +83,7 @@ export default function Despesas() {
         totalValue: Number((data.quantity * data.unitValue).toFixed(2)),
       })
       if (error) throw new Error(error.message)
+      await logAudit('UPDATE', 'farm_expenses', editing.id, editing as any, data as any)
       toast({ title: 'Despesa atualizada! ✅' })
     } else {
       const { error } = await addExpense(data as any)
@@ -220,7 +222,7 @@ export default function Despesas() {
                 { label: 'Total', value: `R$ ${details.totalValue.toFixed(2)}` },
                 { label: 'Fornecedor', value: details.supplier },
                 { label: 'Pagamento', value: details.paymentMethod },
-                { label: 'Pago', value: details.isPaid },
+                { label: 'Pago', value: details.isPaid ? 'Sim' : 'Não' },
                 { label: 'Lote', value: details.lotName },
                 { label: 'Atividade', value: details.activity },
                 { label: 'Origem', value: details.source_type },
