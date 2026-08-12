@@ -46,25 +46,7 @@ export interface Lot {
 export interface StructureCost {
   id: string
   date: string
-  category:
-    | 'Madeira'
-    | 'Tela'
-    | 'Telhado'
-    | 'Piso'
-    | 'Concreto'
-    | 'Portões'
-    | 'Cerca'
-    | 'Hidráulica'
-    | 'Elétrica'
-    | "Caixa d'água"
-    | 'Bebedouros'
-    | 'Comedouros'
-    | 'Chocadeira'
-    | 'Equipamentos'
-    | 'Ferramentas'
-    | 'Mão de obra'
-    | 'Transporte'
-    | 'Outros'
+  category: string
   subcategory?: string
   description: string
   quantity: number
@@ -81,21 +63,7 @@ export interface StructureCost {
 export interface Expense {
   id: string
   date: string
-  category:
-    | 'Ração'
-    | 'Pintinhos'
-    | 'Ovos férteis'
-    | 'Medicamentos'
-    | 'Vacinas'
-    | 'Cama'
-    | 'Energia'
-    | 'Água'
-    | 'Transporte'
-    | 'Abate'
-    | 'Embalagem'
-    | 'Mão de obra'
-    | 'Manutenção'
-    | 'Outros'
+  category: string
   description: string
   lotId?: string
   lotName?: string
@@ -115,16 +83,7 @@ export interface Expense {
 export interface InventoryItem {
   id: string
   name: string
-  category:
-    | 'Ração'
-    | 'Milho'
-    | 'Farelos'
-    | 'Medicamentos'
-    | 'Vacinas'
-    | 'Maravalha'
-    | 'Embalagens'
-    | 'Insumos'
-    | 'Outros'
+  category: string
   unit: string
   currentStock: number
   minStock: number
@@ -132,18 +91,43 @@ export interface InventoryItem {
   supplier?: string
   notes?: string
   lastUpdated: string
+  packageWeight?: number
+  brand?: string
 }
 
 export interface FeedConsumption {
   id: string
   date: string
-  lotId: string
-  lotName: string
+  lotId?: string
+  lotName?: string
+  activityId?: string
+  activityName?: string
+  destinationType?: 'lote' | 'atividade' | 'geral'
   quantityKg: number
   inventoryItemId?: string
+  inventoryItemName?: string
   costPerKg: number
   totalCost: number
   notes?: string
+}
+
+export interface FeedPurchase {
+  id: string
+  date: string
+  inventoryItemId: string
+  inventoryItemName: string
+  packages: number
+  weightPerPackage: number
+  totalQuantity: number
+  pricePerPackage: number
+  totalValue: number
+  supplier?: string
+  paymentMethod?: string
+  notes?: string
+  source_type?: string
+  source_id?: string
+  expenseId?: string
+  recordType?: 'purchase' | 'consumption'
 }
 
 export interface Weighing {
@@ -263,16 +247,7 @@ export interface Sale {
   id: string
   date: string
   customerName: string
-  product:
-    | 'Ovos'
-    | 'Ovos férteis'
-    | 'Pintinhos'
-    | 'Frangos vivos'
-    | 'Frangos abatidos'
-    | 'Galinhas'
-    | 'Matrizes'
-    | 'Reprodutores'
-    | 'Outros'
+  product: string
   lotId?: string
   lotName?: string
   quantity: number
@@ -307,14 +282,7 @@ export interface Supplier {
 export interface Asset {
   id: string
   name: string
-  category:
-    | 'Chocadeira'
-    | 'Equipamentos'
-    | 'Ferramentas'
-    | 'Bombas'
-    | 'Aeradores'
-    | 'Estruturas'
-    | 'Outros'
+  category: string
   acquisitionDate: string
   value: number
   usefulLifeYears: number

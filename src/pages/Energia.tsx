@@ -6,12 +6,19 @@ import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 import { Zap, Plus } from 'lucide-react'
 import { EnergyMeasurement } from '@/types/farm'
 
 const fields: FormField[] = [
   { key: 'date', label: 'Data', type: 'date', required: true },
-  { key: 'equipment', label: 'Equipamento', type: 'text', required: true },
+  {
+    key: 'measurementType',
+    label: 'Tipo / Aplicação',
+    type: 'aplicacao',
+    defaultValue: 'propriedade',
+  },
+  { key: 'equipment', label: 'Equipamento / Local', type: 'text', required: true },
   { key: 'hours', label: 'Horas de Funcionamento', type: 'number', required: true, step: '0.1' },
   { key: 'consumptionKwh', label: 'Consumo (kWh)', type: 'number', required: true, step: '0.01' },
   {

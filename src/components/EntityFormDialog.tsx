@@ -17,18 +17,29 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { CategorySelect } from '@/components/CategorySelect'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { toast } from '@/hooks/use-toast'
 
 export interface FormField {
   key: string
   label: string
-  type: 'text' | 'number' | 'date' | 'select' | 'textarea' | 'checkbox'
+  type:
+    | 'text'
+    | 'number'
+    | 'date'
+    | 'select'
+    | 'textarea'
+    | 'checkbox'
+    | 'category-select'
+    | 'aplicacao'
   required?: boolean
   options?: string[]
   placeholder?: string
   defaultValue?: string
   step?: string
+  /** storageKey for category-select (structure/expense/inventory/asset) */
+  categoryStorageKey?: string
   showWhen?: (values: Record<string, string>) => boolean
 }
 
@@ -40,7 +51,7 @@ interface Props {
   fields: FormField[]
   onSubmit: (values: Record<string, string>) => Promise<void>
   submitLabel?: string
-  lotConfig?: { required: boolean }
+  lotConfig?: { required: boolean; showWhen?: (values: Record<string, string>) => boolean }
   initialValues?: Record<string, string>
 }
 
@@ -109,7 +120,35 @@ export function EntityFormDialog({
                 {f.label}
                 {f.required ? ' *' : ''}
               </Label>
-              {f.type === 'select' ? (
+              {f.type === 'category-select' ? (
+                <CategorySelect
+                  value={values[f.key] || ''}
+                  onChange={(v) => setValues((p) => ({ ...p, [f.key]: v }))}
+                  label=""
+                  storageKey={f.categoryStorageKey || 'expense'}
+                  suggestions={f.options || []}
+                />
+              ) : f.type === 'aplicacao' ? (
+                <Select
+                  value={values[f.key] || 'propriedade'}
+                  onValueChange={(v) => setValues((p) => ({ ...p, [f.key]: v }))}
+                >
+                  <SelectTrigger className="h-10 text-xs rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="propriedade" className="text-xs">
+                      Propriedade (sem lote)
+                    </SelectItem>
+                    <SelectItem value="atividade" className="text-xs">
+                      Atividade
+                    </SelectItem>
+                    <SelectItem value="lote" className="text-xs">
+                      Lote
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              ) : f.type === 'select' ? (
                 <Select
                   value={values[f.key] || ''}
                   onValueChange={(v) => setValues((p) => ({ ...p, [f.key]: v }))}
@@ -157,7 +196,7 @@ export function EntityFormDialog({
               )}
             </div>
           ))}
-          {lotConfig && (
+          {lotConfig && (!lotConfig.showWhen || lotConfig.showWhen(values)) && (
             <div>
               <Label className="text-xs">Lote{lotConfig.required ? ' *' : ' (opcional)'}</Label>
               <Select

@@ -12,47 +12,131 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { RecordActionMenu } from '@/components/RecordActionMenu'
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
+import { CategorySelect } from '@/components/CategorySelect'
 import { Truck, Plus } from 'lucide-react'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 import { Asset } from '@/types/farm'
 
+const ASSET_SUGGESTIONS = [
+  'Chocadeira',
+  'Equipamentos',
+  'Ferramentas',
+  'Bombas',
+  'Aeradores',
+  'Estruturas',
+  'Veículos',
+  'Outros',
+]
+
+const CONDITIONS = ['Excelente', 'Bom', 'Regular', 'Necessita manutenção']
+const STATUSES = ['Em uso', 'Ocioso', 'Em manutenção', 'Descartado']
+
+interface FormState {
+  name: string
+  category: string
+  acquisitionDate: string
+  value: string
+  usefulLifeYears: string
+  condition: Asset['condition']
+  location: string
+  status: Asset['status']
+}
+
+const emptyForm: FormState = {
+  name: '',
+  category: 'Equipamentos',
+  acquisitionDate: new Date().toISOString().split('T')[0],
+  value: '',
+  usefulLifeYears: '5',
+  condition: 'Bom',
+  location: '',
+  status: 'Em uso',
+}
+
 export default function Patrimonio() {
-  const { assets, addAsset, structures } = useFarmStore()
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [name, setName] = useState('')
-  const [category, setCategory] = useState<Asset['category']>('Equipamentos')
-  const [acquisitionDate, setAcquisitionDate] = useState(new Date().toISOString().split('T')[0])
-  const [value, setValue] = useState('')
-  const [usefulLifeYears, setUsefulLifeYears] = useState('5')
-  const [condition, setCondition] = useState<Asset['condition']>('Bom')
-  const [location, setLocation] = useState('')
+  const { assets, addAsset, updateAsset, deleteAsset, structures } = useFarmStore()
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Asset | null>(null)
+  const [deleting, setDeleting] = useState<Asset | null>(null)
+  const [details, setDetails] = useState<Asset | null>(null)
+  const [form, setForm] = useState<FormState>(emptyForm)
 
   const totalAssetsValue = assets.reduce((acc, a) => acc + a.value, 0)
   const totalStructures = structures.reduce((acc, s) => acc + s.totalValue, 0)
   const grandTotal = totalAssetsValue + totalStructures
 
-  const handleAdd = (e: React.FormEvent) => {
-    e.preventDefault()
-    const newAsset: Asset = {
-      id: `ast-${Date.now()}`,
-      name,
-      category,
-      acquisitionDate,
-      value: Number(value) || 0,
-      usefulLifeYears: Number(usefulLifeYears) || 1,
-      condition,
-      location: location || 'Não especificado',
-      status: 'Em uso',
-    }
-    addAsset(newAsset)
-    toast({
-      title: 'Patrimônio registrado! 🏗️',
-      description: `${name} adicionado aos bens da propriedade.`,
+  const openCreate = () => {
+    setEditing(null)
+    setForm(emptyForm)
+    setOpen(true)
+  }
+
+  const openEdit = (a: Asset) => {
+    setEditing(a)
+    setForm({
+      name: a.name,
+      category: a.category,
+      acquisitionDate: a.acquisitionDate,
+      value: String(a.value),
+      usefulLifeYears: String(a.usefulLifeYears),
+      condition: a.condition,
+      location: a.location,
+      status: a.status,
     })
-    setDialogOpen(false)
-    setName('')
-    setValue('')
-    setLocation('')
+    setOpen(true)
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    try {
+      const data: Omit<Asset, 'id'> = {
+        name: form.name,
+        category: form.category,
+        acquisitionDate: form.acquisitionDate,
+        value: Number(form.value) || 0,
+        usefulLifeYears: Number(form.usefulLifeYears) || 1,
+        condition: form.condition,
+        location: form.location || 'Não especificado',
+        status: form.status,
+      }
+      if (editing) {
+        const { error } = await updateAsset(editing.id, data)
+        if (error) throw new Error(error.message)
+        await logAudit('UPDATE', 'farm_assets', editing.id, editing as any, data as any)
+        toast({ title: 'Bem atualizado! ✅' })
+      } else {
+        const { error } = await addAsset({ ...data, id: `ast-${Date.now()}` } as any)
+        if (error) throw new Error(error.message)
+        toast({ title: 'Patrimônio registrado! 🏗️', description: data.name })
+      }
+      setOpen(false)
+      setEditing(null)
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' })
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleting) return
+    try {
+      const { error } = await deleteAsset(deleting.id)
+      if (error) throw new Error(error.message)
+      await logAudit('DELETE', 'farm_assets', deleting.id, deleting as any, null)
+      toast({ title: 'Bem excluído! 🗑️' })
+      setDeleting(null)
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' })
+    }
   }
 
   const getDepreciation = (asset: Asset) => {
@@ -75,10 +159,7 @@ export default function Patrimonio() {
             Inventário de equipamentos, estruturas e investimentos da fazenda.
           </p>
         </div>
-        <Button
-          onClick={() => setDialogOpen(!dialogOpen)}
-          className="rounded-xl bg-primary text-white text-xs gap-2"
-        >
+        <Button onClick={openCreate} className="rounded-xl bg-primary text-white text-xs gap-2">
           <Plus className="w-4 h-4" /> Novo Bem
         </Button>
       </div>
@@ -104,110 +185,6 @@ export default function Patrimonio() {
         </Card>
       </div>
 
-      {dialogOpen && (
-        <Card className="rounded-3xl bg-white border-border shadow-subtle p-5">
-          <h2 className="text-base font-bold mb-3">Registrar Novo Bem Patrimonial</h2>
-          <form onSubmit={handleAdd} className="space-y-3">
-            <div>
-              <Label className="text-xs">Descrição</Label>
-              <Input
-                placeholder="Ex: Chocadeira 120 ovos"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="h-10 text-xs rounded-xl"
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Categoria</Label>
-                <Select value={category} onValueChange={(v) => setCategory(v as Asset['category'])}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Chocadeira">Chocadeira</SelectItem>
-                    <SelectItem value="Equipamentos">Equipamentos</SelectItem>
-                    <SelectItem value="Ferramentas">Ferramentas</SelectItem>
-                    <SelectItem value="Estruturas">Estruturas</SelectItem>
-                    <SelectItem value="Bombas">Bombas</SelectItem>
-                    <SelectItem value="Outros">Outros</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Data de Aquisição</Label>
-                <Input
-                  type="date"
-                  value={acquisitionDate}
-                  onChange={(e) => setAcquisitionDate(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                  required
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Valor (R$)</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  placeholder="0.00"
-                  value={value}
-                  onChange={(e) => setValue(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                  required
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Vida Útil (anos)</Label>
-                <Input
-                  type="number"
-                  value={usefulLifeYears}
-                  onChange={(e) => setUsefulLifeYears(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                  required
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs">Estado de Conservação</Label>
-                <Select
-                  value={condition}
-                  onValueChange={(v) => setCondition(v as Asset['condition'])}
-                >
-                  <SelectTrigger className="h-10 text-xs rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Excelente">Excelente</SelectItem>
-                    <SelectItem value="Bom">Bom</SelectItem>
-                    <SelectItem value="Regular">Regular</SelectItem>
-                    <SelectItem value="Necessita manutenção">Necessita manutenção</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label className="text-xs">Local</Label>
-                <Input
-                  placeholder="Ex: Galinheiro Principal"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                />
-              </div>
-            </div>
-            <Button
-              type="submit"
-              className="w-full h-11 text-xs font-bold rounded-xl bg-primary text-white"
-            >
-              Adicionar Patrimônio ✨
-            </Button>
-          </form>
-        </Card>
-      )}
-
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {assets.map((ast) => {
           const dep = getDepreciation(ast)
@@ -215,9 +192,16 @@ export default function Patrimonio() {
             <Card key={ast.id} className="rounded-2xl bg-white border-border p-4 space-y-2">
               <div className="flex items-center justify-between">
                 <p className="font-bold text-sm text-foreground">{ast.name}</p>
-                <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">
-                  {ast.condition}
-                </Badge>
+                <div className="flex items-center gap-2">
+                  <Badge className="bg-emerald-100 text-emerald-800 text-[10px]">
+                    {ast.condition}
+                  </Badge>
+                  <RecordActionMenu
+                    onViewDetails={() => setDetails(ast)}
+                    onEdit={() => openEdit(ast)}
+                    onDelete={() => setDeleting(ast)}
+                  />
+                </div>
               </div>
               <p className="text-xs text-muted-foreground">
                 {ast.category} • {ast.location} • {ast.status}
@@ -243,6 +227,171 @@ export default function Patrimonio() {
           )
         })}
       </div>
+
+      {/* Create/Edit Dialog */}
+      <Dialog open={open} onOpenChange={(v) => !v && (setOpen(false), setEditing(null))}>
+        <DialogContent className="max-w-md rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">
+              {editing ? 'Editar Bem' : 'Registrar Novo Bem Patrimonial'}
+            </DialogTitle>
+            <DialogDescription className="text-xs">
+              Cadastro de patrimônio. Nenhum lote é necessário.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-3 mt-2">
+            <div>
+              <Label className="text-xs">Descrição *</Label>
+              <Input
+                placeholder="Ex: Chocadeira 120 ovos"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="h-10 text-xs rounded-xl"
+                required
+              />
+            </div>
+            <CategorySelect
+              label="Categoria"
+              value={form.category}
+              onChange={(v) => setForm({ ...form, category: v })}
+              storageKey="asset"
+              suggestions={ASSET_SUGGESTIONS}
+            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Data de Aquisição</Label>
+                <Input
+                  type="date"
+                  value={form.acquisitionDate}
+                  onChange={(e) => setForm({ ...form, acquisitionDate: e.target.value })}
+                  className="h-10 text-xs rounded-xl"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Valor (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={form.value}
+                  onChange={(e) => setForm({ ...form, value: e.target.value })}
+                  className="h-10 text-xs rounded-xl"
+                  required
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Vida Útil (anos)</Label>
+                <Input
+                  type="number"
+                  value={form.usefulLifeYears}
+                  onChange={(e) => setForm({ ...form, usefulLifeYears: e.target.value })}
+                  className="h-10 text-xs rounded-xl"
+                  required
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Estado de Conservação</Label>
+                <Select
+                  value={form.condition}
+                  onValueChange={(v) => setForm({ ...form, condition: v as Asset['condition'] })}
+                >
+                  <SelectTrigger className="h-10 text-xs rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONDITIONS.map((c) => (
+                      <SelectItem key={c} value={c} className="text-xs">
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Local</Label>
+                <Input
+                  placeholder="Ex: Galinheiro Principal"
+                  value={form.location}
+                  onChange={(e) => setForm({ ...form, location: e.target.value })}
+                  className="h-10 text-xs rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Status</Label>
+                <Select
+                  value={form.status}
+                  onValueChange={(v) => setForm({ ...form, status: v as Asset['status'] })}
+                >
+                  <SelectTrigger className="h-10 text-xs rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map((s) => (
+                      <SelectItem key={s} value={s} className="text-xs">
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <Button
+              type="submit"
+              className="w-full h-11 text-xs font-bold rounded-xl bg-primary text-white"
+            >
+              {editing ? 'Salvar Alterações' : 'Adicionar Patrimônio ✨'}
+            </Button>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Details */}
+      <Dialog open={!!details} onOpenChange={(v) => !v && setDetails(null)}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-bold">Detalhes do Bem</DialogTitle>
+          </DialogHeader>
+          {details && (
+            <div className="space-y-2 text-xs">
+              <p>
+                <strong>Nome:</strong> {details.name}
+              </p>
+              <p>
+                <strong>Categoria:</strong> {details.category}
+              </p>
+              <p>
+                <strong>Aquisição:</strong> {details.acquisitionDate}
+              </p>
+              <p>
+                <strong>Valor:</strong> R$ {details.value.toFixed(2)}
+              </p>
+              <p>
+                <strong>Vida útil:</strong> {details.usefulLifeYears} anos
+              </p>
+              <p>
+                <strong>Condição:</strong> {details.condition}
+              </p>
+              <p>
+                <strong>Local:</strong> {details.location}
+              </p>
+              <p>
+                <strong>Status:</strong> {details.status}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <DeleteConfirmDialog
+        open={!!deleting}
+        onOpenChange={(v) => !v && setDeleting(null)}
+        onConfirm={handleDelete}
+      />
     </div>
   )
 }

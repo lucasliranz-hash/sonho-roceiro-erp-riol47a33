@@ -9,25 +9,39 @@ import { toast } from '@/hooks/use-toast'
 import { DollarSign, Plus } from 'lucide-react'
 import { Expense } from '@/types/farm'
 
+const EXPENSE_SUGGESTIONS = [
+  'Ração',
+  'Pintinhos',
+  'Medicamentos',
+  'Vacinas',
+  'Cama',
+  'Energia',
+  'Água',
+  'Transporte',
+  'Manutenção',
+  'Mão de obra',
+  'Abate',
+  'Embalagem',
+  'Outros',
+]
+
 const fields: FormField[] = [
   { key: 'date', label: 'Data', type: 'date', required: true },
   { key: 'description', label: 'Descrição', type: 'text', required: true },
   {
     key: 'category',
     label: 'Categoria',
-    type: 'select',
-    options: [
-      'Ração',
-      'Pintinhos',
-      'Medicamentos',
-      'Vacinas',
-      'Cama',
-      'Energia',
-      'Água',
-      'Transporte',
-      'Manutenção',
-      'Outros',
-    ],
+    type: 'category-select',
+    categoryStorageKey: 'expense',
+    options: EXPENSE_SUGGESTIONS,
+  },
+  { key: 'aplicacao', label: 'Aplicar a', type: 'aplicacao', defaultValue: 'propriedade' },
+  {
+    key: 'activity',
+    label: 'Atividade',
+    type: 'text',
+    placeholder: 'Opcional',
+    showWhen: (v) => v.aplicacao === 'atividade' || v.aplicacao === 'lote',
   },
   { key: 'quantity', label: 'Quantidade', type: 'number', defaultValue: '1' },
   { key: 'unitValue', label: 'Valor Unitário (R$)', type: 'number', step: '0.01' },
@@ -42,15 +56,21 @@ export default function Despesas() {
   const totalExp = expenses.reduce((acc, e) => acc + e.totalValue, 0)
 
   const handleSubmit = async (values: Record<string, string>) => {
+    const aplicacao = (values.aplicacao || 'propriedade') as 'propriedade' | 'atividade' | 'lote'
+    const lotId = aplicacao === 'lote' ? values.lotId || '' : ''
     const data = {
       date: values.date,
       description: values.description,
-      category: values.category as Expense['category'],
+      category: values.category,
       quantity: Number(values.quantity) || 1,
       unitValue: Number(values.unitValue) || 0,
       supplier: 'Geral',
       paymentMethod: 'Pix',
       isPaid: true,
+      aplicacao,
+      activity: values.activity || '',
+      lotId,
+      source_type: 'MANUAL',
     }
     if (editing) {
       const { error } = await updateExpense(editing.id, {
@@ -150,13 +170,15 @@ export default function Despesas() {
         title={editing ? 'Editar Despesa' : 'Nova Despesa'}
         fields={fields}
         onSubmit={handleSubmit}
-        lotConfig={{ required: false }}
+        lotConfig={{ required: false, showWhen: (aplicacao?: string) => aplicacao === 'lote' }}
         initialValues={
           editing
             ? {
                 date: editing.date,
                 description: editing.description,
                 category: editing.category,
+                aplicacao: editing.aplicacao || 'propriedade',
+                activity: editing.activity || '',
                 quantity: String(editing.quantity),
                 unitValue: String(editing.unitValue),
                 lotId: editing.lotId || '',

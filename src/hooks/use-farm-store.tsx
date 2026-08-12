@@ -9,6 +9,7 @@ import {
   StructureCost,
   InventoryItem,
   FeedConsumption,
+  FeedPurchase,
   Weighing,
   Mortality,
   EggProduction,
@@ -34,6 +35,11 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const expenses = useSupabaseEntity<Expense>(FARM_TABLES.expenses, orgId, 'expenses')
   const inventory = useSupabaseEntity<InventoryItem>(FARM_TABLES.inventory, orgId, 'inventory')
   const feedLogs = useSupabaseEntity<FeedConsumption>(FARM_TABLES.feedLogs, orgId, 'feed')
+  const feedPurchases = useSupabaseEntity<FeedPurchase>(
+    FARM_TABLES.feedLogs,
+    orgId,
+    'feedPurchases',
+  )
   const weighings = useSupabaseEntity<Weighing>(FARM_TABLES.weighings, orgId, 'weighings')
   const mortality = useSupabaseEntity<Mortality>(FARM_TABLES.mortality, orgId, 'mortality')
   const eggs = useSupabaseEntity<EggProduction>(FARM_TABLES.eggs, orgId, 'eggs')
@@ -108,6 +114,100 @@ function useFarmStoreImpl(orgId: string | undefined) {
       return { error: null }
     },
     [feedLogs, inventory],
+  )
+
+  // Compra/Entrada de ração: registra compra, atualiza estoque (+=), custo médio, e opcionalmente gera despesa CAPEX/OPEX
+  const addFeedPurchase = useCallback(
+    async (
+      purchase: Omit<FeedPurchase, 'id' | 'totalQuantity' | 'totalValue'> & {
+        generateExpense?: boolean
+      },
+    ) => {
+      const totalQuantity = Number(
+        ((purchase.packages || 0) * (purchase.weightPerPackage || 0)).toFixed(2),
+      )
+      const totalValue = Number(
+        ((purchase.packages || 0) * (purchase.pricePerPackage || 0)).toFixed(2),
+      )
+      const purchaseId = `fp-${Date.now()}`
+      const record: FeedPurchase = {
+        ...purchase,
+        id: purchaseId,
+        totalQuantity,
+        totalValue,
+        source_type: 'INVENTORY_PURCHASE',
+      }
+      const { error } = await feedPurchases.add(record)
+      if (error) return { error }
+
+      // Update inventory: stock += totalQuantity, recalc average cost
+      const item = inventory.items.find((i) => i.id === purchase.inventoryItemId)
+      if (item) {
+        const oldStock = item.currentStock || 0
+        const oldAvg = item.averageCost || 0
+        const newStock = oldStock + totalQuantity
+        // weighted average cost
+        const newAvg =
+          newStock > 0 ? Number(((oldStock * oldAvg + totalValue) / newStock).toFixed(2)) : oldAvg
+        await inventory.update(purchase.inventoryItemId, {
+          currentStock: newStock,
+          averageCost: newAvg,
+          lastUpdated: new Date().toISOString().split('T')[0],
+        })
+      }
+
+      // Optionally generate expense in financeiro
+      if (purchase.generateExpense) {
+        await expenses.add({
+          id: `ex-${Date.now()}`,
+          date: purchase.date,
+          category: 'Ração',
+          description: `Compra de ${purchase.inventoryItemName || 'ração'} (${purchase.packages}x ${purchase.weightPerPackage}kg)`,
+          quantity: purchase.packages,
+          unitValue: purchase.pricePerPackage,
+          totalValue: totalValue,
+          supplier: purchase.supplier || 'Fornecedor',
+          paymentMethod: purchase.paymentMethod || 'Pix',
+          isPaid: true,
+          source_type: 'INVENTORY_PURCHASE',
+          source_id: purchaseId,
+        } as any)
+      }
+      return { error: null }
+    },
+    [feedPurchases, inventory, expenses],
+  )
+
+  const updateFeedPurchase = useCallback(
+    async (id: string, updates: Partial<FeedPurchase>) => {
+      return feedPurchases.update(id, updates)
+    },
+    [feedPurchases],
+  )
+
+  const deleteFeedPurchase = useCallback(
+    async (id: string) => {
+      const p = feedPurchases.items.find((item) => item.id === id)
+      const { error } = await feedPurchases.remove(id)
+      if (error) return { error }
+      // Reverse stock and average cost impact is complex; just remove stock addition
+      if (p) {
+        const item = inventory.items.find((i) => i.id === p.inventoryItemId)
+        if (item) {
+          await inventory.update(p.inventoryItemId, {
+            currentStock: Math.max(0, item.currentStock - p.totalQuantity),
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+        }
+        // remove linked expense
+        const linked = expenses.items.find(
+          (e) => e.source_type === 'INVENTORY_PURCHASE' && e.source_id === id,
+        )
+        if (linked) await expenses.remove(linked.id)
+      }
+      return { error: null }
+    },
+    [feedPurchases, inventory, expenses],
   )
 
   const addWeighing = useCallback(
@@ -314,7 +414,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const f = feedLogs.items.find((item) => item.id === id)
       const { error } = await feedLogs.remove(id)
       if (error) return { error }
-      if (f && f.inventoryItemId) {
+      // Only restock if it was a consumption record (not a purchase)
+      if (f && f.inventoryItemId && (f as any).recordType !== 'purchase') {
         const item = inventory.items.find((i) => i.id === f.inventoryItemId)
         if (item)
           await inventory.update(f.inventoryItemId, {
@@ -377,6 +478,10 @@ function useFarmStoreImpl(orgId: string | undefined) {
     addFeedConsumption,
     updateFeedConsumption: updateFeedRecord,
     deleteFeedConsumption,
+    feedPurchases: feedPurchases.items,
+    addFeedPurchase,
+    updateFeedPurchase,
+    deleteFeedPurchase,
     weighings: weighings.items,
     addWeighing,
     updateWeighing: weighings.update,

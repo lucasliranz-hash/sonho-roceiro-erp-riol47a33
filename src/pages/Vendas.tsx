@@ -6,8 +6,21 @@ import { EntityFormDialog, FormField } from '@/components/EntityFormDialog'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 import { ShoppingCart, Plus } from 'lucide-react'
 import { Sale } from '@/types/farm'
+
+const SALE_SUGGESTIONS = [
+  'Ovos',
+  'Ovos férteis',
+  'Pintinhos',
+  'Frangos vivos',
+  'Frangos abatidos',
+  'Galinhas',
+  'Matrizes',
+  'Reprodutores',
+  'Outros',
+]
 
 const fields: FormField[] = [
   { key: 'date', label: 'Data', type: 'date', required: true },
@@ -15,18 +28,9 @@ const fields: FormField[] = [
   {
     key: 'product',
     label: 'Produto',
-    type: 'select',
-    options: [
-      'Ovos',
-      'Ovos férteis',
-      'Pintinhos',
-      'Frangos vivos',
-      'Frangos abatidos',
-      'Galinhas',
-      'Matrizes',
-      'Reprodutores',
-      'Outros',
-    ],
+    type: 'category-select',
+    categoryStorageKey: 'sale',
+    options: SALE_SUGGESTIONS,
   },
   { key: 'quantity', label: 'Quantidade', type: 'number', required: true },
   { key: 'unitPrice', label: 'Preço Unitário (R$)', type: 'number', step: '0.01' },
@@ -44,11 +48,12 @@ export default function Vendas() {
     const data = {
       date: values.date,
       customerName: values.customerName,
-      product: values.product as Sale['product'],
+      product: values.product,
       quantity: Number(values.quantity) || 1,
       unitPrice: Number(values.unitPrice) || 0,
       paymentMethod: 'Pix',
       isPaid: true,
+      source_type: 'MANUAL',
     }
     if (editing) {
       const { error } = await updateSale(editing.id, {
@@ -56,6 +61,7 @@ export default function Vendas() {
         totalPrice: Number((data.quantity * data.unitPrice).toFixed(2)),
       })
       if (error) throw new Error(error.message)
+      await logAudit('UPDATE', 'farm_sales', editing.id, editing as any, data as any)
       toast({ title: 'Venda atualizada! ✅' })
     } else {
       const { error } = await addSale(data as any)
@@ -71,6 +77,7 @@ export default function Vendas() {
       toast({ title: 'Erro', variant: 'destructive' })
       return
     }
+    await logAudit('DELETE', 'farm_sales', deleting.id, deleting as any, null)
     toast({ title: 'Venda excluída! 🗑️' })
     setDeleting(null)
   }
