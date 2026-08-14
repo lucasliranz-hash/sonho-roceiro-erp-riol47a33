@@ -358,6 +358,22 @@ export default function Racao() {
     }
   }
 
+  const handleDeleteRacao = async () => {
+    if (!deletingRacao) return
+    try {
+      const { error } = await deleteInventory(deletingRacao.id)
+      if (error) throw new Error(error.message)
+      await logAudit('DELETE', 'farm_inventory', deletingRacao.id, deletingRacao as any)
+      toast({
+        title: 'Ração excluída! 🗑️',
+        description: 'O cadastro foi removido do estoque.',
+      })
+      setDeletingRacao(null)
+    } catch (err: any) {
+      toast({ title: 'Erro', description: err?.message, variant: 'destructive' })
+    }
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
