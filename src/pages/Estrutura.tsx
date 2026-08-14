@@ -203,7 +203,11 @@ export default function Estrutura() {
           description: 'Alterações salvas no Supabase.',
         })
       } else {
-        // CREATE structure
+        // CREATE structure — pass the same id to addStructure so the linked
+        // financial transaction references the real structure id.
+        // Determine the real id that will be persisted for the structure.
+        // addStructure preserves the id provided here, so the linked expense
+        // (source_type=STRUCTURE, source_id=<id>) points to the real row.
         const newId = `st-${Date.now()}`
         const record: Omit<StructureCost, 'totalValue'> & { id: string } = {
           id: newId,
@@ -222,8 +226,11 @@ export default function Estrutura() {
         const { error } = await addStructure(record as any)
         if (error) throw new Error(error.message)
 
-        // Generate CAPEX expense linked to this structure
-        if (form.generateCapex) {
+        // Generate a single CAPEX expense linked to this structure.
+        // Guard: only create if no active expense already links to this id
+        // (prevents duplicates from retries / double submits).
+        const existing = findLinkedExpense(newId)
+        if (form.generateCapex && !existing) {
           await addExpense({
             date: form.date,
             category: form.category,

@@ -120,6 +120,15 @@ export function FinanceiroTransactionList() {
   const [createType, setCreateType] = useState<'expense' | 'sale' | null>(null)
 
   const transactions = useMemo<Txn[]>(() => {
+    // Set of structure ids that already have a linked CAPEX expense row —
+    // those are shown via the expense itself, so we skip the redundant
+    // structure row to avoid duplicate entries in Financeiro.
+    const structureIdsWithExpense = new Set(
+      expenses
+        .filter((e) => e.source_type === 'STRUCTURE' && e.source_id)
+        .map((e) => e.source_id as string),
+    )
+
     const exp = expenses.map((e: Expense) => ({
       id: e.id,
       recordType: 'expense' as const,
@@ -142,17 +151,22 @@ export function FinanceiroTransactionList() {
       isPositive: true,
       raw: s,
     }))
-    const str = structures.map((s) => ({
-      id: s.id,
-      recordType: 'structure' as const,
-      description: s.description,
-      amount: s.totalValue,
-      date: s.date,
-      source_type: 'STRUCTURE',
-      category: s.category,
-      isPositive: false,
-      raw: s,
-    }))
+    // Only emit a structure row when there is NO linked CAPEX expense for it
+    // (otherwise the expense row already represents the transaction, and
+    // showing both would duplicate the value in the cash flow).
+    const str = structures
+      .filter((s) => !structureIdsWithExpense.has(s.id))
+      .map((s) => ({
+        id: s.id,
+        recordType: 'structure' as const,
+        description: s.description,
+        amount: s.totalValue,
+        date: s.date,
+        source_type: 'STRUCTURE',
+        category: s.category,
+        isPositive: false,
+        raw: s,
+      }))
     const ast = assets.map((a) => ({
       id: a.id,
       recordType: 'asset' as const,

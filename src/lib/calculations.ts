@@ -61,13 +61,24 @@ export function computeFinancialSummary(
   assets: Asset[],
 ): FinancialSummary {
   const operationalRevenue = sales.reduce((acc, s) => acc + s.totalPrice, 0)
-  const operationalExpenses = expenses.reduce((acc, e) => acc + e.totalValue, 0)
+  // CAPEX/structure expenses already appear as linked rows in `expenses`
+  // (source_type=STRUCTURE). Count them as CAPEX, not as operational OPEX,
+  // so the same value is never counted twice.
+  const isCapexExpense = (e: Expense) => e.source_type === 'STRUCTURE'
+  const operationalExpenses = expenses
+    .filter((e) => !isCapexExpense(e))
+    .reduce((acc, e) => acc + e.totalValue, 0)
   const operationalResult = operationalRevenue - operationalExpenses
 
+  // CAPEX = structures (source of truth) — each structure maps to exactly one
+  // linked expense, so summing structures avoids double counting.
   const capex = structures.reduce((acc, st) => acc + st.totalValue, 0)
 
   const paidInflows = sales.filter((s) => s.isPaid).reduce((acc, s) => acc + s.totalPrice, 0)
-  const paidOpex = expenses.filter((e) => e.isPaid).reduce((acc, e) => acc + e.totalValue, 0)
+  // OPEX excludes CAPEX-linked expenses (counted below as capex).
+  const paidOpex = expenses
+    .filter((e) => e.isPaid && !isCapexExpense(e))
+    .reduce((acc, e) => acc + e.totalValue, 0)
   const paidCapex = structures.filter((st) => st.isPaid).reduce((acc, st) => acc + st.totalValue, 0)
 
   const cashFlow = paidInflows - paidOpex - paidCapex

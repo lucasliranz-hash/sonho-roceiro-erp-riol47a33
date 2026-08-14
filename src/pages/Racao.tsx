@@ -60,6 +60,7 @@ export default function Racao() {
     deleteFeedPurchase,
     addInventoryItem,
     updateInventory,
+    deleteInventory,
   } = useFarmStore()
 
   const [tab, setTab] = useState<'estoque' | 'compras' | 'consumo'>('estoque')
@@ -107,6 +108,7 @@ export default function Racao() {
 
   const [deletingConsumption, setDeletingConsumption] = useState<FeedConsumption | null>(null)
   const [deletingPurchase, setDeletingPurchase] = useState<FeedPurchase | null>(null)
+  const [deletingRacao, setDeletingRacao] = useState<InventoryItem | null>(null)
   const [details, setDetails] = useState<any>(null)
 
   // Itens de ração = inventory items cuja categoria inclui "ração" ou todos (permite qualquer item)
@@ -467,6 +469,7 @@ export default function Racao() {
                     <RecordActionMenu
                       onEdit={() => openRacaoEdit(item)}
                       onViewDetails={() => setDetails(item)}
+                      onDelete={() => setDeletingRacao(item)}
                     />
                   </div>
                 </div>
@@ -999,11 +1002,22 @@ export default function Racao() {
         open={!!deletingConsumption}
         onOpenChange={(v) => !v && setDeletingConsumption(null)}
         onConfirm={handleDeleteConsumption}
+        title="Excluir lançamento de ração?"
+        description="Esta ação removerá este lançamento e ajustará o estoque relacionado, quando aplicável."
       />
       <DeleteConfirmDialog
         open={!!deletingPurchase}
         onOpenChange={(v) => !v && setDeletingPurchase(null)}
         onConfirm={handleDeletePurchase}
+        title="Excluir lançamento de ração?"
+        description="Esta ação removerá este lançamento e ajustará o estoque relacionado, quando aplicável."
+      />
+      <DeleteConfirmDialog
+        open={!!deletingRacao}
+        onOpenChange={(v) => !v && setDeletingRacao(null)}
+        onConfirm={handleDeleteRacao}
+        title="Excluir lançamento de ração?"
+        description="Esta ação removerá este lançamento e ajustará o estoque relacionado, quando aplicável."
       />
     </div>
   )

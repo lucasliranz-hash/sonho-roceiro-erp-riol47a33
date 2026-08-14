@@ -364,7 +364,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
         break
       }
       case 'investimento': {
-        const { error } = await addStructure({
+        const result = await addStructure({
           date,
           category: invCategory,
           description: invDescription || `Investimento em ${invCategory}`,
@@ -376,7 +376,7 @@ export function QuickEntryModal({ open, onOpenChange, initialActionType }: Quick
           isPaid: true,
           center: 'Patrimônio',
         })
-        if (handleError(error)) return
+        if (handleError(result.error)) return
         toast({
           title: 'Investimento registrado! 🏗️',
           description: 'Bem patrimonial adicionado ao CAPEX.',

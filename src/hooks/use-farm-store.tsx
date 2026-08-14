@@ -87,12 +87,16 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addStructure = useCallback(
-    async (st: Omit<StructureCost, 'id' | 'totalValue'>) => {
-      return structures.add({
+    async (st: Omit<StructureCost, 'id' | 'totalValue'> & { id?: string }) => {
+      // Preserve the caller-provided id so the linked financial transaction
+      // (source_type=STRUCTURE, source_id=<id>) points to the exact structure.
+      const id = st.id || `st-${Date.now()}`
+      const { error } = await structures.add({
         ...st,
-        id: `st-${Date.now()}`,
+        id,
         totalValue: Number((st.quantity * st.unitValue).toFixed(2)),
-      })
+      } as any)
+      return { error, id }
     },
     [structures],
   )
