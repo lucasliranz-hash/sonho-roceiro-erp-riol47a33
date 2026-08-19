@@ -32,6 +32,7 @@ import {
   Building2,
   Coins,
   Plus,
+  PawPrint,
 } from 'lucide-react'
 import {
   computePriceFromMargin,
@@ -150,6 +151,29 @@ interface CostLine {
   sources: SourceRow[]
 }
 
+interface AcquisitionCostLine {
+  /** Valor final exibido (acquisitionCost do lote, sem duplicar com a despesa vinculada) */
+  value: number
+  /** Custo cadastrado no lote */
+  lotAcquisitionCost: number
+  /** Despesa financeira vinculada (source_type=LOT_ACQUISITION), se existir */
+  linkedExpense?: {
+    id: string
+    value: number
+    date: string
+    description?: string
+    category?: string
+  }
+  /** Se a aquisição está incluída no período atual (false => mostrar aviso) */
+  included: boolean
+  /** Motivo textual do estado de inclusão (para aviso) */
+  exclusionReason?: string
+  /** Quantidade de animais usada para cálculo por animal */
+  animalCount: number
+  /** Custo de aquisição por animal (acquisitionCost / animalCount) */
+  costPerAnimal: number | null
+}
+
 interface ComputedResult {
   activityName: string
   periodStart: string
@@ -157,6 +181,7 @@ interface ComputedResult {
   racao: CostLine
   sanidade: CostLine
   outrosDiretos: CostLine
+  aquisicao: AcquisitionCostLine | null
   energia: CostLine
   maoDeObra: CostLine
   outrosAtividade: CostLine
@@ -167,6 +192,7 @@ interface ComputedResult {
   diretosTotal: number
   atividadeTotal: number
   totalOpex: number
+  totalComAquisicao: number
   isEgg: boolean
   isAnimal: boolean
   produced: number | null
@@ -250,6 +276,123 @@ function CostRow({
             </div>
           </CollapsibleContent>
         )}
+      </Collapsible>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Componente: linha de custo de aquisição (com [Ver origem] estrutural)
+// ---------------------------------------------------------------------------
+
+function AcquisitionCostRow({ aquisicao }: { aquisicao: AcquisitionCostLine }) {
+  const [open, setOpen] = useState(false)
+  const hasSources = !!aquisicao.linkedExpense
+  const dimmed = !aquisicao.included
+  return (
+    <div className={cn('rounded-2xl border border-border bg-white', dimmed && 'opacity-60')}>
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <div className="p-3 space-y-2">
+          <div className="flex items-center justify-between text-xs gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-muted-foreground shrink-0">
+                <PawPrint className="w-4 h-4" />
+              </span>
+              <span className="font-medium text-foreground truncate">Aquisição dos animais</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={cn('font-bold', dimmed ? 'text-muted-foreground' : 'text-rose-700')}>
+                {fmtBRL(aquisicao.value)}
+              </span>
+              {hasSources ? (
+                <CollapsibleTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 text-[10px] text-primary hover:underline whitespace-nowrap"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> Ver origem
+                  </button>
+                </CollapsibleTrigger>
+              ) : (
+                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                  sem despesa vinculada
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Aviso de período */}
+          {dimmed && aquisicao.exclusionReason && (
+            <div className="flex items-start gap-2 p-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-800 text-[11px]">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+              <p>
+                O custo de aquisição ({fmtBRL(aquisicao.lotAcquisitionCost)}) não está neste período
+                — o lote iniciou em {aquisicao.exclusionReason}. Selecione &lsquo;Ciclo do
+                lote&rsquo; para incluí-lo.
+              </p>
+            </div>
+          )}
+
+          {/* Resumo por animal */}
+          {aquisicao.costPerAnimal !== null && (
+            <p className="text-[10px] text-muted-foreground">
+              Custo de aquisição por animal: {fmtBRL(aquisicao.costPerAnimal)} (
+              {aquisicao.animalCount} animais)
+            </p>
+          )}
+
+          {/* Detalhamento da origem */}
+          {hasSources && (
+            <CollapsibleContent>
+              <div className="space-y-2 pt-1">
+                {/* Bloco: Custo do lote */}
+                <div className="rounded-lg bg-rose-50/60 border border-rose-100 px-2 py-1.5">
+                  <p className="text-[10px] font-semibold uppercase text-rose-700">Custo do lote</p>
+                  <div className="flex items-center justify-between text-[11px] gap-2">
+                    <span className="truncate">Aquisição dos animais</span>
+                    <span className="font-bold text-rose-700 shrink-0">
+                      {fmtBRL(aquisicao.lotAcquisitionCost)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Bloco: Origem financeira */}
+                {aquisicao.linkedExpense && (
+                  <div className="rounded-lg bg-blue-50/60 border border-blue-100 px-2 py-1.5">
+                    <p className="text-[10px] font-semibold uppercase text-blue-700">
+                      Origem financeira
+                    </p>
+                    <div className="flex items-center justify-between text-[11px] gap-2">
+                      <div className="min-w-0">
+                        <span className="font-medium truncate block">
+                          {aquisicao.linkedExpense.description || 'Despesa vinculada'}
+                        </span>
+                        {aquisicao.linkedExpense.category && (
+                          <span className="text-muted-foreground">
+                            {aquisicao.linkedExpense.category}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="text-muted-foreground mr-2">
+                          {new Date(aquisicao.linkedExpense.date + 'T00:00:00').toLocaleDateString(
+                            'pt-BR',
+                          )}
+                        </span>
+                        <span className="font-bold text-blue-700">
+                          {fmtBRL(aquisicao.linkedExpense.value)}
+                        </span>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      Já incluída — não somada novamente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </CollapsibleContent>
+          )}
+        </div>
       </Collapsible>
     </div>
   )
@@ -367,6 +510,103 @@ export default function CustosPrecificacao() {
     )
     const outrosDiretosValue = outrosDiretosExp.reduce((a, e) => a + e.totalValue, 0)
 
+    // --- Aquisição dos animais (linha própria, sem rateio mensal) ---
+    // Previne dupla contagem via relacionamento estrutural: se existir uma
+    // despesa financeira (farm_expenses) com source_type=LOT_ACQUISITION e
+    // source_id = id do lote, ela representa o MESMO custo já lançado.
+    const isLotAcquisition = (e: Expense) =>
+      (e.source_type || '').toUpperCase() === 'LOT_ACQUISITION'
+
+    // Lotes considerados para aquisição (lote selecionado ou todos os da atividade)
+    const acquisitionLots = selectedLotId
+      ? lots.filter((l) => l.id === selectedLotId)
+      : activityLots
+
+    let aquisicaoLotCostSum = 0
+    let aquisicaoAnimalCount = 0
+    const aquisicaoLinkedExpenses: Array<{
+      id: string
+      value: number
+      date: string
+      description?: string
+      category?: string
+      lotId?: string
+    }> = []
+
+    // Mapa de despesas LOT_ACQUISITION por lotId (quando houver)
+    const lotAcquisitionExpenses = expenses.filter((e) => isLotAcquisition(e))
+
+    for (const lot of acquisitionLots) {
+      const lotAcq = Number(lot.acquisitionCost) || 0
+      aquisicaoLotCostSum += lotAcq
+      aquisicaoAnimalCount += Number(lot.initialQuantity) || 0
+      // Despesas vinculadas a este lote específico (source_id === lot.id)
+      const linked = lotAcquisitionExpenses.filter((e) => (e.source_id || '') === lot.id)
+      for (const e of linked) {
+        aquisicaoLinkedExpenses.push({
+          id: e.id,
+          value: e.totalValue,
+          date: e.date,
+          description: e.description,
+          category: e.category,
+          lotId: e.lotId,
+        })
+      }
+    }
+
+    // Regra de período: incluir 100% do acquisitionCost apenas em "Ciclo do lote"
+    // ou em qualquer período que contenha o startDate do lote.
+    const isCyclePeriod = periodPreset === 'Ciclo do lote'
+    // Para "Todos os lotes" verificamos se ao menos um lote tem startDate no período
+    const anyLotStartInPeriod = acquisitionLots.some((l) => l.startDate && inPeriod(l.startDate))
+    const acquisitionIncluded = isCyclePeriod || anyLotStartInPeriod
+
+    // Quando o período NÃO contém o startDate, exibimos o aviso com a data do(s) lote(s)
+    const exclusionLotDates = acquisitionLots.filter((l) => l.startDate).map((l) => l.startDate)
+    const exclusionReason =
+      !acquisitionIncluded && exclusionLotDates.length > 0
+        ? exclusionLotDates
+            .map((d) => new Date(d + 'T00:00:00').toLocaleDateString('pt-BR'))
+            .join(', ')
+        : undefined
+
+    // Soma das despesas vinculadas (já lançadas no financeiro) — usadas para
+    // o "[Ver origem]" e para garantir que NÃO somamos duas vezes.
+    const aquisicaoLinkedSum = aquisicaoLinkedExpenses.reduce((a, e) => a + e.value, 0)
+
+    // Valor exibido: o custo cadastrado no lote. Se houver despesa vinculada,
+    // ela já representa o mesmo custo (não somamos novamente).
+    const aquisicaoDisplayValue = aquisicaoLotCostSum
+    // Valor que efetivamente entra no total do lote (respeitando o período)
+    const aquisicaoContribution = acquisitionIncluded ? aquisicaoDisplayValue : 0
+
+    const aquisicaoCostPerAnimal =
+      aquisicaoAnimalCount > 0 && aquisicaoLotCostSum > 0
+        ? aquisicaoLotCostSum / aquisicaoAnimalCount
+        : null
+
+    const aquisicao: AcquisitionCostLine | null =
+      acquisitionLots.length > 0 && aquisicaoLotCostSum > 0
+        ? {
+            value: aquisicaoContribution,
+            lotAcquisitionCost: aquisicaoLotCostSum,
+            linkedExpense:
+              aquisicaoLinkedExpenses.length > 0
+                ? {
+                    id: aquisicaoLinkedExpenses[0].id,
+                    value: aquisicaoLinkedSum,
+                    date: aquisicaoLinkedExpenses[0].date,
+                    description: aquisicaoLinkedExpenses[0].description,
+                    category: aquisicaoLinkedExpenses[0].category,
+                  }
+                : undefined,
+            included: acquisitionIncluded,
+            exclusionReason,
+            animalCount: aquisicaoAnimalCount,
+            costPerAnimal: aquisicaoCostPerAnimal,
+          }
+        : null
+
     // --- Sub-bloco B: CUSTOS DA ATIVIDADE ---
     // Energia (measurementType 'Atividade')
     const energiaLogs = energyLogs.filter(
@@ -415,6 +655,8 @@ export default function CustosPrecificacao() {
     const diretosTotal = racaoValue + sanidadeValue + outrosDiretosValue
     const atividadeTotal = energiaValue + modValue + outrosAtivValue
     const totalOpex = diretosTotal + atividadeTotal + (includeRateio ? rateioProporcional : 0)
+    // Custo total do lote com aquisição: OPEX + aquisição (linha própria, fora do OPEX)
+    const totalComAquisicao = totalOpex + aquisicaoContribution
 
     // --- Produção ---
     const prod = (product || '').toLowerCase()
@@ -530,9 +772,11 @@ export default function CustosPrecificacao() {
           value: s.totalValue,
         })),
       },
+      aquisicao,
       diretosTotal,
       atividadeTotal,
       totalOpex,
+      totalComAquisicao,
       isEgg,
       isAnimal,
       produced,
@@ -808,7 +1052,6 @@ export default function CustosPrecificacao() {
                 Período: {computed.periodStart} → {computed.periodEnd}
               </span>
             </div>
-
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Sub-bloco A: CUSTOS DIRETOS */}
               <div className="space-y-2">
@@ -833,6 +1076,7 @@ export default function CustosPrecificacao() {
                   value={computed.outrosDiretos.value}
                   sources={computed.outrosDiretos.sources}
                 />
+                {computed.aquisicao && <AcquisitionCostRow aquisicao={computed.aquisicao} />}
                 <div className="flex items-center justify-between p-3 rounded-2xl bg-secondary/30 text-xs">
                   <span className="font-medium text-muted-foreground">Subtotal diretos</span>
                   <span className="font-bold text-rose-700">{fmtBRL(computed.diretosTotal)}</span>
@@ -934,7 +1178,6 @@ export default function CustosPrecificacao() {
                 </p>
               </div>
             </div>
-
             {/* Totais */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-border">
               <div className="p-4 rounded-2xl bg-rose-50 border border-rose-100">
@@ -955,7 +1198,20 @@ export default function CustosPrecificacao() {
                 </p>
                 <p className="text-[10px] text-muted-foreground mt-1">Separado do OPEX</p>
               </div>
-            </div>
+              {computed.aquisicao && computed.aquisicao.value > 0 && (
+                <div className="p-4 rounded-2xl bg-violet-50 border border-violet-100">
+                  <span className="text-xs text-muted-foreground block">
+                    Custo total do lote (com aquisição)
+                  </span>
+                  <p className="text-2xl font-extrabold text-violet-700">
+                    {fmtBRL(computed.totalComAquisicao)}
+                  </p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    OPEX + Aquisição dos animais ({fmtBRL(computed.aquisicao.value)})
+                  </p>
+                </div>
+              )}
+            </div>{' '}
           </Card>
 
           {/* ============================================================= */}
@@ -1039,13 +1295,29 @@ export default function CustosPrecificacao() {
                 {computed.isAnimal && unit !== 'kg' && (
                   <div className="p-4 rounded-2xl bg-violet-50 border border-violet-100">
                     <span className="text-[11px] text-muted-foreground block">
-                      Custo por animal
+                      Custo operacional por animal
                     </span>
                     <p className="text-lg font-extrabold text-violet-700">
                       {fmtBRL(computed.costPerUnit)}
                     </p>
                   </div>
                 )}
+                {computed.aquisicao &&
+                  computed.aquisicao.costPerAnimal !== null &&
+                  computed.aquisicao.costPerAnimal > 0 && (
+                    <div className="p-4 rounded-2xl bg-amber-50 border border-amber-100">
+                      <span className="text-[11px] text-muted-foreground block">
+                        Custo de aquisição por animal
+                      </span>
+                      <p className="text-lg font-extrabold text-amber-700">
+                        {fmtBRL(computed.aquisicao.costPerAnimal)}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {fmtBRL(computed.aquisicao.lotAcquisitionCost)} ÷{' '}
+                        {computed.aquisicao.animalCount} animais (separado do OPEX)
+                      </p>
+                    </div>
+                  )}
                 {computed.isEgg && unit === 'dúzia' && (
                   <div className="p-4 rounded-2xl bg-yellow-50 border border-yellow-100">
                     <span className="text-[11px] text-muted-foreground block">Custo por dúzia</span>
