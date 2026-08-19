@@ -1,5 +1,94 @@
 import { Lot, Expense, Sale, StructureCost, Asset } from '@/types/farm'
 
+export interface PriceFromMarginResult {
+  costPerUnit: number
+  sellingPrice: number
+  profitPerUnit: number
+  marginReal: number
+}
+
+export interface MarginFromPriceResult {
+  profitPerUnit: number
+  marginReal: number
+}
+
+export interface PricingScenarioItem {
+  margin: number
+  price: number
+  profitPerUnit: number
+  profitTotal: number
+  revenue: number
+}
+
+const round2 = (n: number): number => Number(Math.round((n + Number.EPSILON) * 100) / 100)
+
+/**
+ * Calcula preço de venda a partir de margem desejada (markup sobre preço).
+ * Fórmula: Preço = Custo / (1 - Margem/100)
+ * Ex.: Custo=100, Margem=30% => Preço = 142.86
+ */
+export function computePriceFromMargin(
+  costPerUnit: number,
+  marginPercent: number,
+): PriceFromMarginResult {
+  const cost = Number.isFinite(costPerUnit) ? costPerUnit : 0
+  const margin = Number.isFinite(marginPercent) ? Math.min(Math.max(marginPercent, 0), 100) : 0
+  const denominator = 1 - margin / 100
+  const sellingPrice = denominator > 0 ? cost / denominator : 0
+  const profitPerUnit = sellingPrice - cost
+  const marginReal = sellingPrice > 0 ? (profitPerUnit / sellingPrice) * 100 : 0
+  return {
+    costPerUnit: round2(cost),
+    sellingPrice: round2(sellingPrice),
+    profitPerUnit: round2(profitPerUnit),
+    marginReal: round2(marginReal),
+  }
+}
+
+/**
+ * Calcula a margem real a partir do preço de venda informado.
+ * Fórmula: Margem = (Lucro / Preço) * 100, onde Lucro = Preço - Custo
+ * Ex.: Custo=100, Preço=130 => Margem = 23.08%
+ */
+export function computeMarginFromPrice(
+  costPerUnit: number,
+  sellingPrice: number,
+): MarginFromPriceResult {
+  const cost = Number.isFinite(costPerUnit) ? costPerUnit : 0
+  const price = Number.isFinite(sellingPrice) ? sellingPrice : 0
+  const profitPerUnit = price - cost
+  const marginReal = price > 0 ? (profitPerUnit / price) * 100 : 0
+  return {
+    profitPerUnit: round2(profitPerUnit),
+    marginReal: round2(marginReal),
+  }
+}
+
+/**
+ * Gera cenários de precificação para uma lista de margens.
+ * Retorna, para cada margem: preço, lucro unitário, lucro total e receita.
+ */
+export function computePricingScenarios(
+  costPerUnit: number,
+  quantity: number,
+  margins: number[],
+): PricingScenarioItem[] {
+  const cost = Number.isFinite(costPerUnit) ? costPerUnit : 0
+  const qty = Number.isFinite(quantity) && quantity > 0 ? quantity : 0
+  return margins.map((m) => {
+    const res = computePriceFromMargin(cost, m)
+    const profitTotal = res.profitPerUnit * qty
+    const revenue = res.sellingPrice * qty
+    return {
+      margin: round2(m),
+      price: res.sellingPrice,
+      profitPerUnit: res.profitPerUnit,
+      profitTotal: round2(profitTotal),
+      revenue: round2(revenue),
+    }
+  })
+}
+
 export interface LotCostSummary {
   totalCost: number
   costPerBirdHoused: number

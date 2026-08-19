@@ -21,6 +21,7 @@ import {
   Truck,
   UserCog,
   CircleUser,
+  Calculator,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -63,6 +64,7 @@ export const navGroups: NavGroup[] = [
       { label: 'Patrimônio', path: '/patrimonio', icon: Truck },
       { label: 'Estrutura', path: '/estrutura', icon: Building2 },
       { label: 'Energia', path: '/energia', icon: Zap },
+      { label: 'Custos e Precificação', path: '/custos', icon: Calculator },
     ],
   },
   {
