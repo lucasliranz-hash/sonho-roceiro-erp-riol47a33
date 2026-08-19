@@ -26,6 +26,7 @@ import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
 import { Layers, Plus, Search, ArrowLeft } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { Lot, LotType, LotStatus } from '@/types/farm'
 import { computeLotCosts } from '@/lib/calculations'
 import { toast } from '@/hooks/use-toast'
@@ -42,7 +43,7 @@ const LOT_TYPES: LotType[] = [
 const LOT_STATUSES: LotStatus[] = ['Ativo', 'Finalizado', 'Vendido', 'Abatido', 'Transferido']
 
 export default function Lotes() {
-  const { lots, addLot, updateLot, deleteLot, weighings, mortality, expenses, sales } =
+  const { lots, addLot, updateLot, deleteLot, weighings, mortality, expenses, sales, activities } =
     useFarmStore()
   const { canEdit, canDelete } = usePermissions()
   const [searchTerm, setSearchTerm] = useState('')
@@ -56,6 +57,7 @@ export default function Lotes() {
   // New lot form states
   const [name, setName] = useState('')
   const [type, setType] = useState<LotType>('Poedeiras')
+  const [activityId, setActivityId] = useState<string>('')
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
   const [origin, setOrigin] = useState('Incubação Própria')
   const [supplier, setSupplier] = useState('Sítio Sonho Roceiro')
@@ -67,6 +69,7 @@ export default function Lotes() {
   const [editForm, setEditForm] = useState({
     name: '',
     type: 'Poedeiras' as LotType,
+    activityId: '' as string,
     startDate: new Date().toISOString().split('T')[0],
     origin: '',
     supplier: '',
@@ -78,11 +81,22 @@ export default function Lotes() {
     notes: '',
   })
 
+  const activityName = (id?: string) => activities.find((a) => a.id === id)?.name
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!activityId) {
+      toast({
+        title: 'Selecione a atividade',
+        description: 'Cadastre uma atividade antes de criar o lote.',
+        variant: 'destructive',
+      })
+      return
+    }
     addLot({
       name,
       type,
+      activityId: activityId || undefined,
       startDate,
       origin,
       supplier,
@@ -96,6 +110,7 @@ export default function Lotes() {
     toast({ title: 'Lote criado com sucesso! 🐥', description: `Lote "${name}" foi cadastrado.` })
     setCreateDialogOpen(false)
     setName('')
+    setActivityId('')
   }
 
   const openEdit = (lot: Lot) => {
@@ -103,6 +118,7 @@ export default function Lotes() {
     setEditForm({
       name: lot.name,
       type: lot.type,
+      activityId: lot.activityId || '',
       startDate: lot.startDate,
       origin: lot.origin,
       supplier: lot.supplier,
@@ -119,9 +135,18 @@ export default function Lotes() {
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!editing) return
+    if (!editForm.activityId) {
+      toast({
+        title: 'Selecione a atividade',
+        description: 'Todo lote deve estar vinculado a uma atividade.',
+        variant: 'destructive',
+      })
+      return
+    }
     const updates: Partial<Lot> = {
       name: editForm.name,
       type: editForm.type,
+      activityId: editForm.activityId || undefined,
       startDate: editForm.startDate,
       origin: editForm.origin,
       supplier: editForm.supplier,
@@ -304,6 +329,12 @@ export default function Lotes() {
               <CardContent className="p-6 space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
                   <div>
+                    <span className="text-muted-foreground">Atividade:</span>
+                    <p className="font-bold text-foreground">
+                      {activityName(selectedLot.activityId) || 'Sem atividade'}
+                    </p>
+                  </div>
+                  <div>
                     <span className="text-muted-foreground">Tipo:</span>
                     <p className="font-bold text-foreground">{selectedLot.type}</p>
                   </div>
@@ -411,6 +442,7 @@ export default function Lotes() {
           editForm={editForm}
           setEditForm={setEditForm}
           onSubmit={handleEditSubmit}
+          activities={activities}
         />
 
         <DeleteConfirmDialog
@@ -454,6 +486,31 @@ export default function Lotes() {
                   className="h-10 text-xs rounded-xl"
                   required
                 />
+              </div>
+
+              <div>
+                <Label className="text-xs">Atividade *</Label>
+                {activities.length === 0 ? (
+                  <div className="text-[11px] text-muted-foreground p-2 rounded-xl bg-secondary border border-border">
+                    Nenhuma atividade cadastrada.{' '}
+                    <Link to="/atividades" className="text-primary font-semibold underline">
+                      Cadastre uma atividade primeiro.
+                    </Link>
+                  </div>
+                ) : (
+                  <Select value={activityId} onValueChange={setActivityId} required>
+                    <SelectTrigger className="h-10 text-xs rounded-xl">
+                      <SelectValue placeholder="Selecionar atividade" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activities.map((a) => (
+                        <SelectItem key={a.id} value={a.id} className="text-xs">
+                          {a.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -573,6 +630,11 @@ export default function Lotes() {
                 <p className="text-xs text-muted-foreground">
                   {lot.type} • {lot.breed}
                 </p>
+                {activityName(lot.activityId) && (
+                  <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-primary/10 text-primary">
+                    {activityName(lot.activityId)}
+                  </span>
+                )}
               </div>
 
               <div className="pt-2 border-t border-border/60 grid grid-cols-2 gap-2 text-xs">
@@ -602,6 +664,7 @@ export default function Lotes() {
         editForm={editForm}
         setEditForm={setEditForm}
         onSubmit={handleEditSubmit}
+        activities={activities}
       />
 
       <DeleteConfirmDialog
@@ -623,6 +686,7 @@ export default function Lotes() {
             ? [
                 { label: 'Código', value: details.code },
                 { label: 'Nome', value: details.name },
+                { label: 'Atividade', value: activityName(details.activityId) || 'Sem atividade' },
                 { label: 'Tipo', value: details.type },
                 { label: 'Raça', value: details.breed },
                 { label: 'Data de início', value: details.startDate },
@@ -649,6 +713,7 @@ function EditLotDialog({
   editForm,
   setEditForm,
   onSubmit,
+  activities,
 }: {
   open: boolean
   onOpenChange: (v: boolean) => void
@@ -656,6 +721,7 @@ function EditLotDialog({
   editForm: any
   setEditForm: (f: any) => void
   onSubmit: (e: React.FormEvent) => void
+  activities: { id: string; name: string }[]
 }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -674,6 +740,33 @@ function EditLotDialog({
               className="h-10 text-xs rounded-xl"
               required
             />
+          </div>
+          <div>
+            <Label className="text-xs">Atividade *</Label>
+            {activities.length === 0 ? (
+              <div className="text-[11px] text-muted-foreground p-2 rounded-xl bg-secondary border border-border">
+                Nenhuma atividade cadastrada.{' '}
+                <Link to="/atividades" className="text-primary font-semibold underline">
+                  Cadastre uma atividade primeiro.
+                </Link>
+              </div>
+            ) : (
+              <Select
+                value={editForm.activityId}
+                onValueChange={(v) => setEditForm({ ...editForm, activityId: v })}
+              >
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue placeholder="Sem atividade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activities.map((a) => (
+                    <SelectItem key={a.id} value={a.id} className="text-xs">
+                      {a.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>

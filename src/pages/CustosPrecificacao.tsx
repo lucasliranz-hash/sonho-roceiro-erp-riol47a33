@@ -1,7 +1,8 @@
 import { useState, useMemo, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { cn } from '@/lib/utils'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,6 +31,7 @@ import {
   Target,
   Building2,
   Coins,
+  Plus,
 } from 'lucide-react'
 import {
   computePriceFromMargin,
@@ -625,143 +627,164 @@ export default function CustosPrecificacao() {
       {/* ============================================================= */}
       {/* BLOCO 1 — Análise (filtros) */}
       {/* ============================================================= */}
-      <Card className="rounded-3xl bg-white border-border shadow-subtle p-5 space-y-4">
-        <h2 className="text-base font-bold flex items-center gap-2">
-          <Target className="w-4 h-4 text-primary" /> Análise
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Atividade */}
-          <div>
-            <Label className="text-xs">Atividade *</Label>
-            <Select
-              value={selectedActivityId}
-              onValueChange={(v) => {
-                setSelectedActivityId(v)
-                setSelectedLotId('')
-              }}
+      {activeActivities.length === 0 ? (
+        <Card className="rounded-3xl bg-white border-border shadow-subtle">
+          <CardContent className="p-8 text-center space-y-3">
+            <Target className="w-10 h-10 text-muted-foreground/40 mx-auto" />
+            <p className="text-sm font-semibold text-muted-foreground">
+              Nenhuma atividade cadastrada.
+            </p>
+            <p className="text-xs text-muted-foreground max-w-md mx-auto">
+              Para precificar, cadastre primeiro uma atividade produtiva (avicultura, piscicultura,
+              etc.). As atividades organizam lotes, custos diretos e rateios.
+            </p>
+            <Button
+              asChild
+              className="rounded-xl bg-primary text-white font-semibold text-xs gap-2"
             >
-              <SelectTrigger className="h-10 text-xs rounded-xl">
-                <SelectValue placeholder="Selecionar atividade" />
-              </SelectTrigger>
-              <SelectContent>
-                {activeActivities.map((act) => (
-                  <SelectItem key={act.id} value={act.id} className="text-xs">
-                    {act.name} — {act.type}
-                  </SelectItem>
-                ))}
-                {activeActivities.length === 0 && (
-                  <div className="px-2 py-1.5 text-[11px] text-muted-foreground">
-                    Nenhuma atividade ativa.
-                  </div>
-                )}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Lote (opcional) */}
-          <div>
-            <Label className="text-xs">Lote (opcional)</Label>
-            <Select value={selectedLotId} onValueChange={setSelectedLotId}>
-              <SelectTrigger className="h-10 text-xs rounded-xl">
-                <SelectValue placeholder="Todos os lotes" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="" className="text-xs">
-                  Todos os lotes
-                </SelectItem>
-                {activityLots.map((lot) => (
-                  <SelectItem key={lot.id} value={lot.id} className="text-xs">
-                    {lot.code} - {lot.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Produto */}
-          <div>
-            <Label className="text-xs">Produto</Label>
-            <Input
-              list="custos-product-suggestions"
-              placeholder="Digite ou selecione o produto"
-              value={product}
-              onChange={(e) => setProduct(e.target.value)}
-              className="h-10 text-xs rounded-xl"
-            />
-            <datalist id="custos-product-suggestions">
-              {PRODUCT_SUGGESTIONS.map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
-          </div>
-
-          {/* Unidade */}
-          <div>
-            <Label className="text-xs">Unidade</Label>
-            <Select value={unit} onValueChange={setUnit}>
-              <SelectTrigger className="h-10 text-xs rounded-xl">
-                <SelectValue placeholder="Selecionar unidade" />
-              </SelectTrigger>
-              <SelectContent>
-                {UNIT_OPTIONS.map((u) => (
-                  <SelectItem key={u} value={u} className="text-xs">
-                    {u}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Período */}
-          <div>
-            <Label className="text-xs">Período</Label>
-            <Select value={periodPreset} onValueChange={(v) => setPeriodPreset(v as PeriodPreset)}>
-              <SelectTrigger className="h-10 text-xs rounded-xl">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {PERIOD_PRESETS.map((p) => (
-                  <SelectItem key={p} value={p} className="text-xs">
-                    {p}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Datas personalizadas */}
-          {periodPreset === 'Personalizado' && (
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs">Início</Label>
-                <Input
-                  type="date"
-                  value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Fim</Label>
-                <Input
-                  type="date"
-                  value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="h-10 text-xs rounded-xl"
-                />
-              </div>
+              <Link to="/atividades">
+                <Plus className="w-4 h-4" /> Cadastrar primeira atividade
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="rounded-3xl bg-white border-border shadow-subtle p-5 space-y-4">
+          <h2 className="text-base font-bold flex items-center gap-2">
+            <Target className="w-4 h-4 text-primary" /> Análise
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {/* Atividade */}
+            <div>
+              <Label className="text-xs">Atividade *</Label>
+              <Select
+                value={selectedActivityId}
+                onValueChange={(v) => {
+                  setSelectedActivityId(v)
+                  setSelectedLotId('')
+                }}
+              >
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue placeholder="Selecionar atividade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {activeActivities.map((act) => (
+                    <SelectItem key={act.id} value={act.id} className="text-xs">
+                      {act.name} — {act.type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </div>
 
-        <Button
-          onClick={handleCalculate}
-          disabled={!selectedActivityId}
-          className="w-full h-12 text-sm font-bold rounded-2xl bg-primary text-white gap-2"
-        >
-          <Calculator className="w-5 h-5" /> Calcular com dados reais
-        </Button>
-      </Card>
+            {/* Lote (opcional) */}
+            <div>
+              <Label className="text-xs">Lote (opcional)</Label>
+              <Select value={selectedLotId} onValueChange={setSelectedLotId}>
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue placeholder="Todos os lotes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="" className="text-xs">
+                    Todos os lotes
+                  </SelectItem>
+                  {activityLots.map((lot) => (
+                    <SelectItem key={lot.id} value={lot.id} className="text-xs">
+                      {lot.code} - {lot.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Produto */}
+            <div>
+              <Label className="text-xs">Produto</Label>
+              <Input
+                list="custos-product-suggestions"
+                placeholder="Digite ou selecione o produto"
+                value={product}
+                onChange={(e) => setProduct(e.target.value)}
+                className="h-10 text-xs rounded-xl"
+              />
+              <datalist id="custos-product-suggestions">
+                {PRODUCT_SUGGESTIONS.map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            </div>
+
+            {/* Unidade */}
+            <div>
+              <Label className="text-xs">Unidade</Label>
+              <Select value={unit} onValueChange={setUnit}>
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue placeholder="Selecionar unidade" />
+                </SelectTrigger>
+                <SelectContent>
+                  {UNIT_OPTIONS.map((u) => (
+                    <SelectItem key={u} value={u} className="text-xs">
+                      {u}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Período */}
+            <div>
+              <Label className="text-xs">Período</Label>
+              <Select
+                value={periodPreset}
+                onValueChange={(v) => setPeriodPreset(v as PeriodPreset)}
+              >
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {PERIOD_PRESETS.map((p) => (
+                    <SelectItem key={p} value={p} className="text-xs">
+                      {p}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Datas personalizadas */}
+            {periodPreset === 'Personalizado' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <Label className="text-xs">Início</Label>
+                  <Input
+                    type="date"
+                    value={customStart}
+                    onChange={(e) => setCustomStart(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Fim</Label>
+                  <Input
+                    type="date"
+                    value={customEnd}
+                    onChange={(e) => setCustomEnd(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <Button
+            onClick={handleCalculate}
+            disabled={!selectedActivityId}
+            className="w-full h-12 text-sm font-bold rounded-2xl bg-primary text-white gap-2"
+          >
+            <Calculator className="w-5 h-5" /> Calcular com dados reais
+          </Button>
+        </Card>
+      )}
 
       {/* ============================================================= */}
       {/* RESULTADOS */}

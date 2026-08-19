@@ -22,6 +22,7 @@ import {
   UserCog,
   CircleUser,
   Calculator,
+  ListTodo,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -64,6 +65,7 @@ export const navGroups: NavGroup[] = [
       { label: 'Patrimônio', path: '/patrimonio', icon: Truck },
       { label: 'Estrutura', path: '/estrutura', icon: Building2 },
       { label: 'Energia', path: '/energia', icon: Zap },
+      { label: 'Atividades', path: '/atividades', icon: ListTodo },
       { label: 'Custos e Precificação', path: '/custos', icon: Calculator },
     ],
   },

@@ -31,6 +31,7 @@ import Financeiro from './pages/Financeiro'
 import Producao from './pages/Producao'
 import Indicadores from './pages/Indicadores'
 import CustosPrecificacao from './pages/CustosPrecificacao'
+import Atividades from './pages/Atividades'
 import Patrimonio from './pages/Patrimonio'
 import Alertas from './pages/Alertas'
 import Configuracoes from './pages/Configuracoes'
@@ -84,6 +85,7 @@ function App() {
                     <Route path="/producao" element={<Producao />} />
                     <Route path="/indicadores" element={<Indicadores />} />
                     <Route path="/custos" element={<CustosPrecificacao />} />
+                    <Route path="/atividades" element={<Atividades />} />
                     <Route path="/patrimonio" element={<Patrimonio />} />
                     <Route path="/alertas" element={<Alertas />} />
                     <Route path="/equipe" element={<Equipe />} />

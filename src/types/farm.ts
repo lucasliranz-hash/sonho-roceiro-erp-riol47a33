@@ -3,17 +3,35 @@ export type ActivityType =
   | 'Piscicultura'
   | 'Suinocultura'
   | 'Bovinocultura'
-  | 'Cavalos'
-  | 'Hortas'
-  | 'Pomar'
+  | 'Ovinocultura'
+  | 'Caprinocultura'
+  | 'Agricultura'
+  | 'Outra'
 
 export interface Activity {
   id: string
   name: string
   type: ActivityType
+  /** Valor de tipo customizado, usado apenas quando type === 'Outra' */
+  customType?: string
   description?: string
   isActive: boolean
+  /** ID da propriedade à qual a atividade pertence */
+  propertyId?: string
+  /** ID da organização à qual a atividade pertence */
+  organizationId?: string
 }
+
+export const ACTIVITY_TYPES: ActivityType[] = [
+  'Avicultura',
+  'Piscicultura',
+  'Suinocultura',
+  'Bovinocultura',
+  'Ovinocultura',
+  'Caprinocultura',
+  'Agricultura',
+  'Outra',
+]
 
 export type LotType =
   | 'Poedeiras'

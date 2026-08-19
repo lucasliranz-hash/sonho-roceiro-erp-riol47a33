@@ -74,6 +74,18 @@ function useFarmStoreImpl(orgId: string | undefined) {
     [lots],
   )
 
+  // ===== Atividades =====
+  // addActivity gera o id; update/remove (activities.update/activities.remove)
+  // já registram audit internamente via useSupabaseEntity, seguindo o mesmo
+  // padrão de addLot/addExpense.
+  const addActivity = useCallback(
+    async (activity: Omit<Activity, 'id'>) => {
+      const id = `act-${Date.now()}`
+      return activities.add({ ...activity, id })
+    },
+    [activities],
+  )
+
   const addExpense = useCallback(
     async (exp: Omit<Expense, 'id' | 'totalValue'>) => {
       return expenses.add({
@@ -486,6 +498,9 @@ function useFarmStoreImpl(orgId: string | undefined) {
   return {
     activities: activities.items,
     setActivities: activities.setItems,
+    addActivity,
+    updateActivity: activities.update,
+    deleteActivity: activities.remove,
     lots: lots.items,
     setLots: lots.setItems,
     addLot,
