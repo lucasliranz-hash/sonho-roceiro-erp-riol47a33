@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Settings, Download, Smartphone, Users, ChevronRight } from 'lucide-react'
+import { Settings, Download, Smartphone, Users, ChevronRight, ListTodo } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from '@/hooks/use-toast'
 
@@ -23,20 +23,37 @@ export default function Configuracoes() {
         </p>
       </div>
 
-      <Link to="/equipe">
-        <Card className="p-4 rounded-2xl bg-white border-border flex items-center gap-3 hover:bg-secondary/50 transition-colors cursor-pointer">
-          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-            <Users className="w-5 h-5 text-primary" />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs font-bold">Equipe e Permissões</p>
-            <p className="text-[10px] text-muted-foreground">
-              Gerencie usuários, convites e acessos
-            </p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        </Card>
-      </Link>
+      <div className="space-y-3">
+        <Link to="/atividades">
+          <Card className="p-4 rounded-2xl bg-white border-border flex items-center gap-3 hover:bg-secondary/50 transition-colors cursor-pointer">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <ListTodo className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold">Atividades</p>
+              <p className="text-[10px] text-muted-foreground">
+                Cadastre atividades produtivas (avicultura, piscicultura, etc.)
+              </p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </Card>
+        </Link>
+
+        <Link to="/equipe">
+          <Card className="p-4 rounded-2xl bg-white border-border flex items-center gap-3 hover:bg-secondary/50 transition-colors cursor-pointer">
+            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5 text-primary" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs font-bold">Equipe e Permissões</p>
+              <p className="text-[10px] text-muted-foreground">
+                Gerencie usuários, convites e acessos
+              </p>
+            </div>
+            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          </Card>
+        </Link>
+      </div>
 
       <Card className="p-6 rounded-3xl bg-white border-border space-y-4">
         <h2 className="font-bold text-base">Propriedade: Sonho Roceiro</h2>
