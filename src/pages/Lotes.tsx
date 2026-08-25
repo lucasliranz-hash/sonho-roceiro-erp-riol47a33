@@ -25,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
-import { Layers, Plus, Search, ArrowLeft } from 'lucide-react'
+import { Layers, Plus, Search, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Lot, LotType, LotStatus } from '@/types/farm'
 import { computeLotCosts } from '@/lib/calculations'
@@ -43,8 +43,18 @@ const LOT_TYPES: LotType[] = [
 const LOT_STATUSES: LotStatus[] = ['Ativo', 'Finalizado', 'Vendido', 'Abatido', 'Transferido']
 
 export default function Lotes() {
-  const { lots, addLot, updateLot, deleteLot, weighings, mortality, expenses, sales, activities } =
-    useFarmStore()
+  const {
+    lots,
+    addLot,
+    updateLot,
+    deleteLot,
+    weighings,
+    mortality,
+    expenses,
+    sales,
+    activities,
+    feedLogs,
+  } = useFarmStore()
   const { canEdit, canDelete } = usePermissions()
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedLot, setSelectedLot] = useState<Lot | null>(null)
@@ -53,6 +63,7 @@ export default function Lotes() {
   const [editing, setEditing] = useState<Lot | null>(null)
   const [deleting, setDeleting] = useState<Lot | null>(null)
   const [details, setDetails] = useState<Lot | null>(null)
+  const [expandedOrigin, setExpandedOrigin] = useState<string | null>(null)
 
   // New lot form states
   const [name, setName] = useState('')
@@ -189,10 +200,53 @@ export default function Lotes() {
     const lotMortality = mortality.filter((m) => m.lotId === selectedLot.id)
     const lotExpenses = expenses.filter((e) => e.lotId === selectedLot.id)
     const lotSales = sales.filter((s) => s.lotId === selectedLot.id)
+    const lotFeedLogs = feedLogs.filter((f) => f.lotId === selectedLot.id)
 
     const totalExp = lotExpenses.reduce((acc, e) => acc + e.totalValue, 0)
     const totalRev = lotSales.reduce((acc, s) => acc + s.totalPrice, 0)
-    const lotCosts = computeLotCosts(selectedLot, expenses, sales)
+    const lotCosts = computeLotCosts(selectedLot, expenses, sales, feedLogs)
+
+    // Breakdown categories for Composição de Custos
+    const sanitizeCategories = [
+      'sanidade',
+      'medicamento',
+      'vacina',
+      'vermífugo',
+      'vermifugo',
+      'tratamento',
+    ]
+    const isSanityExpense = (e: (typeof expenses)[0]) => {
+      const cat = (e.category || '').toLowerCase()
+      return sanitizeCategories.some((kw) => cat.includes(kw))
+    }
+
+    const isEnergyExpense = (e: (typeof expenses)[0]) => {
+      const cat = (e.category || '').toLowerCase()
+      return (
+        cat.includes('energia') ||
+        cat.includes('luz') ||
+        cat.includes('elétrica') ||
+        cat.includes('eletrica') ||
+        e.source_type === 'ENERGY'
+      )
+    }
+
+    const sanityExpenses = lotExpenses.filter(isSanityExpense)
+    const energyExpenses = lotExpenses.filter((e) => !isSanityExpense(e) && isEnergyExpense(e))
+    const otherExpenses = lotExpenses.filter((e) => !isSanityExpense(e) && !isEnergyExpense(e))
+
+    const acquisitionCost = selectedLot.acquisitionCost || 0
+    const feedCost = lotCosts.feedCost
+    const sanityCost = sanityExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
+    const energyCost = energyExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
+    const otherCost = otherExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
+    const totalCompositionCost = acquisitionCost + feedCost + sanityCost + energyCost + otherCost
+    const costPerBirdAlive =
+      selectedLot.currentQuantity > 0 ? totalCompositionCost / selectedLot.currentQuantity : 0
+
+    const toggleOrigin = (key: string) => {
+      setExpandedOrigin((prev) => (prev === key ? null : key))
+    }
 
     return (
       <div className="space-y-6 animate-fade-in">
@@ -248,12 +302,20 @@ export default function Lotes() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <Card className="rounded-2xl bg-white border-border">
             <CardContent className="p-3">
               <span className="text-[11px] text-muted-foreground">Custo / Ave Alojada</span>
               <p className="text-lg font-bold text-amber-700">
                 R$ {lotCosts.costPerBirdHoused.toFixed(2)}
+              </p>
+            </CardContent>
+          </Card>
+          <Card className="rounded-2xl bg-white border-border">
+            <CardContent className="p-3">
+              <span className="text-[11px] text-muted-foreground">Custo / Ave Viva</span>
+              <p className="text-lg font-bold text-amber-700">
+                R$ {lotCosts.costPerBirdAlive.toFixed(2)}
               </p>
             </CardContent>
           </Card>
@@ -271,7 +333,7 @@ export default function Lotes() {
               <p className="text-lg font-bold text-amber-700">R$ {lotCosts.costPerKg.toFixed(2)}</p>
             </CardContent>
           </Card>
-          <Card className="rounded-2xl bg-white border-border">
+          <Card className="rounded-2xl bg-white border-border col-span-2 md:col-span-1">
             <CardContent className="p-3">
               <span className="text-[11px] text-muted-foreground">ROI do Lote</span>
               <p
@@ -324,7 +386,7 @@ export default function Lotes() {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="resumo" className="mt-4">
+          <TabsContent value="resumo" className="mt-4 space-y-4">
             <Card className="rounded-2xl bg-white border-border">
               <CardContent className="p-6 space-y-4">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-4 text-xs">
@@ -352,6 +414,198 @@ export default function Lotes() {
                     <span className="font-bold">Observações:</span> {selectedLot.notes}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Composição de Custos */}
+            <Card className="rounded-2xl bg-white border-border">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                  <h2 className="text-sm font-bold text-foreground">Composição de Custos</h2>
+                  <span className="text-[11px] text-muted-foreground">Detalhamento econômico</span>
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  {/* Aquisição dos animais */}
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-muted-foreground">Aquisição dos animais</span>
+                    <span className="font-semibold text-foreground">
+                      R$ {acquisitionCost.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Ração */}
+                  <div className="space-y-2 py-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Ração</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleOrigin('racao')}
+                          className="h-6 px-2 text-[11px] text-primary hover:text-primary hover:bg-primary/10 rounded-lg gap-1"
+                        >
+                          Ver origem
+                          {expandedOrigin === 'racao' ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </Button>
+                      </div>
+                      <span className="font-semibold text-foreground">
+                        R$ {feedCost.toFixed(2)}
+                      </span>
+                    </div>
+                    {expandedOrigin === 'racao' && (
+                      <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 space-y-1.5 text-[11px] animate-fade-in">
+                        {lotFeedLogs.length === 0 ? (
+                          <p className="text-muted-foreground">
+                            Nenhum consumo de ração registrado para este lote.
+                          </p>
+                        ) : (
+                          lotFeedLogs.map((f) => (
+                            <div
+                              key={f.id}
+                              className="flex items-center justify-between py-0.5 border-b border-border/30 last:border-b-0"
+                            >
+                              <span>
+                                {f.date} — {f.quantityKg} kg{' '}
+                                {f.inventoryItemName ? `(${f.inventoryItemName})` : ''}
+                              </span>
+                              <span className="font-medium text-foreground">
+                                R$ {(f.totalCost || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Sanidade */}
+                  <div className="space-y-2 py-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Sanidade</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleOrigin('sanidade')}
+                          className="h-6 px-2 text-[11px] text-primary hover:text-primary hover:bg-primary/10 rounded-lg gap-1"
+                        >
+                          Ver origem
+                          {expandedOrigin === 'sanidade' ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </Button>
+                      </div>
+                      <span className="font-semibold text-foreground">
+                        R$ {sanityCost.toFixed(2)}
+                      </span>
+                    </div>
+                    {expandedOrigin === 'sanidade' && (
+                      <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 space-y-1.5 text-[11px] animate-fade-in">
+                        {sanityExpenses.length === 0 ? (
+                          <p className="text-muted-foreground">
+                            Nenhuma despesa de sanidade registrada para este lote.
+                          </p>
+                        ) : (
+                          sanityExpenses.map((e) => (
+                            <div
+                              key={e.id}
+                              className="flex items-center justify-between py-0.5 border-b border-border/30 last:border-b-0"
+                            >
+                              <span>
+                                {e.date} — {e.description || e.category}
+                              </span>
+                              <span className="font-medium text-foreground">
+                                R$ {e.totalValue.toFixed(2)}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Energia */}
+                  <div className="flex items-center justify-between py-1">
+                    <span className="text-muted-foreground">Energia</span>
+                    <span className="font-semibold text-foreground">
+                      R$ {energyCost.toFixed(2)}
+                    </span>
+                  </div>
+
+                  {/* Outras despesas */}
+                  <div className="space-y-2 py-1">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground">Outras despesas</span>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleOrigin('outras')}
+                          className="h-6 px-2 text-[11px] text-primary hover:text-primary hover:bg-primary/10 rounded-lg gap-1"
+                        >
+                          Ver origem
+                          {expandedOrigin === 'outras' ? (
+                            <ChevronUp className="w-3 h-3" />
+                          ) : (
+                            <ChevronDown className="w-3 h-3" />
+                          )}
+                        </Button>
+                      </div>
+                      <span className="font-semibold text-foreground">
+                        R$ {otherCost.toFixed(2)}
+                      </span>
+                    </div>
+                    {expandedOrigin === 'outras' && (
+                      <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 space-y-1.5 text-[11px] animate-fade-in">
+                        {otherExpenses.length === 0 ? (
+                          <p className="text-muted-foreground">
+                            Nenhuma outra despesa registrada para este lote.
+                          </p>
+                        ) : (
+                          otherExpenses.map((e) => (
+                            <div
+                              key={e.id}
+                              className="flex items-center justify-between py-0.5 border-b border-border/30 last:border-b-0"
+                            >
+                              <span>
+                                {e.date} — {e.description || e.category}
+                              </span>
+                              <span className="font-medium text-foreground">
+                                R$ {e.totalValue.toFixed(2)}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Linha divisória */}
+                  <div className="border-t border-border pt-3 mt-2 flex items-center justify-between text-sm font-bold">
+                    <span className="text-foreground">CUSTO TOTAL</span>
+                    <span className="text-rose-600">R$ {totalCompositionCost.toFixed(2)}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 text-xs">
+                    <span className="text-muted-foreground">Aves vivas</span>
+                    <span className="font-bold text-foreground">{selectedLot.currentQuantity}</span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
+                    <span>CUSTO ATUAL POR AVE</span>
+                    <span className="text-sm text-amber-800">R$ {costPerBirdAlive.toFixed(2)}</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

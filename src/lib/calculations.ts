@@ -1,4 +1,4 @@
-import { Lot, Expense, Sale, StructureCost, Asset } from '@/types/farm'
+import { Lot, Expense, Sale, StructureCost, Asset, FeedConsumption } from '@/types/farm'
 
 export interface PriceFromMarginResult {
   costPerUnit: number
@@ -91,7 +91,11 @@ export function computePricingScenarios(
 
 export interface LotCostSummary {
   totalCost: number
+  feedCost: number
+  acquisitionCost: number
+  opexCost: number
   costPerBirdHoused: number
+  costPerBirdAlive: number
   costPerBirdSold: number
   costPerKg: number
   revenue: number
@@ -102,17 +106,26 @@ export interface LotCostSummary {
   totalWeightSoldKg: number
 }
 
-export function computeLotCosts(lot: Lot, expenses: Expense[], sales: Sale[]): LotCostSummary {
+export function computeLotCosts(
+  lot: Lot,
+  expenses: Expense[],
+  sales: Sale[],
+  feedLogs: FeedConsumption[] = [],
+): LotCostSummary {
   const lotExpenses = expenses.filter((e) => e.lotId === lot.id)
   const lotSales = sales.filter((s) => s.lotId === lot.id)
+  const lotFeedLogs = feedLogs.filter((f) => f.lotId === lot.id)
 
-  const opex = lotExpenses.reduce((acc, e) => acc + e.totalValue, 0)
-  const totalCost = opex + lot.acquisitionCost
+  const feedCost = lotFeedLogs.reduce((acc, f) => acc + (f.totalCost || 0), 0)
+  const opexCost = lotExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
+  const acquisitionCost = lot.acquisitionCost || 0
+  const totalCost = opexCost + feedCost + acquisitionCost
   const revenue = lotSales.reduce((acc, s) => acc + s.totalPrice, 0)
   const totalSold = lotSales.reduce((acc, s) => acc + s.quantity, 0)
   const totalWeightSoldKg = lotSales.reduce((acc, s) => acc + (s.weightKg || 0), 0)
 
   const costPerBirdHoused = lot.initialQuantity > 0 ? totalCost / lot.initialQuantity : 0
+  const costPerBirdAlive = lot.currentQuantity > 0 ? totalCost / lot.currentQuantity : 0
   const costPerBirdSold = totalSold > 0 ? totalCost / totalSold : 0
   const costPerKg = totalWeightSoldKg > 0 ? totalCost / totalWeightSoldKg : 0
 
@@ -122,7 +135,11 @@ export function computeLotCosts(lot: Lot, expenses: Expense[], sales: Sale[]): L
 
   return {
     totalCost,
+    feedCost,
+    acquisitionCost,
+    opexCost,
     costPerBirdHoused,
+    costPerBirdAlive,
     costPerBirdSold,
     costPerKg,
     revenue,
