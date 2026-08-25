@@ -1,4 +1,4 @@
-const CACHE_NAME = 'sr-gestao-v3'
+const CACHE_NAME = 'sr-gestao-v4'
 const APP_SHELL_URLS = ['/', '/manifest.json', '/pwa-icon.svg']
 
 self.addEventListener('install', (event) => {

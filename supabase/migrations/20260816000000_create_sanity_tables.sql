@@ -43,4 +43,7 @@ BEGIN
     EXECUTE format('DROP TRIGGER IF EXISTS %I ON public.%I', tbl || '_set_deleted_by', tbl);
     EXECUTE format('CREATE TRIGGER %I BEFORE UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION public.set_deleted_by()', tbl || '_set_deleted_by', tbl);
   END LOOP;
+
+  -- Force PostgREST schema cache reload
+  NOTIFY pgrst, 'reload schema';
 END $$;

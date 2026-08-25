@@ -15,6 +15,10 @@ import { cn } from '@/lib/utils'
 import { useAuth } from '@/hooks/use-auth'
 import { roleLabels } from '@/types/auth'
 
+const BUILD_TIME = new Date().toISOString()
+const SUPABASE_PROJECT_REF = 'qqhah...bvqq'
+const APP_VERSION = 'v0.0.47'
+
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
   const { alerts } = useFarmStore()
@@ -138,7 +142,13 @@ export default function Layout() {
               </p>
             </div>
           </Link>
-          <p className="text-[10px] text-muted-foreground/70 text-center mt-2">v0.0.45</p>
+          <div className="text-[10px] text-muted-foreground/70 text-center mt-2 space-y-0.5">
+            <p className="font-medium text-foreground/70">{APP_VERSION}</p>
+            <p className="font-mono text-[9px] text-muted-foreground/60">{SUPABASE_PROJECT_REF}</p>
+            <p className="text-[9px] text-muted-foreground/50 truncate" title={BUILD_TIME}>
+              {BUILD_TIME}
+            </p>
+          </div>
         </div>
       </aside>
 
@@ -191,8 +201,10 @@ export default function Layout() {
         </Button>
       </div>
 
-      <div className="lg:hidden fixed bottom-1 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-        <span className="text-[9px] text-muted-foreground/60">v0.0.45</span>
+      <div className="lg:hidden fixed bottom-1 left-1/2 -translate-x-1/2 z-30 pointer-events-none text-center">
+        <span className="text-[9px] text-muted-foreground/60 font-mono">
+          {APP_VERSION} • {SUPABASE_PROJECT_REF}
+        </span>
       </div>
       <MobileBottomNav
         onNewEntry={() => setQuickActionsOpen(true)}
