@@ -16,6 +16,10 @@ interface AuthContextType {
   session: Session | null
   profile: Profile | null
   orgMember: OrganizationMember | null
+  organization: { id: string; name: string } | null
+  currentProperty: { id: string; name: string } | null
+  properties: { id: string; name: string }[]
+  setCurrentProperty: (prop: { id: string; name: string }) => void
   loading: boolean
   signUp: (
     email: string,
@@ -44,6 +48,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [orgMember, setOrgMember] = useState<OrganizationMember | null>(null)
+  const [organization, setOrganization] = useState<{ id: string; name: string } | null>(null)
+  const [currentProperty, setCurrentProperty] = useState<{ id: string; name: string } | null>(null)
+  const [properties, setProperties] = useState<{ id: string; name: string }[]>(null as any)
   const [loading, setLoading] = useState(true)
   const orgSetupDone = useRef(false)
   const lastSignInUpdated = useRef(false)
@@ -94,8 +101,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         .eq('user_id', user.id)
         .limit(1)
 
+      let effectiveOrgId: string | null = null
       if (memberData && memberData.length > 0) {
-        setOrgMember(memberData[0] as OrganizationMember)
+        const mem = memberData[0] as OrganizationMember
+        setOrgMember(mem)
+        effectiveOrgId = mem.organization_id
       } else if (!orgSetupDone.current && user.user_metadata?.farm_name) {
         orgSetupDone.current = true
         const farmName = user.user_metadata.farm_name as string
@@ -131,6 +141,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             .eq('user_id', user.id)
             .limit(1)
           setOrgMember(newMember?.[0] as OrganizationMember | null)
+          effectiveOrgId = org.id
+        }
+      }
+
+      if (effectiveOrgId) {
+        const { data: orgData } = await supabase
+          .from('organizations')
+          .select('id, name')
+          .eq('id', effectiveOrgId)
+          .maybeSingle()
+        if (orgData) {
+          setOrganization(orgData)
+        }
+
+        const { data: propData } = await supabase
+          .from('properties')
+          .select('id, name')
+          .eq('organization_id', effectiveOrgId)
+          .order('created_at', { ascending: true })
+
+        if (propData && propData.length > 0) {
+          setProperties(propData)
+          setCurrentProperty((prev) => {
+            if (prev && propData.some((p) => p.id === prev.id)) return prev
+            return propData[0]
+          })
         }
       }
     } catch (err) {
@@ -183,6 +219,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         session,
         profile,
         orgMember,
+        organization,
+        currentProperty,
+        properties: properties || [],
+        setCurrentProperty,
         loading,
         signUp,
         signIn,
