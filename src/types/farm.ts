@@ -59,6 +59,7 @@ export interface Lot {
   purpose: string
   status: LotStatus
   notes?: string
+  incubationId?: string
 }
 
 export interface StructureCost {
@@ -208,6 +209,19 @@ export interface Incubation {
   deaths?: number
   energyCost?: number
   notes?: string
+  // Custos adicionais
+  eggCostPerUnit?: number
+  suppliesCost?: number
+  laborCost?: number
+  otherCosts?: number
+  energyStartKwh?: number
+  energyEndKwh?: number
+  energyTotalKwh?: number
+  energyRatePerKwh?: number
+  // Fechamento e vínculo
+  endDate?: string
+  resultingLotId?: string
+  activityId?: string
 }
 
 export interface Candling {

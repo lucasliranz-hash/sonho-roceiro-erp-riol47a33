@@ -516,11 +516,16 @@ export function useDashboardData() {
     // farm_lots
     for (const lot of lots) {
       const ts = new Date(lot.startDate).getTime()
+      const originInc = lot.incubationId ? incubations.find((i) => i.id === lot.incubationId) : null
+      const desc = originInc
+        ? `🐔 Lote ${lot.code} criado de ${originInc.code} (${lot.initialQuantity} aves)`
+        : `${lot.code} - ${lot.name} (${lot.initialQuantity} aves)`
+
       timeline.push({
         id: `lot-${lot.id}`,
         iconType: 'lote',
-        actionLabel: 'Novo lote',
-        description: `${lot.code} - ${lot.name} (${lot.initialQuantity} aves)`,
+        actionLabel: originInc ? 'Lote de Incubação' : 'Novo lote',
+        description: desc,
         relatedEntity: lot.breed || undefined,
         date: lot.startDate,
         formattedRelativeDate: formatRelativeActivityDate(lot.startDate),
@@ -531,15 +536,21 @@ export function useDashboardData() {
     // farm_incubations
     for (const inc of incubations) {
       if ((inc.hatchedCount || 0) > 0) {
-        const ts = new Date(inc.expectedHatchDate || inc.startDate).getTime()
+        const isFinalized = inc.status === 'Concluído'
+        const incDate = inc.endDate || inc.expectedHatchDate || inc.startDate
+        const ts = new Date(incDate).getTime()
+        const desc = isFinalized
+          ? `🐣 ${inc.healthyChicks || inc.hatchedCount} pintinhos nasceram — ${inc.code}`
+          : `${inc.hatchedCount} pintinhos nascidos`
+
         timeline.push({
           id: `inc-hatch-${inc.id}`,
           iconType: 'nascimento',
-          actionLabel: 'Nascimento',
-          description: `${inc.hatchedCount} pintinhos nascidos`,
+          actionLabel: isFinalized ? 'Incubação Finalizada' : 'Nascimento',
+          description: desc,
           relatedEntity: inc.incubatorName || inc.code,
-          date: inc.expectedHatchDate || inc.startDate,
-          formattedRelativeDate: formatRelativeActivityDate(inc.expectedHatchDate || inc.startDate),
+          date: incDate,
+          formattedRelativeDate: formatRelativeActivityDate(incDate),
           timestamp: isNaN(ts) ? 0 : ts,
         })
       }

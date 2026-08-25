@@ -306,11 +306,90 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const finalizeIncubation = useCallback(
     async (
       id: string,
-      results: Pick<Incubation, 'hatchedCount' | 'unhatchedCount' | 'healthyChicks' | 'deaths'>,
-    ) => {
-      return incubations.update(id, { ...results, status: 'Concluído' as IncubationStatus })
+      results: {
+        hatchedCount: number
+        unhatchedCount: number
+        healthyChicks: number
+        deaths: number
+        endDate: string
+        createLot: boolean
+        lotName?: string
+        notes?: string
+      },
+    ): Promise<{ error: any; lotId?: string }> => {
+      const inc = incubations.items.find((i) => i.id === id)
+      if (!inc) {
+        return { error: { message: 'Incubação não encontrada' } }
+      }
+
+      // Se createLot solicitado mas resultingLotId já existe, avisar e não duplicar lote
+      if (results.createLot && inc.resultingLotId) {
+        return {
+          error: { message: `Esta incubação já gerou o lote ${inc.resultingLotId}.` },
+          lotId: inc.resultingLotId,
+        }
+      }
+
+      // 1. Atualizar a incubação com status Concluído, endDate e resultados
+      const incubationUpdates: Partial<Incubation> = {
+        hatchedCount: results.hatchedCount,
+        unhatchedCount: results.unhatchedCount,
+        healthyChicks: results.healthyChicks,
+        deaths: results.deaths,
+        endDate: results.endDate,
+        notes: results.notes ?? inc.notes,
+        status: 'Concluído' as IncubationStatus,
+      }
+
+      let generatedLotId: string | undefined = undefined
+
+      // 2. Se createLot === true E incubation.resultingLotId ainda não existe:
+      if (results.createLot && !inc.resultingLotId) {
+        const totalCost = getIncubationTotalCost(inc)
+        const supplierName = inc.supplier || 'Incubação própria'
+
+        const newLotData: Omit<Lot, 'id' | 'code' | 'currentQuantity'> = {
+          name: results.lotName?.trim() || `Pintinhos - ${inc.code}`,
+          type: 'Pintinhos',
+          activityId: inc.activityId,
+          startDate: results.endDate || new Date().toISOString().split('T')[0],
+          origin: 'Incubação própria',
+          supplier: supplierName,
+          breed: inc.breed,
+          initialQuantity: results.healthyChicks,
+          initialAgeDays: 1,
+          acquisitionCost: totalCost,
+          purpose: 'Recria / Produção',
+          status: 'Ativo',
+          notes: `Lote gerado automaticamente da incubação ${inc.code}.`,
+          incubationId: inc.id,
+        }
+
+        const addLotRes = await addLot(newLotData)
+        if (addLotRes.error) {
+          return { error: addLotRes.error }
+        }
+
+        // Recupera o ID do lote recém-criado (retornado ou gerado)
+        generatedLotId = (addLotRes as any)?.data?.[0]?.id || (addLotRes as any)?.id
+
+        // Se por ventura addLot não retornar id explicitamente no payload, podemos encontrá-lo
+        if (!generatedLotId) {
+          // fallback
+          generatedLotId = `l-inc-${inc.id}-${Date.now()}`
+        }
+
+        incubationUpdates.resultingLotId = generatedLotId
+      }
+
+      const updateRes = await incubations.update(id, incubationUpdates)
+      if (updateRes.error) {
+        return { error: updateRes.error }
+      }
+
+      return { error: null, lotId: generatedLotId }
     },
-    [incubations],
+    [incubations, addLot],
   )
 
   const addCandling = useCallback(
@@ -603,6 +682,17 @@ export function FarmStoreProvider({ children }: { children: ReactNode }) {
   const { orgMember } = useAuth()
   const value = useFarmStoreImpl(orgMember?.organization_id)
   return <FarmStoreContext.Provider value={value}>{children}</FarmStoreContext.Provider>
+}
+
+export function getIncubationTotalCost(inc: Partial<Incubation> | null | undefined): number {
+  if (!inc) return 0
+  return (
+    Number(inc.eggCost || 0) +
+    Number(inc.energyCost || 0) +
+    Number(inc.suppliesCost || 0) +
+    Number(inc.laborCost || 0) +
+    Number(inc.otherCosts || 0)
+  )
 }
 
 export function useFarmStore() {

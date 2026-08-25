@@ -18,19 +18,23 @@ import {
 import { IncubationDetail } from '@/components/IncubationDetail'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import { useNavigate } from 'react-router-dom'
 import {
   DeleteIncubationDialog,
   HatchingDialog,
   FinalizeDialog,
+  FinalizeData,
 } from '@/components/IncubationActionDialogs'
 import { CandlingDialog } from '@/components/CandlingDialog'
 import { IncubationEditDialog } from '@/components/IncubationEditDialog'
 import { toast } from '@/hooks/use-toast'
 import { Incubation } from '@/types/farm'
 import { logAudit } from '@/services/audit'
+import { getIncubationTotalCost } from '@/hooks/use-farm-store'
 
 export default function Chocadeira() {
-  const { incubations, deleteIncubation, updateIncubation, finalizeIncubation, addCandling } =
+  const navigate = useNavigate()
+  const { incubations, deleteIncubation, updateIncubation, finalizeIncubation, addCandling, lots } =
     useFarmStore()
   const { canEdit, canDelete } = usePermissions()
   const [selectedId, setSelectedId] = useState<string | null>(null)
@@ -61,23 +65,40 @@ export default function Chocadeira() {
     setDeleting(null)
   }
 
-  const handleFinalize = async () => {
+  const handleFinalize = async (data: FinalizeData) => {
     if (!finalizing) return
-    const { error } = await finalizeIncubation(finalizing.id, {
-      hatchedCount: finalizing.hatchedCount || 0,
-      unhatchedCount: finalizing.unhatchedCount || 0,
-      healthyChicks: finalizing.healthyChicks || 0,
-      deaths: finalizing.deaths || 0,
-    })
-    if (error) {
-      toast({ title: 'Erro ao finalizar', variant: 'destructive' })
-      return
+    const res = await finalizeIncubation(finalizing.id, data)
+    if (res.error) {
+      // Se já existia lote gerado, mostrar toast de aviso em vez de erro destrutivo
+      if (finalizing.resultingLotId) {
+        toast({
+          title: 'Atenção ⚠️',
+          description:
+            res.error.message || `Esta incubação já gerou o lote ${finalizing.resultingLotId}.`,
+        })
+      } else {
+        toast({
+          title: 'Erro ao finalizar',
+          description: res.error.message || 'Falha ao finalizar incubação.',
+          variant: 'destructive',
+        })
+      }
+      return { error: res.error }
     }
-    toast({
-      title: 'Incubação finalizada! ✅',
-      description: `${finalizing.code} marcada como concluída.`,
-    })
+
+    if (res.lotId) {
+      toast({
+        title: 'Incubação finalizada com sucesso! 🐣',
+        description: `Lote ${res.lotId} criado automaticamente com ${data.healthyChicks} pintinhos! 🐔`,
+      })
+    } else {
+      toast({
+        title: 'Incubação finalizada! ✅',
+        description: `${finalizing.code} marcada como concluída.`,
+      })
+    }
     setFinalizing(null)
+    return { error: null }
   }
 
   return (
@@ -252,11 +273,15 @@ export default function Chocadeira() {
       />
 
       {/* Finalize */}
-      <FinalizeDialog
-        open={!!finalizing}
-        onOpenChange={(v) => !v && setFinalizing(null)}
-        onConfirm={handleFinalize}
-      />
+      {finalizing && (
+        <FinalizeDialog
+          open={!!finalizing}
+          onOpenChange={(v) => !v && setFinalizing(null)}
+          incubation={finalizing}
+          onConfirm={handleFinalize}
+          onViewLot={(lotId) => navigate('/lotes')}
+        />
+      )}
 
       {/* Details */}
       <RecordDetailsDialog
@@ -280,6 +305,11 @@ export default function Chocadeira() {
                 { label: 'Fornecedor', value: details.supplier },
                 { label: 'Ovos', value: details.eggCount },
                 { label: 'Custo dos ovos (R$)', value: details.eggCost },
+                { label: 'Custo de energia (R$)', value: details.energyCost },
+                { label: 'Custo de insumos (R$)', value: details.suppliesCost },
+                { label: 'Custo de mão de obra (R$)', value: details.laborCost },
+                { label: 'Outros custos (R$)', value: details.otherCosts },
+                { label: 'Custo total (R$)', value: getIncubationTotalCost(details).toFixed(2) },
                 { label: 'Temperatura alvo (°C)', value: details.targetTemp },
                 { label: 'Umidade alvo (%)', value: details.targetHumidity },
                 { label: 'Viragem automática', value: details.autoTurning ? 'Sim' : 'Não' },
@@ -287,7 +317,8 @@ export default function Chocadeira() {
                 { label: 'Não eclodidos', value: details.unhatchedCount },
                 { label: 'Saudáveis', value: details.healthyChicks },
                 { label: 'Mortes', value: details.deaths },
-                { label: 'Custo de energia (R$)', value: details.energyCost },
+                { label: 'Data final', value: details.endDate },
+                { label: 'Lote gerado', value: details.resultingLotId },
                 { label: 'Observação', value: details.notes },
               ]
             : []

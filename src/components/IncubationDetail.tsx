@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useFarmStore } from '@/hooks/use-farm-store'
+import { useNavigate } from 'react-router-dom'
+import { useFarmStore, getIncubationTotalCost } from '@/hooks/use-farm-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -13,8 +14,11 @@ import {
   Baby,
   CheckCircle,
   Flame,
-  Calendar,
   Egg,
+  DollarSign,
+  TrendingUp,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react'
 import { Incubation } from '@/types/farm'
 import { IncubationEditDialog } from '@/components/IncubationEditDialog'
@@ -25,6 +29,7 @@ import {
   TempHumidityDialog,
   HatchingDialog,
   FinalizeDialog,
+  FinalizeData,
 } from '@/components/IncubationActionDialogs'
 import { toast } from '@/hooks/use-toast'
 
@@ -34,7 +39,8 @@ interface Props {
 }
 
 export function IncubationDetail({ incubation, onBack }: Props) {
-  const { candlings, updateIncubation, deleteIncubation, addCandling, finalizeIncubation } =
+  const navigate = useNavigate()
+  const { candlings, lots, updateIncubation, deleteIncubation, addCandling, finalizeIncubation } =
     useFarmStore()
   const [editOpen, setEditOpen] = useState(false)
   const [candlingOpen, setCandlingOpen] = useState(false)
@@ -50,10 +56,32 @@ export function IncubationDetail({ incubation, onBack }: Props) {
     Math.floor((Date.now() - new Date(incubation.startDate).getTime()) / 86400000) + 1,
   )
   const isActive = incubation.status === 'Em andamento'
+
+  // Ovoscopia mais recente para indicadores
+  const lastCandling =
+    incCandlings.length > 0 ? [...incCandlings].sort((a, b) => b.day - a.day)[0] : null
+
+  const fertileCount = lastCandling ? lastCandling.fertile : null
+  const infertileCount = lastCandling ? lastCandling.infertile : null
+  const fertilityRate =
+    fertileCount !== null && incubation.eggCount > 0
+      ? ((fertileCount / incubation.eggCount) * 100).toFixed(1)
+      : null
+
   const hatchRate =
     incubation.eggCount > 0 && incubation.hatchedCount
       ? ((incubation.hatchedCount / incubation.eggCount) * 100).toFixed(1)
       : null
+
+  const totalCost = getIncubationTotalCost(incubation)
+  const healthyCount = incubation.healthyChicks || 0
+  const costPerHealthyChick = healthyCount > 0 ? totalCost / healthyCount : null
+  const theoreticalCostPerEgg = incubation.eggCount > 0 ? totalCost / incubation.eggCount : null
+
+  // Localizar lote resultante, se existir
+  const resultingLot = incubation.resultingLotId
+    ? lots.find((l) => l.id === incubation.resultingLotId || l.incubationId === incubation.id)
+    : null
 
   const handleDelete = async () => {
     const { error } = await deleteIncubation(incubation.id)
@@ -69,25 +97,29 @@ export function IncubationDetail({ incubation, onBack }: Props) {
     onBack()
   }
 
-  const handleFinalize = async () => {
-    const { error } = await finalizeIncubation(incubation.id, {
-      hatchedCount: incubation.hatchedCount || 0,
-      unhatchedCount: incubation.unhatchedCount || 0,
-      healthyChicks: incubation.healthyChicks || 0,
-      deaths: incubation.deaths || 0,
-    })
-    if (error) {
+  const handleFinalize = async (data: FinalizeData) => {
+    const res = await finalizeIncubation(incubation.id, data)
+    if (res.error) {
       toast({
         title: 'Erro ao finalizar ❌',
-        description: error?.message || 'Falha ao finalizar incubação.',
+        description: res.error?.message || 'Falha ao finalizar incubação.',
         variant: 'destructive',
       })
-      return
+      return { error: res.error }
     }
-    toast({
-      title: 'Incubação finalizada',
-      description: `${incubation.code} marcada como concluída.`,
-    })
+
+    if (res.lotId) {
+      toast({
+        title: 'Incubação finalizada com sucesso! 🐣',
+        description: `Lote ${res.lotId} criado automaticamente com ${data.healthyChicks} pintinhos! 🐔`,
+      })
+    } else {
+      toast({
+        title: 'Incubação finalizada! ✅',
+        description: `${incubation.code} marcada como concluída.`,
+      })
+    }
+    return { error: null }
   }
 
   const actions = [
@@ -244,32 +276,199 @@ export function IncubationDetail({ incubation, onBack }: Props) {
         )}
       </Card>
 
+      {/* ========================================================= */}
+      {/* SEÇÃO 1: CUSTOS DA INCUBAÇÃO (SEMPRE VISÍVEL) */}
+      {/* ========================================================= */}
+      <Card className="rounded-2xl bg-white border-border p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-bold flex items-center gap-1.5 uppercase text-muted-foreground">
+            <DollarSign className="w-4 h-4 text-primary" /> Custos da Incubação
+          </h3>
+          <span className="text-sm font-extrabold text-foreground">
+            Total: R$ {totalCost.toFixed(2)}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5 text-xs">
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Ovos</span>
+            <span className="font-bold text-foreground">
+              R$ {Number(incubation.eggCost || 0).toFixed(2)}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Energia</span>
+            <span className="font-bold text-foreground">
+              R$ {Number(incubation.energyCost || 0).toFixed(2)}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Insumos</span>
+            <span className="font-bold text-foreground">
+              R$ {Number(incubation.suppliesCost || 0).toFixed(2)}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Mão de Obra</span>
+            <span className="font-bold text-foreground">
+              R$ {Number(incubation.laborCost || 0).toFixed(2)}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Outros</span>
+            <span className="font-bold text-foreground">
+              R$ {Number(incubation.otherCosts || 0).toFixed(2)}
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      {/* ========================================================= */}
+      {/* SEÇÃO 2: INDICADORES (SEMPRE VISÍVEL) */}
+      {/* ========================================================= */}
+      <Card className="rounded-2xl bg-white border-border p-4 space-y-3">
+        <h3 className="text-xs font-bold flex items-center gap-1.5 uppercase text-muted-foreground">
+          <TrendingUp className="w-4 h-4 text-primary" /> Indicadores Zootécnicos
+        </h3>
+
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2.5 text-xs">
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Ovos colocados</span>
+            <span className="font-bold text-foreground">{incubation.eggCount}</span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Ovos férteis</span>
+            <span className="font-bold text-emerald-700">
+              {fertileCount !== null ? fertileCount : '—'}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Inférteis</span>
+            <span className="font-bold text-rose-600">
+              {infertileCount !== null ? infertileCount : '—'}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Taxa fertilidade</span>
+            <span className="font-bold text-foreground">
+              {fertilityRate !== null ? `${fertilityRate}%` : '—'}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Taxa eclosão</span>
+            <span className="font-bold text-primary">
+              {incubation.status === 'Concluído' && hatchRate !== null ? `${hatchRate}%` : '—'}
+            </span>
+          </div>
+          <div className="p-2.5 rounded-xl bg-secondary/40">
+            <span className="text-[10px] text-muted-foreground block">Pintinhos viáveis</span>
+            <span className="font-bold text-emerald-700">
+              {incubation.healthyChicks !== undefined ? incubation.healthyChicks : '—'}
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      {/* ========================================================= */}
+      {/* SEÇÃO 3: LOTE GERADO (QUANDO CONCLUÍDO E POSSUI resultingLotId) */}
+      {/* ========================================================= */}
+      {incubation.status === 'Concluído' && incubation.resultingLotId && (
+        <Card className="rounded-2xl bg-emerald-50/70 border border-emerald-200 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-emerald-700" />
+              <div>
+                <h3 className="text-xs font-bold text-emerald-950">Lote Gerado Automaticamente</h3>
+                <p className="text-[11px] text-emerald-800">
+                  Esta incubação gerou o lote{' '}
+                  <strong className="font-bold">
+                    {resultingLot?.code
+                      ? `${resultingLot.code} - ${resultingLot.name}`
+                      : incubation.resultingLotId}
+                  </strong>
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => navigate('/lotes')}
+              className="rounded-xl h-9 text-xs bg-white text-emerald-900 border-emerald-300 hover:bg-emerald-100 gap-1"
+            >
+              <ExternalLink className="w-3.5 h-3.5" /> Ver lote
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between text-xs pt-2 border-t border-emerald-200/60">
+            <span className="text-emerald-900">
+              Pintinhos: <strong>{incubation.healthyChicks || 0} aves</strong>
+            </span>
+            <span className="font-bold text-emerald-950">
+              Custo por pintinho:{' '}
+              {costPerHealthyChick !== null ? `R$ ${costPerHealthyChick.toFixed(2)}` : '—'}
+            </span>
+          </div>
+        </Card>
+      )}
+
+      {/* ========================================================= */}
+      {/* SEÇÃO 4: RESULTADOS (EXPANDIDO) */}
+      {/* ========================================================= */}
       {incubation.status === 'Concluído' && (
-        <Card className="rounded-2xl bg-white border-border p-4">
-          <h3 className="text-xs font-bold mb-2">Resultados</h3>
+        <Card className="rounded-2xl bg-white border-border p-4 space-y-3">
+          <h3 className="text-xs font-bold uppercase text-muted-foreground">
+            Resultados do Fechamento
+          </h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-            <div>
-              <span className="text-muted-foreground">Nascidos: </span>
-              <span className="font-bold">{incubation.hatchedCount || 0}</span>
+            <div className="p-2.5 rounded-xl bg-secondary/30">
+              <span className="text-muted-foreground block text-[10px]">Nascidos (eclosão)</span>
+              <span className="font-bold text-foreground">{incubation.hatchedCount || 0}</span>
             </div>
-            <div>
-              <span className="text-muted-foreground">Não eclodidos: </span>
-              <span className="font-bold">{incubation.unhatchedCount || 0}</span>
+            <div className="p-2.5 rounded-xl bg-secondary/30">
+              <span className="text-muted-foreground block text-[10px]">Não eclodidos</span>
+              <span className="font-bold text-foreground">{incubation.unhatchedCount || 0}</span>
             </div>
-            <div>
-              <span className="text-muted-foreground">Saudáveis: </span>
+            <div className="p-2.5 rounded-xl bg-secondary/30">
+              <span className="text-muted-foreground block text-[10px]">Pintinhos viáveis</span>
               <span className="font-bold text-emerald-700">{incubation.healthyChicks || 0}</span>
             </div>
-            <div>
-              <span className="text-muted-foreground">Mortes: </span>
+            <div className="p-2.5 rounded-xl bg-secondary/30">
+              <span className="text-muted-foreground block text-[10px]">Mortes</span>
               <span className="font-bold text-rose-600">{incubation.deaths || 0}</span>
             </div>
-            {hatchRate && (
-              <div className="col-span-2">
-                <span className="text-muted-foreground">Taxa de Eclosão: </span>
-                <span className="font-bold text-primary">{hatchRate}%</span>
-              </div>
-            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t border-border/60 text-xs">
+            <div className="p-3 rounded-xl bg-secondary/20">
+              <span className="text-muted-foreground block text-[11px]">
+                Custo total da incubação
+              </span>
+              <span className="text-base font-extrabold text-foreground">
+                R$ {totalCost.toFixed(2)}
+              </span>
+            </div>
+            <div className="p-3 rounded-xl bg-emerald-50/50 border border-emerald-100">
+              <span className="text-emerald-900 block text-[11px]">Custo por pintinho viável</span>
+              <span className="text-base font-extrabold text-emerald-700">
+                {costPerHealthyChick !== null ? `R$ ${costPerHealthyChick.toFixed(2)}` : '—'}
+              </span>
+            </div>
+          </div>
+
+          {/* Análise de perdas */}
+          <div className="p-3 rounded-xl bg-amber-50/60 border border-amber-200/80 text-[11px] text-amber-900">
+            <span className="font-bold block mb-0.5">Análise de perdas e diluição de custos:</span>
+            <span>
+              Custo teórico com {incubation.eggCount} ovos:{' '}
+              <strong>
+                {theoreticalCostPerEgg !== null ? `R$ ${theoreticalCostPerEgg.toFixed(2)}` : '—'}
+              </strong>{' '}
+              por ovo | Custo real com {healthyCount} pintinhos:{' '}
+              <strong className="text-amber-950">
+                {costPerHealthyChick !== null ? `R$ ${costPerHealthyChick.toFixed(2)}` : '—'}
+              </strong>{' '}
+              por pintinho viável.
+            </span>
           </div>
         </Card>
       )}
@@ -333,7 +532,9 @@ export function IncubationDetail({ incubation, onBack }: Props) {
       <FinalizeDialog
         open={finalizeOpen}
         onOpenChange={setFinalizeOpen}
+        incubation={incubation}
         onConfirm={handleFinalize}
+        onViewLot={(lotId) => navigate('/lotes')}
       />
     </div>
   )

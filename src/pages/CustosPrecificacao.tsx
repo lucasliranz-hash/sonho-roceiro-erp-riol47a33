@@ -164,6 +164,16 @@ interface AcquisitionCostLine {
     description?: string
     category?: string
   }
+  /** Incubação vinculada, se este lote teve origem em incubação própria */
+  linkedIncubation?: {
+    id: string
+    code: string
+    incubatorName?: string
+    breed?: string
+    eggCost?: number
+    energyCost?: number
+    totalCost?: number
+  }
   /** Se a aquisição está incluída no período atual (false => mostrar aviso) */
   included: boolean
   /** Motivo textual do estado de inclusão (para aviso) */
@@ -287,7 +297,7 @@ function CostRow({
 
 function AcquisitionCostRow({ aquisicao }: { aquisicao: AcquisitionCostLine }) {
   const [open, setOpen] = useState(false)
-  const hasSources = !!aquisicao.linkedExpense
+  const hasSources = !!aquisicao.linkedExpense || !!aquisicao.linkedIncubation
   const dimmed = !aquisicao.included
   return (
     <div className={cn('rounded-2xl border border-border bg-white', dimmed && 'opacity-60')}>
@@ -298,7 +308,16 @@ function AcquisitionCostRow({ aquisicao }: { aquisicao: AcquisitionCostLine }) {
               <span className="text-muted-foreground shrink-0">
                 <PawPrint className="w-4 h-4" />
               </span>
-              <span className="font-medium text-foreground truncate">Aquisição dos animais</span>
+              <div className="min-w-0">
+                <span className="font-medium text-foreground truncate block">
+                  Aquisição dos animais
+                </span>
+                {aquisicao.linkedIncubation && (
+                  <span className="text-[10px] text-emerald-700 font-semibold block">
+                    Origem: Incubação própria ({aquisicao.linkedIncubation.code})
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <span className={cn('font-bold', dimmed ? 'text-muted-foreground' : 'text-rose-700')}>
@@ -345,6 +364,36 @@ function AcquisitionCostRow({ aquisicao }: { aquisicao: AcquisitionCostLine }) {
           {hasSources && (
             <CollapsibleContent>
               <div className="space-y-2 pt-1">
+                {/* Bloco: Origem em Incubação própria */}
+                {aquisicao.linkedIncubation && (
+                  <div className="rounded-lg bg-emerald-50/70 border border-emerald-200 px-2.5 py-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <p className="text-[10px] font-semibold uppercase text-emerald-800">
+                        Origem: Incubação própria ({aquisicao.linkedIncubation.code})
+                      </p>
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="ghost"
+                        className="h-6 text-[10px] text-emerald-800 hover:text-emerald-950 p-0"
+                      >
+                        <Link to="/chocadeira">Ver incubação</Link>
+                      </Button>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] gap-2">
+                      <span className="text-muted-foreground">
+                        {aquisicao.linkedIncubation.incubatorName || 'Chocadeira'} •{' '}
+                        {aquisicao.linkedIncubation.breed || 'Galinha caipira'}
+                      </span>
+                      <span className="font-bold text-emerald-700 shrink-0">
+                        {fmtBRL(
+                          aquisicao.linkedIncubation.totalCost || aquisicao.lotAcquisitionCost,
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {/* Bloco: Custo do lote */}
                 <div className="rounded-lg bg-rose-50/60 border border-rose-100 px-2 py-1.5">
                   <p className="text-[10px] font-semibold uppercase text-rose-700">Custo do lote</p>
@@ -430,6 +479,7 @@ export default function CustosPrecificacao() {
     mortality,
     weighings,
     structures,
+    incubations,
   } = useFarmStore()
 
   // Estado local (filtros)
@@ -536,6 +586,9 @@ export default function CustosPrecificacao() {
     // Mapa de despesas LOT_ACQUISITION por lotId (quando houver)
     const lotAcquisitionExpenses = expenses.filter((e) => isLotAcquisition(e))
 
+    // Localizar se há incubação vinculada ao lote selecionado ou ao primeiro lote
+    let linkedIncubationData: AcquisitionCostLine['linkedIncubation'] = undefined
+
     for (const lot of acquisitionLots) {
       const lotAcq = Number(lot.acquisitionCost) || 0
       aquisicaoLotCostSum += lotAcq
@@ -551,6 +604,27 @@ export default function CustosPrecificacao() {
           category: e.category,
           lotId: e.lotId,
         })
+      }
+
+      if (lot.incubationId && !linkedIncubationData) {
+        const foundInc = incubations.find((i) => i.id === lot.incubationId)
+        if (foundInc) {
+          const incTot =
+            (foundInc.eggCost || 0) +
+            (foundInc.energyCost || 0) +
+            (foundInc.suppliesCost || 0) +
+            (foundInc.laborCost || 0) +
+            (foundInc.otherCosts || 0)
+          linkedIncubationData = {
+            id: foundInc.id,
+            code: foundInc.code,
+            incubatorName: foundInc.incubatorName,
+            breed: foundInc.breed,
+            eggCost: foundInc.eggCost,
+            energyCost: foundInc.energyCost,
+            totalCost: incTot,
+          }
+        }
       }
     }
 
@@ -600,6 +674,7 @@ export default function CustosPrecificacao() {
                     category: aquisicaoLinkedExpenses[0].category,
                   }
                 : undefined,
+            linkedIncubation: linkedIncubationData,
             included: acquisitionIncluded,
             exclusionReason,
             animalCount: aquisicaoAnimalCount,
@@ -810,6 +885,7 @@ export default function CustosPrecificacao() {
     weighings,
     sales,
     activeActivities,
+    incubations,
   ])
 
   // Resultados de precificação (Bloco 5)
