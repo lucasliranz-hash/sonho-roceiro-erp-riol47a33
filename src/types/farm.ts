@@ -401,6 +401,8 @@ export type VaccinationRoute =
   | 'spray'
   | 'outra'
 
+export type VialStatus = 'closed' | 'opened' | 'discarded'
+
 export interface Vaccination {
   id: string
   organization_id?: string
@@ -427,6 +429,10 @@ export interface Vaccination {
   stock_deducted?: boolean
   notes?: string
   status: VaccinationStatus
+  // Frascos multidose e perdas
+  vial_status?: VialStatus
+  discarded_quantity?: number
+  waste_cost?: number
   data?: Record<string, any>
   created_at?: string
   updated_at?: string
