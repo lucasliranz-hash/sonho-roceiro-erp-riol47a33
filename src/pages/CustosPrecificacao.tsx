@@ -652,9 +652,11 @@ export default function CustosPrecificacao() {
     const capexStructures = structures.filter((s) => inPeriod(s.date))
     const capexValue = capexStructures.reduce((a, s) => a + s.totalValue, 0)
 
-    const diretosTotal = racaoValue + sanidadeValue + outrosDiretosValue
+    const diretosOperacionais = racaoValue + sanidadeValue + outrosDiretosValue
+    const diretosTotal = diretosOperacionais + aquisicaoContribution
     const atividadeTotal = energiaValue + modValue + outrosAtivValue
-    const totalOpex = diretosTotal + atividadeTotal + (includeRateio ? rateioProporcional : 0)
+    const totalOpex =
+      diretosOperacionais + atividadeTotal + (includeRateio ? rateioProporcional : 0)
     // Custo total do lote com aquisição: OPEX + aquisição (linha própria, fora do OPEX)
     const totalComAquisicao = totalOpex + aquisicaoContribution
 
