@@ -218,7 +218,7 @@ export default function Estoque() {
                   <div className="text-right">
                     <span className="text-[11px] text-muted-foreground block">Custo Médio</span>
                     <span className="text-sm font-bold text-primary">
-                      R$ {item.averageCost.toFixed(2)}
+                      R$ {item.averageCost.toFixed(2)}/{item.unit || 'un'}
                     </span>
                   </div>
                 </div>

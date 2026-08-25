@@ -220,6 +220,7 @@ export default function Racao() {
     (Number(purchaseForm.packages) || 0) * (Number(purchaseForm.weightPerPackage) || 0)
   const purchaseTotalValue =
     (Number(purchaseForm.packages) || 0) * (Number(purchaseForm.pricePerPackage) || 0)
+  const purchaseCostPerKg = purchaseTotalQty > 0 ? purchaseTotalValue / purchaseTotalQty : 0
 
   const handlePurchaseSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -478,6 +479,9 @@ export default function Racao() {
                       <p className="font-extrabold text-amber-800">
                         {item.currentStock} {item.unit}
                       </p>
+                      <p className="text-[10px] text-muted-foreground">
+                        R$ {item.averageCost.toFixed(2)}/kg
+                      </p>
                       {isLow && (
                         <Badge className="bg-amber-100 text-amber-800 text-[9px]">Baixo</Badge>
                       )}
@@ -521,6 +525,9 @@ export default function Racao() {
                     <p className="font-bold text-emerald-700">R$ {p.totalValue.toFixed(2)}</p>
                     <p className="text-[10px] text-muted-foreground">
                       R$ {p.pricePerPackage.toFixed(2)}/saco
+                      {p.totalQuantity > 0
+                        ? ` (R$ ${(p.totalValue / p.totalQuantity).toFixed(2)}/kg)`
+                        : ''}
                     </p>
                   </div>
                   <RecordActionMenu
@@ -563,7 +570,12 @@ export default function Racao() {
                 <div className="flex items-center gap-2">
                   <div className="text-right">
                     <p className="font-bold text-amber-800">{f.quantityKg} kg</p>
-                    <p className="text-muted-foreground">R$ {f.totalCost.toFixed(2)}</p>
+                    <p className="text-muted-foreground">
+                      R$ {f.totalCost.toFixed(2)}{' '}
+                      <span className="text-[10px]">
+                        (R$ {Number(f.costPerKg || 0).toFixed(2)}/kg)
+                      </span>
+                    </p>
                   </div>
                   <RecordActionMenu
                     onEdit={() => openConsumptionEdit(f)}
@@ -790,6 +802,14 @@ export default function Racao() {
                   className="h-10 text-xs rounded-xl bg-secondary/50 font-bold"
                 />
               </div>
+            </div>
+            <div>
+              <Label className="text-xs">Custo por kg (calculado)</Label>
+              <Input
+                value={`Custo por kg: R$ ${purchaseCostPerKg.toFixed(2)}/kg`}
+                readOnly
+                className="h-10 text-xs rounded-xl bg-secondary/50 font-semibold text-emerald-700"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>

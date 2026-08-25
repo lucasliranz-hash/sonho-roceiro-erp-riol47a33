@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react'
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  useRef,
+  ReactNode,
+} from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { useSupabaseEntity } from '@/hooks/use-supabase-entity'
 import { FARM_TABLES } from '@/services/farm'
@@ -156,18 +164,24 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const { error } = await feedPurchases.add(record)
       if (error) return { error }
 
-      // Update inventory: stock += totalQuantity, recalc average cost
+      // Update inventory: stock += totalQuantity, recalc average cost (sempre custo por kg)
       const item = inventory.items.find((i) => i.id === purchase.inventoryItemId)
       if (item) {
         const oldStock = item.currentStock || 0
         const oldAvg = item.averageCost || 0
         const newStock = oldStock + totalQuantity
-        // weighted average cost
-        const newAvg =
-          newStock > 0 ? Number(((oldStock * oldAvg + totalValue) / newStock).toFixed(2)) : oldAvg
+        // Se for a primeira compra / estoque zerado, recalcula averageCost direto como totalValue / totalQuantity por kg
+        // Caso contrário, calcula a média ponderada por kg
+        let newAvg = oldAvg
+        if (oldStock <= 0) {
+          newAvg = totalQuantity > 0 ? Number((totalValue / totalQuantity).toFixed(4)) : 0
+        } else if (newStock > 0) {
+          newAvg = Number(((oldStock * oldAvg + totalValue) / newStock).toFixed(4))
+        }
+
         await inventory.update(purchase.inventoryItemId, {
           currentStock: newStock,
-          averageCost: newAvg,
+          averageCost: Number(newAvg.toFixed(2)),
           lastUpdated: new Date().toISOString().split('T')[0],
         })
       }
@@ -596,6 +610,90 @@ function useFarmStoreImpl(orgId: string | undefined) {
     },
     [feedLogs, inventory],
   )
+
+  // Auto-correção de registros legados de ração (garante que averageCost seja por KG e não por saco)
+  const isMigratingRef = useRef(false)
+  useEffect(() => {
+    if (!orgId || isMigratingRef.current) return
+    if (
+      inventory.items.length === 0 &&
+      feedPurchases.items.length === 0 &&
+      feedLogs.items.length === 0
+    )
+      return
+
+    const runAutoCorrection = async () => {
+      isMigratingRef.current = true
+      try {
+        const purchasesList = feedPurchases.items.filter(
+          (p) => (p as any).recordType === 'purchase',
+        )
+        const consumptionList = feedLogs.items.filter((f) => (f as any).recordType !== 'purchase')
+
+        for (const item of inventory.items) {
+          const itemPurchases = purchasesList.filter((p) => p.inventoryItemId === item.id)
+          const pkgWeight = Number((item as any).packageWeight) || 0
+          let targetAvgCost = item.averageCost || 0
+          let needsUpdate = false
+
+          if (itemPurchases.length > 0) {
+            const sumValue = itemPurchases.reduce((acc, p) => acc + (p.totalValue || 0), 0)
+            const sumQty = itemPurchases.reduce((acc, p) => acc + (p.totalQuantity || 0), 0)
+            if (sumQty > 0) {
+              const calcAvg = Number((sumValue / sumQty).toFixed(2))
+              // Se o averageCost atual for muito maior que o calculado (ex: > 2x ou > 5x)
+              if (item.averageCost > 0 && item.averageCost > calcAvg * 1.5) {
+                targetAvgCost = calcAvg
+                needsUpdate = true
+              } else if (item.averageCost === 0 && calcAvg > 0) {
+                targetAvgCost = calcAvg
+                needsUpdate = true
+              }
+            }
+          } else if (pkgWeight > 1 && item.averageCost > 0) {
+            // Se não houver compras registradas mas packageWeight > 1 e o custo for suspeito (ex: > R$ 25/kg)
+            // indicando que foi inserido o valor do saco inteiro (ex: R$ 69,90)
+            if (item.averageCost > 20) {
+              targetAvgCost = Number((item.averageCost / pkgWeight).toFixed(2))
+              needsUpdate = true
+            }
+          }
+
+          if (needsUpdate && targetAvgCost > 0) {
+            await inventory.update(item.id, {
+              averageCost: targetAvgCost,
+            })
+          }
+
+          // Corrigir consumos vinculados a este item se o costPerKg estiver errado
+          const itemConsumptions = consumptionList.filter((c) => c.inventoryItemId === item.id)
+          const effectiveCostPerKg = targetAvgCost > 0 ? targetAvgCost : item.averageCost
+
+          for (const c of itemConsumptions) {
+            if (effectiveCostPerKg > 0) {
+              // Se o costPerKg do consumo for desproporcional ao effectiveCostPerKg (ex: > 1.5x) ou desatualizado
+              const isCostSuspect =
+                c.costPerKg > effectiveCostPerKg * 1.5 ||
+                (pkgWeight > 1 && c.costPerKg > 20 && effectiveCostPerKg <= 20)
+
+              if (isCostSuspect) {
+                const correctedCostPerKg = effectiveCostPerKg
+                const correctedTotalCost = Number((c.quantityKg * correctedCostPerKg).toFixed(2))
+                await feedLogs.update(c.id, {
+                  costPerKg: correctedCostPerKg,
+                  totalCost: correctedTotalCost,
+                })
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error('[useFarmStore] Error running feed auto-correction:', err)
+      }
+    }
+
+    runAutoCorrection()
+  }, [orgId, inventory.items, feedPurchases.items, feedLogs.items, inventory, feedLogs])
 
   return {
     activities: activities.items,
