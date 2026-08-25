@@ -142,7 +142,7 @@ export function IncubationDetail({ incubation, onBack }: Props) {
       label: 'Finalizar',
       icon: CheckCircle,
       onClick: () => setFinalizeOpen(true),
-      disabled: !isActive,
+      disabled: false,
     },
     { label: 'Excluir', icon: Trash2, onClick: () => setDeleteOpen(true), disabled: false },
   ]

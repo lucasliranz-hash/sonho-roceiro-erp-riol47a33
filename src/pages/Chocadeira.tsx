@@ -170,7 +170,7 @@ export default function Chocadeira() {
                             label: 'Finalizar incubação',
                             icon: CheckCircle2,
                             onClick: () => setFinalizing(inc),
-                            disabled: !canEdit || !isActive,
+                            disabled: !canEdit,
                           },
                         ]}
                       />
