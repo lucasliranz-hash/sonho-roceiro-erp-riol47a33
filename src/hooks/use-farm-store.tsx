@@ -285,9 +285,32 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
   const updateIncubation = useCallback(
     async (id: string, updates: Partial<Incubation>) => {
-      return incubations.update(id, updates)
+      const oldInc = incubations.items.find((i) => i.id === id)
+      const res = await incubations.update(id, updates)
+      if (res.error) return res
+
+      // Se a incubação estiver concluída e possuir lote resultante vinculado
+      const resultingLotId = updates.resultingLotId || oldInc?.resultingLotId
+      if (oldInc && resultingLotId) {
+        // Se healthyChicks foi atualizado
+        if (updates.healthyChicks !== undefined && updates.healthyChicks !== oldInc.healthyChicks) {
+          const lot = lots.items.find((l) => l.id === resultingLotId || l.incubationId === id)
+          if (lot) {
+            const oldQty = lot.initialQuantity
+            const diff = updates.healthyChicks - (oldInc.healthyChicks || 0)
+            const newCurrent = Math.max(0, lot.currentQuantity + diff)
+            // Atualiza initialQuantity do lote para o novo healthyChicks e ajusta currentQuantity
+            await lots.update(lot.id, {
+              initialQuantity: updates.healthyChicks,
+              currentQuantity: newCurrent,
+            })
+          }
+        }
+      }
+
+      return res
     },
-    [incubations],
+    [incubations, lots],
   )
 
   const deleteIncubation = useCallback(

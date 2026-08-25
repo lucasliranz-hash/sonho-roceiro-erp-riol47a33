@@ -12,9 +12,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { DollarSign, Zap, Egg as EggIcon } from 'lucide-react'
+import { DollarSign, Zap, Egg as EggIcon, Baby, AlertCircle } from 'lucide-react'
 import { Incubation, IncubationStatus } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
+import { logAudit } from '@/services/audit'
 
 interface Props {
   open: boolean
@@ -35,6 +36,21 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
   const [autoTurning, setAutoTurning] = useState(incubation.autoTurning)
   const [notes, setNotes] = useState(incubation.notes || '')
   const [status, setStatus] = useState<IncubationStatus>(incubation.status)
+
+  // Campos de eclosão (pós-finalização ou edição)
+  const [hatchedCount, setHatchedCount] = useState(
+    incubation.hatchedCount !== undefined ? String(incubation.hatchedCount) : '',
+  )
+  const [healthyChicks, setHealthyChicks] = useState(
+    incubation.healthyChicks !== undefined ? String(incubation.healthyChicks) : '',
+  )
+  const [deaths, setDeaths] = useState(
+    incubation.deaths !== undefined ? String(incubation.deaths) : '',
+  )
+  const [unhatchedCount, setUnhatchedCount] = useState(
+    incubation.unhatchedCount !== undefined ? String(incubation.unhatchedCount) : '',
+  )
+  const [endDate, setEndDate] = useState(incubation.endDate || '')
 
   // Custos da incubação
   const [eggCost, setEggCost] = useState(String(incubation.eggCost ?? ''))
@@ -83,6 +99,17 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
       setAutoTurning(incubation.autoTurning)
       setNotes(incubation.notes || '')
       setStatus(incubation.status)
+
+      // Eclosão
+      setHatchedCount(incubation.hatchedCount !== undefined ? String(incubation.hatchedCount) : '')
+      setHealthyChicks(
+        incubation.healthyChicks !== undefined ? String(incubation.healthyChicks) : '',
+      )
+      setDeaths(incubation.deaths !== undefined ? String(incubation.deaths) : '')
+      setUnhatchedCount(
+        incubation.unhatchedCount !== undefined ? String(incubation.unhatchedCount) : '',
+      )
+      setEndDate(incubation.endDate || '')
 
       // Custos
       setEggCost(incubation.eggCost !== undefined ? String(incubation.eggCost) : '')
@@ -197,12 +224,34 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
     return egg + energy + supplies + labor + others
   }, [eggCost, energyCost, suppliesCost, laborCost, otherCosts])
 
+  const isConcluded = status === 'Concluído' || incubation.status === 'Concluído'
+  const hasResultingLot = !!incubation.resultingLotId
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     const expectedHatchDate = new Date(new Date(startDate).getTime() + 21 * 86400000)
       .toISOString()
       .split('T')[0]
-    const result = (await onSave({
+
+    const parsedHatched = hatchedCount !== '' ? Number(hatchedCount) : undefined
+    const parsedHealthy = healthyChicks !== '' ? Number(healthyChicks) : undefined
+    const parsedDeaths = deaths !== '' ? Number(deaths) : undefined
+    const parsedUnhatched = unhatchedCount !== '' ? Number(unhatchedCount) : undefined
+
+    if (
+      parsedHealthy !== undefined &&
+      parsedHatched !== undefined &&
+      parsedHealthy > parsedHatched
+    ) {
+      toast({
+        title: 'Validação inválida',
+        description: 'Pintinhos viáveis não pode ser maior que o total de nascidos.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    const updates: Partial<Incubation> = {
       incubatorName,
       origin,
       breed,
@@ -225,7 +274,14 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
       suppliesCost: suppliesCost ? Number(suppliesCost) : undefined,
       laborCost: laborCost ? Number(laborCost) : undefined,
       otherCosts: otherCosts ? Number(otherCosts) : undefined,
-    })) as { error?: any } | void
+      hatchedCount: parsedHatched,
+      healthyChicks: parsedHealthy,
+      deaths: parsedDeaths,
+      unhatchedCount: parsedUnhatched,
+      endDate: endDate || undefined,
+    }
+
+    const result = (await onSave(updates)) as { error?: any } | void
     if (result && typeof result === 'object' && 'error' in result && result.error) {
       toast({
         title: 'Erro ao salvar ❌',
@@ -234,6 +290,32 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
       })
       return
     }
+
+    // Auditoria para edição pós-finalização se concluída ou se mudou campos de fechamento
+    if (isConcluded || hasResultingLot) {
+      await logAudit(
+        'Edição pós-finalização',
+        'farm_incubations',
+        incubation.id,
+        {
+          hatchedCount: incubation.hatchedCount,
+          healthyChicks: incubation.healthyChicks,
+          deaths: incubation.deaths,
+          unhatchedCount: incubation.unhatchedCount,
+          notes: incubation.notes,
+          resultingLotId: incubation.resultingLotId,
+        },
+        {
+          hatchedCount: parsedHatched,
+          healthyChicks: parsedHealthy,
+          deaths: parsedDeaths,
+          unhatchedCount: parsedUnhatched,
+          notes,
+          resultingLotId: incubation.resultingLotId,
+        },
+      )
+    }
+
     toast({ title: 'Incubação atualizada! ✅', description: 'As alterações foram salvas.' })
     onOpenChange(false)
   }
@@ -495,6 +577,103 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
             <Label className="text-xs font-medium">Viragem Automática</Label>
             <Switch checked={autoTurning} onCheckedChange={setAutoTurning} />
           </div>
+          {/* ========================================================= */}
+          {/* SEÇÃO: RESULTADOS DE ECLOSÃO (PÓS-FINALIZAÇÃO OU CONCLUÍDO) */}
+          {/* ========================================================= */}
+          {(isConcluded || hasResultingLot || hatchedCount !== '' || healthyChicks !== '') && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold flex items-center gap-1.5 text-emerald-950">
+                  <Baby className="w-4 h-4 text-emerald-700" /> Resultados de Eclosão & Lote
+                </h3>
+                {hasResultingLot && (
+                  <span className="text-[10px] bg-emerald-100 text-emerald-900 px-2 py-0.5 rounded-full font-bold">
+                    Lote Vinculado
+                  </span>
+                )}
+              </div>
+
+              {hasResultingLot && (
+                <div className="p-2 rounded-xl bg-amber-50 border border-amber-200 text-[11px] text-amber-900 flex items-start gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-700 shrink-0 mt-0.5" />
+                  <span>
+                    Ao alterar os <strong>pintinhos viáveis</strong>, o lote gerado vinculado (
+                    {incubation.resultingLotId}) será atualizado automaticamente sem duplicar o lote
+                    e sem alterar o custo total.
+                  </span>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2.5">
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Nascidos (eclosão)</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={hatchedCount}
+                    onChange={(e) => setHatchedCount(e.target.value)}
+                    className="h-9 text-xs rounded-xl bg-white"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">
+                    Pintinhos Viáveis (Saudáveis)
+                  </Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={healthyChicks}
+                    onChange={(e) => setHealthyChicks(e.target.value)}
+                    className="h-9 text-xs rounded-xl bg-white font-bold text-emerald-800"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Mortos ao nascer</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={deaths}
+                    onChange={(e) => setDeaths(e.target.value)}
+                    className="h-9 text-xs rounded-xl bg-white"
+                    placeholder="0"
+                  />
+                </div>
+                <div>
+                  <Label className="text-[10px] text-muted-foreground">Ovos não eclodidos</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    value={unhatchedCount}
+                    onChange={(e) => setUnhatchedCount(e.target.value)}
+                    className="h-9 text-xs rounded-xl bg-white"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-[10px] text-muted-foreground">Data Final (Fechamento)</Label>
+                <Input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="h-9 text-xs rounded-xl bg-white"
+                />
+              </div>
+
+              {Number(healthyChicks) > 0 && (
+                <div className="pt-2 border-t border-emerald-200/60 flex items-center justify-between text-xs">
+                  <span className="text-emerald-900 text-[11px]">Novo Custo / Pintinho:</span>
+                  <span className="font-extrabold text-emerald-950 text-sm">
+                    R$ {(totalCalculatedCost / Number(healthyChicks)).toFixed(2)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <Label className="text-xs">Observações</Label>
             <Textarea

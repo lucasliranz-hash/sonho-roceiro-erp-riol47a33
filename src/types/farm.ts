@@ -188,6 +188,15 @@ export interface EggProduction {
 
 export type IncubationStatus = 'Em andamento' | 'Concluído' | 'Cancelado'
 
+export interface IncubationReading {
+  id: string
+  date: string
+  day: number
+  temperature: number
+  humidity: number
+  notes?: string
+}
+
 export interface Incubation {
   id: string
   code: string
@@ -209,6 +218,8 @@ export interface Incubation {
   deaths?: number
   energyCost?: number
   notes?: string
+  // Leituras diárias
+  readings?: IncubationReading[]
   // Custos adicionais
   eggCostPerUnit?: number
   suppliesCost?: number
