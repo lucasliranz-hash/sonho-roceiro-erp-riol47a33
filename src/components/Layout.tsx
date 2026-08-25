@@ -17,7 +17,7 @@ import { roleLabels } from '@/types/auth'
 
 const BUILD_TIME = new Date().toISOString()
 const SUPABASE_PROJECT_REF = 'qqhah...bvqq'
-const APP_VERSION = 'v0.0.47'
+const APP_VERSION = 'v0.0.48'
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
