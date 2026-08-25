@@ -49,7 +49,12 @@ import {
 } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
 
-// ====================================================================
+// SUB-COMPONENT: DIÁLOGO TRATAMENTO
+// ====================================================================State for Dialogs
+  const [vacModalOpen, setVacModalOpen] = useState(false)
+=======
+  // State for Dialogs
+  const [vacModalOpen, setVacModalOpen] = useState(false)====================================================================
 // SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
 // ====================================================================
 interface ApplyVaccinationDialogProps {
@@ -586,11 +591,41 @@ function ApplyVaccinationDialog({
   )
 }
 
+// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
+// ====================================================================
+=======
 export default function Sanidade() {
   const { currentProperty, organization } = useAuth()
   const { canEdit, canDelete } = usePermissions()
   const {
-// ====================================================================
+    lots,
+    inventory,
+    vaccinations,
+    treatments,
+    healthOccurrences,
+    healthProtocols,
+    protocolAssignments,
+    activities,
+    addVaccination,
+    updateVaccination,
+    deleteVaccination,
+    addTreatment,
+    updateTreatment,
+    deleteTreatment,
+    addHealthOccurrence,
+    updateHealthOccurrence,
+    deleteHealthOccurrence,
+    addHealthProtocol,
+    updateHealthProtocol,
+    deleteHealthProtocol,
+    addProtocolAssignment,
+    deleteProtocolAssignment,
+    addStockMovement,
+    updateInventory,
+  } = useFarmStore()
+
+  const [activeTab, setActiveTab] = useState('vacinacao')
+  const [searchTerm, setSearchTerm] = useState('')====================================================================
 // SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
 // ====================================================================
 interface ApplyVaccinationDialogProps {
