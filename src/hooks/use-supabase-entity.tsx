@@ -76,11 +76,16 @@ export function useSupabaseEntity<T extends { id: string }>(
         payload: { id: item.id, organization_id: orgId, data: item },
       })
 
-      const { error } = await insertEntity(table, orgId, item as unknown as Record<string, unknown>)
+      const { data: resultData, error } = await insertEntity(
+        table,
+        orgId,
+        item as unknown as Record<string, unknown>,
+      )
 
       console.log('[useSupabaseEntity] add: result', {
         table,
         itemId: item.id,
+        returnedData: resultData,
         error,
         success: !error,
       })
@@ -93,6 +98,17 @@ export function useSupabaseEntity<T extends { id: string }>(
           data: { id: item.id, organization_id: orgId, data: item },
         })
         return { error }
+      }
+
+      if (!resultData || resultData.length === 0) {
+        const rlsError = {
+          message: 'Registro não foi salvo. Verifique as permissões da organização.',
+        }
+        console.error('[useSupabaseEntity] add: NO DATA RETURNED (RLS or silent fail)', {
+          table,
+          itemId: item.id,
+        })
+        return { error: rlsError }
       }
 
       setItems((prev) => [item, ...prev])

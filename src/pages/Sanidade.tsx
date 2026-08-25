@@ -31,11 +31,7 @@ import {
   Plus,
   Search,
   CheckCircle2,
-  Clock,
   Trash2,
-  ArrowRight,
-  Layers,
-  Sparkles,
   Link2,
 } from 'lucide-react'
 import {
@@ -48,7 +44,6 @@ import {
   HealthOccurrenceSeverity,
   HealthProtocol,
   HealthProtocolStep,
-  ProtocolAssignment,
   ACTIVITY_TYPES,
 } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
@@ -115,7 +110,6 @@ export default function Sanidade() {
 
   // Helpers
   const lotName = (id?: string) => lots.find((l) => l.id === id)?.name || 'Todos/Geral'
-  const activityName = (id?: string) => activities.find((a) => a.id === id)?.name || '-'
   const itemName = (id?: string) => inventory.find((i) => i.id === id)?.name || '-'
 
   // Filtered lists
@@ -482,39 +476,32 @@ export default function Sanidade() {
 
                       <div className="grid grid-cols-2 gap-2 bg-secondary/30 p-2.5 rounded-2xl text-xs">
                         <div>
+                          <span className="text-[10px] text-muted-foreground block">Dosagem</span>
+                          <span className="font-semibold text-foreground">{trt.dosage || '—'}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Duração</span>
+                          <span className="font-semibold text-foreground">
+                            {trt.duration_days ? `${trt.duration_days} dias` : '—'}
+                          </span>
+                        </div>
+                        <div>
                           <span className="text-[10px] text-muted-foreground block">Início</span>
                           <span className="font-semibold text-foreground">
                             {trt.start_date || '—'}
                           </span>
                         </div>
                         <div>
-                          <span className="text-[10px] text-muted-foreground block">Fim</span>
-                          <span className="font-semibold text-foreground">
-                            {trt.end_date || '—'}
+                          <span className="text-[10px] text-muted-foreground block">
+                            Carência Abate
                           </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Posologia</span>
-                          <span className="font-semibold text-foreground truncate">
-                            {trt.dosage || '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Carência</span>
-                          <span className="font-semibold text-amber-800">
+                          <span className="font-bold text-amber-600">
                             {trt.withdrawal_period_days
                               ? `${trt.withdrawal_period_days} dias`
-                              : 'Zero'}
+                              : '0 dias'}
                           </span>
                         </div>
                       </div>
-
-                      {trt.stock_deducted && (
-                        <p className="text-[10px] text-emerald-700 font-medium flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Baixa realizada no
-                          estoque
-                        </p>
-                      )}
                     </CardContent>
                   </Card>
                 )
@@ -524,7 +511,7 @@ export default function Sanidade() {
         </TabsContent>
 
         {/* ==========================================
-            ABA 3: OCORRÊNCIAS
+            ABA 3: OCORRÊNCIAS CLÍNICAS
         ========================================== */}
         <TabsContent value="ocorrencias" className="mt-4 space-y-4">
           {filteredOccurrences.length === 0 ? (
@@ -533,11 +520,11 @@ export default function Sanidade() {
                 <AlertTriangle className="w-10 h-10 text-muted-foreground/40 mx-auto" />
                 <div>
                   <p className="text-sm font-semibold text-muted-foreground">
-                    Nenhuma ocorrência registrada
+                    Nenhuma ocorrência clínica registrada
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Registre sintomas, lesões, doenças ou comportamentos anormais para histórico
-                    epidemiológico.
+                    Registre sintomas atípicos, lesões, surtos respiratórios ou digestivos para
+                    acompanhamento.
                   </p>
                 </div>
                 <Button
@@ -780,7 +767,18 @@ export default function Sanidade() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => deleteProtocolAssignment(pa.id)}
+                            onClick={async () => {
+                              const res = await deleteProtocolAssignment(pa.id)
+                              if (res?.error) {
+                                toast({
+                                  title: 'Erro ao excluir vínculo',
+                                  description: res.error.message || 'Tente novamente',
+                                  variant: 'destructive',
+                                })
+                                return
+                              }
+                              toast({ title: 'Vínculo excluído com sucesso' })
+                            }}
                             className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-50 rounded-lg"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -1004,10 +1002,26 @@ export default function Sanidade() {
         propertyId={currentProperty?.id}
         onSubmit={async (payload) => {
           if (editingVac) {
-            await updateVaccination(editingVac.id, payload)
+            const result = await updateVaccination(editingVac.id, payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao atualizar vacinação',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Vacinação atualizada com sucesso! 💉' })
           } else {
-            await addVaccination(payload)
+            const result = await addVaccination(payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao cadastrar vacinação',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Vacinação cadastrada com sucesso! 💉' })
           }
           setVacModalOpen(false)
@@ -1025,10 +1039,26 @@ export default function Sanidade() {
         propertyId={currentProperty?.id}
         onSubmit={async (payload) => {
           if (editingTrt) {
-            await updateTreatment(editingTrt.id, payload)
+            const result = await updateTreatment(editingTrt.id, payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao atualizar tratamento',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Tratamento atualizado com sucesso! 💊' })
           } else {
-            await addTreatment(payload)
+            const result = await addTreatment(payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao cadastrar tratamento',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Tratamento cadastrado com sucesso! 💊' })
           }
           setTrtModalOpen(false)
@@ -1045,10 +1075,26 @@ export default function Sanidade() {
         propertyId={currentProperty?.id}
         onSubmit={async (payload) => {
           if (editingOcc) {
-            await updateHealthOccurrence(editingOcc.id, payload)
+            const result = await updateHealthOccurrence(editingOcc.id, payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao atualizar ocorrência',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Ocorrência atualizada! ⚠️' })
           } else {
-            await addHealthOccurrence(payload)
+            const result = await addHealthOccurrence(payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao registrar ocorrência',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Ocorrência registrada com sucesso! ⚠️' })
           }
           setOccModalOpen(false)
@@ -1064,10 +1110,26 @@ export default function Sanidade() {
         propertyId={currentProperty?.id}
         onSubmit={async (payload) => {
           if (editingProt) {
-            await updateHealthProtocol(editingProt.id, payload)
+            const result = await updateHealthProtocol(editingProt.id, payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao atualizar protocolo',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Protocolo atualizado! 📋' })
           } else {
-            await addHealthProtocol(payload)
+            const result = await addHealthProtocol(payload)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao criar protocolo',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Protocolo criado com sucesso! 📋' })
           }
           setProtModalOpen(false)
@@ -1098,7 +1160,7 @@ export default function Sanidade() {
             }
           })
 
-          await addProtocolAssignment({
+          const result = await addProtocolAssignment({
             organization_id: organization?.id,
             property_id: currentProperty?.id,
             lot_id: lotId,
@@ -1109,6 +1171,15 @@ export default function Sanidade() {
             start_date: refDate,
             generated_entries: entries,
           })
+
+          if (result?.error) {
+            toast({
+              title: 'Erro ao vincular protocolo ao lote',
+              description: result.error.message || 'Tente novamente',
+              variant: 'destructive',
+            })
+            return
+          }
 
           toast({
             title: 'Protocolo vinculado ao lote! ✨',
@@ -1124,7 +1195,15 @@ export default function Sanidade() {
         onOpenChange={(v) => !v && setDeletingVac(null)}
         onConfirm={async () => {
           if (deletingVac) {
-            await deleteVaccination(deletingVac.id)
+            const result = await deleteVaccination(deletingVac.id)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao excluir vacinação',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Vacinação excluída' })
             setDeletingVac(null)
           }
@@ -1136,7 +1215,15 @@ export default function Sanidade() {
         onOpenChange={(v) => !v && setDeletingTrt(null)}
         onConfirm={async () => {
           if (deletingTrt) {
-            await deleteTreatment(deletingTrt.id)
+            const result = await deleteTreatment(deletingTrt.id)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao excluir tratamento',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Tratamento excluído' })
             setDeletingTrt(null)
           }
@@ -1148,7 +1235,15 @@ export default function Sanidade() {
         onOpenChange={(v) => !v && setDeletingOcc(null)}
         onConfirm={async () => {
           if (deletingOcc) {
-            await deleteHealthOccurrence(deletingOcc.id)
+            const result = await deleteHealthOccurrence(deletingOcc.id)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao excluir ocorrência',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Ocorrência excluída' })
             setDeletingOcc(null)
           }
@@ -1160,7 +1255,15 @@ export default function Sanidade() {
         onOpenChange={(v) => !v && setDeletingProt(null)}
         onConfirm={async () => {
           if (deletingProt) {
-            await deleteHealthProtocol(deletingProt.id)
+            const result = await deleteHealthProtocol(deletingProt.id)
+            if (result?.error) {
+              toast({
+                title: 'Erro ao excluir protocolo',
+                description: result.error.message || 'Tente novamente',
+                variant: 'destructive',
+              })
+              return
+            }
             toast({ title: 'Protocolo excluído' })
             setDeletingProt(null)
           }
