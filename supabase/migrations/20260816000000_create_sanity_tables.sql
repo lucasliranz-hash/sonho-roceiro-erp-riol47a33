@@ -1,4 +1,5 @@
 -- Migration: Create sanity (sanidade) tables and policies
+-- Applies farm_vaccinations, farm_treatments, farm_health_occurrences, farm_health_protocols, farm_protocol_assignments
 DO $$
 DECLARE
   tbl TEXT;
