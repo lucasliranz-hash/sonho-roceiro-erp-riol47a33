@@ -181,7 +181,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
         await inventory.update(purchase.inventoryItemId, {
           currentStock: newStock,
-          averageCost: Number(newAvg.toFixed(2)),
+          averageCost: Number(newAvg.toFixed(4)),
           lastUpdated: new Date().toISOString().split('T')[0],
         })
       }
@@ -611,10 +611,19 @@ function useFarmStoreImpl(orgId: string | undefined) {
     [feedLogs, inventory],
   )
 
-  // Auto-correção de registros legados de ração (garante que averageCost seja por KG e não por saco)
+  // Migração única de registros legados de ração (garante que averageCost seja por KG e não por saco)
   const isMigratingRef = useRef(false)
   useEffect(() => {
     if (!orgId || isMigratingRef.current) return
+    const MIGRATION_KEY = 'sr_feed_cost_migration_v1'
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem(MIGRATION_KEY)) {
+        return
+      }
+    } catch {
+      // Ignora erro de acesso ao localStorage
+    }
+
     if (
       inventory.items.length === 0 &&
       feedPurchases.items.length === 0 &&
@@ -686,6 +695,14 @@ function useFarmStoreImpl(orgId: string | undefined) {
               }
             }
           }
+        }
+
+        try {
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(MIGRATION_KEY, 'done')
+          }
+        } catch {
+          // Ignora erro de escrita no localStorage
         }
       } catch (err) {
         console.error('[useFarmStore] Error running feed auto-correction:', err)
