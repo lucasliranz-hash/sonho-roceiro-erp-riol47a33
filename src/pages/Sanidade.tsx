@@ -590,29 +590,1095 @@ export default function Sanidade() {
   const { currentProperty, organization } = useAuth()
   const { canEdit, canDelete } = usePermissions()
   const {
-    lots,
-    activities,
-    inventory,
-    vaccinations,
-    addVaccination,
-    updateVaccination,
-    deleteVaccination,
-    treatments,
-    addTreatment,
-    updateTreatment,
-    deleteTreatment,
-    healthOccurrences,
-    addHealthOccurrence,
-    updateHealthOccurrence,
-    deleteHealthOccurrence,
-    healthProtocols,
-    addHealthProtocol,
-    updateHealthProtocol,
-    deleteHealthProtocol,
-    protocolAssignments,
-    addProtocolAssignment,
-    deleteProtocolAssignment,
-  } = useFarmStore()
+// ====================================================================
+// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
+// ====================================================================
+interface ApplyVaccinationDialogProps {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  vaccination: Vaccination | null
+  lots: any[]
+  inventory: any[]
+  onConfirm: (
+    updatedVaccination: Partial<Vaccination>,
+    stockMovement?: {
+      inventoryItemId: string
+      movementPayload: any
+      updatePayload?: any
+    },
+  ) => Promise<void>
+}
+
+function ApplyVaccinationDialog({
+  open,
+  onOpenChange,
+  vaccination,
+  lots,
+  inventory,
+  onConfirm,
+}: ApplyVaccinationDialogProps) {
+  const [performedDate, setPerformedDate] = useState('')
+  const [animalCount, setAnimalCount] = useState('')
+  const [dosePerAnimal, setDosePerAnimal] = useState('')
+  const [doseUnit, setDoseUnit] = useState('mL')
+  const [applicationRoute, setApplicationRoute] = useState('água')
+  const [responsible, setResponsible] = useState('')
+  const [inventoryItemId, setInventoryItemId] = useState('')
+  const [batchNumber, setBatchNumber] = useState('')
+  const [expirationDate, setExpirationDate] = useState('')
+  const [quantityUsed, setQuantityUsed] = useState('')
+  const [unitCost, setUnitCost] = useState('')
+  const [totalCost, setTotalCost] = useState('')
+  const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
+  const [discardedQuantity, setDiscardedQuantity] = useState('')
+  const [wasteCost, setWasteCost] = useState('')
+  const [deductStock, setDeductStock] = useState(true)
+  const [notes, setNotes] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Pre-fill automatically with scheduled data
+  useEffect(() => {
+    if (!open || !vaccination) return
+
+    const v = vaccination as any
+    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
+    const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
+    const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
+    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
+    const resp = getVacField(v, ['responsible'], '')
+    const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
+    const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
+    const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
+    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
+    const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
+    const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
+    const obs = getVacField(v, ['notes', 'observations'], '')
+    const vStat = getVacField(v, ['vial_status', 'vialStatus'], 'opened')
+    const discQty = getVacField(v, ['discarded_quantity', 'discardedQuantity'], '')
+    const wCost = getVacField(v, ['waste_cost', 'wasteCost'], '')
+
+    setPerformedDate(new Date().toISOString().split('T')[0])
+    setAnimalCount(aCount !== '' ? String(aCount) : '')
+    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
+    setDoseUnit(dUnit || 'mL')
+    setApplicationRoute(appRoute || 'água')
+    setResponsible(resp)
+    setInventoryItemId(invId)
+    setBatchNumber(bNum)
+    setExpirationDate(exp)
+    setVialStatus(vStat || 'opened')
+    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
+    setWasteCost(wCost !== '' ? String(wCost) : '')
+    setDeductStock(true)
+    setNotes(obs)
+
+    // Calculate auto consumption if available
+    const countNum = Number(aCount) || 0
+    const doseNum = Number(dPerAnimal) || 0
+    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
+    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
+
+    // Check inventory item for unit cost
+    const itm = inventory.find((i) => i.id === invId)
+    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
+    if (cost > 0) {
+      setUnitCost(String(cost))
+      if (calculatedQty > 0) {
+        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
+      } else {
+        setTotalCost(tCost !== '' ? String(tCost) : '')
+      }
+    } else {
+      setUnitCost(uCost !== '' ? String(uCost) : '')
+      setTotalCost(tCost !== '' ? String(tCost) : '')
+    }
+  }, [open, vaccination, inventory])
+
+  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
+  const lot = lots.find((l) => l.id === vaccination?.lot_id)
+
+  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
+    if (count > 0 && dose > 0) {
+      const calc = Number((count * dose).toFixed(3))
+      setQuantityUsed(String(calc))
+      const itm = itemOverride || selectedItem
+      if (itm && itm.averageCost) {
+        setUnitCost(String(itm.averageCost))
+        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
+      }
+    }
+  }
+
+  const handleInventorySelect = (id: string) => {
+    setInventoryItemId(id)
+    const itm = inventory.find((i) => i.id === id)
+    if (itm) {
+      if (itm.unit) setDoseUnit(itm.unit)
+      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
+      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
+      if (itm.averageCost) {
+        setUnitCost(String(itm.averageCost))
+        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
+        if (qty > 0) {
+          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
+        }
+      }
+    }
+  }
+
+  const handleConfirm = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!performedDate) {
+      toast({ title: 'Informe a data realizada', variant: 'destructive' })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
+      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
+      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
+      const dQty = Number(discardedQuantity) || 0
+      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
+
+      const updatedPayload: Partial<Vaccination> = {
+        status: 'performed',
+        performed_date: performedDate,
+        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
+        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
+        dose_unit: doseUnit || vaccination?.dose_unit,
+        application_route: applicationRoute || vaccination?.application_route,
+        responsible: responsible.trim() || vaccination?.responsible,
+        inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
+        inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
+        batch_number: batchNumber.trim() || vaccination?.batch_number,
+        expiration_date: expirationDate || vaccination?.expiration_date,
+        quantity_used: qUsed > 0 ? qUsed : undefined,
+        unit_cost: uCost > 0 ? uCost : undefined,
+        total_cost: tCost > 0 ? tCost : undefined,
+        stock_deducted: deductStock && Boolean(inventoryItemId),
+        vial_status: (vialStatus as VialStatus) || undefined,
+        discarded_quantity: dQty > 0 ? dQty : undefined,
+        waste_cost: wCost > 0 ? wCost : undefined,
+        notes: notes.trim() || vaccination?.notes,
+      }
+
+      let stockMovement: {
+        inventoryItemId: string
+        movementPayload: any
+        updatePayload?: any
+      } | undefined = undefined
+
+      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
+        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
+        stockMovement = {
+          inventoryItemId,
+          movementPayload: {
+            organization_id: vaccination?.organization_id,
+            property_id: vaccination?.property_id,
+            inventory_item_id: inventoryItemId,
+            type: 'out',
+            quantity: qUsed,
+            unit_price: uCost,
+            total_price: tCost,
+            date: performedDate,
+            reason: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'})`,
+            notes: `Consumo na vacinação do lote ${lot?.name || 'Geral'}. Quantidade: ${qUsed} ${selectedItem.unit || 'un'}.`,
+          },
+          updatePayload: {
+            currentStock: newStock,
+          },
+        }
+      }
+
+      await onConfirm(updatedPayload, stockMovement)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold flex items-center gap-2">
+            <Syringe className="w-5 h-5 text-emerald-600" />
+            Registrar Aplicação de Vacina
+          </DialogTitle>
+        </DialogHeader>
+
+        {vaccination && (
+          <form onSubmit={handleConfirm} className="space-y-4 mt-2">
+            {/* Card resumo da programação */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
+                    Vacinação Programada
+                  </span>
+                  <h4 className="text-sm font-bold text-emerald-950">{vaccination.vaccine_name}</h4>
+                </div>
+                <Badge className="bg-emerald-600 text-white text-[10px]">
+                  {vaccination.disease_target || 'Sanidade'}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
+                <div>
+                  <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
+                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
+                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
+                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Confirmação de dados reais executados */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-foreground block">
+                Dados da Aplicação Efetiva
+              </span>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Data Realizada *</Label>
+                  <Input
+                    type="date"
+                    value={performedDate}
+                    onChange={(e) => setPerformedDate(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Responsável / Aplicador *</Label>
+                  <Input
+                    placeholder="Nome do aplicador"
+                    value={responsible}
+                    onChange={(e) => setResponsible(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">Animais Vacinados</Label>
+                  <Input
+                    type="number"
+                    value={animalCount}
+                    onChange={(e) => {
+                      setAnimalCount(e.target.value)
+                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
+                    }}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="Ex: 4"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Dose Real / Ave</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={dosePerAnimal}
+                    onChange={(e) => {
+                      setDosePerAnimal(e.target.value)
+                      handleRecalcQty(Number(animalCount), Number(e.target.value))
+                    }}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="0.5"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Unidade</Label>
+                  <Input
+                    value={doseUnit}
+                    onChange={(e) => setDoseUnit(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="mL"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Via de Aplicação</Label>
+                <Select value={applicationRoute} onValueChange={setApplicationRoute}>
+                  <SelectTrigger className="h-10 text-xs rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="água">Água de bebida</SelectItem>
+                    <SelectItem value="ocular">Ocular / Nasal</SelectItem>
+                    <SelectItem value="oral">Oral direta</SelectItem>
+                    <SelectItem value="intramuscular">Intramuscular</SelectItem>
+                    <SelectItem value="subcutânea">Subcutânea</SelectItem>
+                    <SelectItem value="spray">Spray</SelectItem>
+                    <SelectItem value="ração">Ração</SelectItem>
+                    <SelectItem value="outra">Outra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Controle de Frasco Multidose */}
+            <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5">
+              <span className="text-xs font-bold text-foreground block">
+                Frascos Multidose & Perdas (Opcional)
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
+                  <Select
+                    value={vialStatus}
+                    onValueChange={(v) => setVialStatus(v as VialStatus)}
+                  >
+                    <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
+                      <SelectItem value="closed">Frasco Fechado</SelectItem>
+                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {vialStatus === 'discarded' ? (
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={discardedQuantity}
+                      onChange={(e) => {
+                        setDiscardedQuantity(e.target.value)
+                        const dq = Number(e.target.value) || 0
+                        const uc = Number(unitCost) || selectedItem?.averageCost || 0
+                        if (dq > 0 && uc > 0) {
+                          setWasteCost(String(Number((dq * uc).toFixed(2))))
+                        }
+                      }}
+                      className="h-9 text-xs rounded-xl bg-white"
+                      placeholder="Doses perdidas"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center pt-4 text-[11px] text-muted-foreground">
+                    Frasco em uso ou estoque reconstituído.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Estoque e Custos */}
+            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">
+                  Baixa de Estoque & Custo do Lote
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  Não gera 2ª despesa financeira
+                </span>
+              </div>
+
+              <div>
+                <Label className="text-xs">Item Sanitário no Estoque *</Label>
+                <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
+                  <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
+                    <SelectValue placeholder="Selecione o produto no estoque para dar baixa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum / Não baixar estoque</SelectItem>
+                    {inventory.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
+                        {(item.averageCost || 0).toFixed(2)}/{item.unit})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedItem && (
+                <div className="p-2.5 rounded-xl bg-white/90 border border-border/80 text-[11px] space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Disponível no Estoque:</span>
+                    <strong className="text-foreground">
+                      {selectedItem.currentStock} {selectedItem.unit}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Custo Médio Unitário:</span>
+                    <strong className="text-emerald-700 font-bold">
+                      R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
+                    </strong>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">
+                    Qtd Consumida ({selectedItem?.unit || doseUnit || 'doses'})
+                  </Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={quantityUsed}
+                    onChange={(e) => {
+                      setQuantityUsed(e.target.value)
+                      const q = Number(e.target.value) || 0
+                      const uc = Number(unitCost) || selectedItem?.averageCost || 0
+                      setTotalCost(String(Number((q * uc).toFixed(2))))
+                    }}
+                    className="h-10 text-xs rounded-xl bg-white"
+                    placeholder="Qtd consumida"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Lote do Fabricante</Label>
+                  <Input
+                    value={batchNumber}
+                    onChange={(e) => setBatchNumber(e.target.value)}
+                    className="h-10 text-xs rounded-xl bg-white"
+                    placeholder="Ex: VAC-2026-X"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Custo Unitário (R$)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={unitCost}
+                    onChange={(e) => {
+                      setUnitCost(e.target.value)
+                      const uc = Number(e.target.value) || 0
+                      const q = Number(quantityUsed) || 0
+                      setTotalCost(String(Number((q * uc).toFixed(2))))
+                    }}
+                    className="h-10 text-xs rounded-xl bg-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Custo Apropriado ao Lote (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={totalCost}
+                    onChange={(e) => setTotalCost(e.target.value)}
+                    className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-700"
+                  />
+                </div>
+              </div>
+
+              {inventoryItemId && (
+                <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
+                  <Checkbox
+                    id="applyVacStockDeduct"
+                    checked={deductStock}
+                    onCheckedChange={(v) => setDeductStock(Boolean(v))}
+                  />
+                  <label
+                    htmlFor="applyVacStockDeduct"
+                    className="text-xs font-semibold leading-none cursor-pointer text-foreground"
+                  >
+                    [✓] Efetuar baixa imediata no estoque ({quantityUsed || '0'}{' '}
+                    {selectedItem?.unit || doseUnit})
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label className="text-xs">Observações da Aplicação</Label>
+              <Textarea
+                placeholder="Ex: Aplicação ocorreu sem intercorrências, lote reagiu bem."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white mt-2 gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {isSubmitting ? 'Confirmando Aplicação...' : 'Confirmar Aplicação de Vacina 💉'}
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ====================================================================
+// SUB-COMPONENT: DIÁLOGO TRATAMENTO
+// ====================================================================State for Dialogs
+  const [vacModalOpen, setVacModalOpen] = useState(false)
+=======
+  const [activeTab, setActiveTab] = useState('vacinacao')
+  const [searchTerm, setSearchTerm] = useState('')
+
+  // State for Dialogs
+  const [vacModalOpen, setVacModalOpen] = useState(false)====================================================================
+=======
+// ====================================================================
+// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
+// ====================================================================
+interface ApplyVaccinationDialogProps {
+  open: boolean
+  onOpenChange: (v: boolean) => void
+  vaccination: Vaccination | null
+  lots: any[]
+  inventory: any[]
+  onConfirm: (
+    updatedVaccination: Partial<Vaccination>,
+    stockMovement?: {
+      inventoryItemId: string
+      movementPayload: any
+      updatePayload?: any
+    },
+  ) => Promise<void>
+}
+
+function ApplyVaccinationDialog({
+  open,
+  onOpenChange,
+  vaccination,
+  lots,
+  inventory,
+  onConfirm,
+}: ApplyVaccinationDialogProps) {
+  const [performedDate, setPerformedDate] = useState('')
+  const [animalCount, setAnimalCount] = useState('')
+  const [dosePerAnimal, setDosePerAnimal] = useState('')
+  const [doseUnit, setDoseUnit] = useState('mL')
+  const [applicationRoute, setApplicationRoute] = useState('água')
+  const [responsible, setResponsible] = useState('')
+  const [inventoryItemId, setInventoryItemId] = useState('')
+  const [batchNumber, setBatchNumber] = useState('')
+  const [expirationDate, setExpirationDate] = useState('')
+  const [quantityUsed, setQuantityUsed] = useState('')
+  const [unitCost, setUnitCost] = useState('')
+  const [totalCost, setTotalCost] = useState('')
+  const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
+  const [discardedQuantity, setDiscardedQuantity] = useState('')
+  const [wasteCost, setWasteCost] = useState('')
+  const [deductStock, setDeductStock] = useState(true)
+  const [notes, setNotes] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Pre-fill automatically with scheduled data
+  useEffect(() => {
+    if (!open || !vaccination) return
+
+    const v = vaccination as any
+    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
+    const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
+    const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
+    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
+    const resp = getVacField(v, ['responsible'], '')
+    const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
+    const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
+    const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
+    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
+    const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
+    const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
+    const obs = getVacField(v, ['notes', 'observations'], '')
+    const vStat = getVacField(v, ['vial_status', 'vialStatus'], 'opened')
+    const discQty = getVacField(v, ['discarded_quantity', 'discardedQuantity'], '')
+    const wCost = getVacField(v, ['waste_cost', 'wasteCost'], '')
+
+    setPerformedDate(new Date().toISOString().split('T')[0])
+    setAnimalCount(aCount !== '' ? String(aCount) : '')
+    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
+    setDoseUnit(dUnit || 'mL')
+    setApplicationRoute(appRoute || 'água')
+    setResponsible(resp)
+    setInventoryItemId(invId)
+    setBatchNumber(bNum)
+    setExpirationDate(exp)
+    setVialStatus(vStat || 'opened')
+    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
+    setWasteCost(wCost !== '' ? String(wCost) : '')
+    setDeductStock(true)
+    setNotes(obs)
+
+    // Calculate auto consumption if available
+    const countNum = Number(aCount) || 0
+    const doseNum = Number(dPerAnimal) || 0
+    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
+    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
+
+    // Check inventory item for unit cost
+    const itm = inventory.find((i) => i.id === invId)
+    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
+    if (cost > 0) {
+      setUnitCost(String(cost))
+      if (calculatedQty > 0) {
+        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
+      } else {
+        setTotalCost(tCost !== '' ? String(tCost) : '')
+      }
+    } else {
+      setUnitCost(uCost !== '' ? String(uCost) : '')
+      setTotalCost(tCost !== '' ? String(tCost) : '')
+    }
+  }, [open, vaccination, inventory])
+
+  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
+  const lot = lots.find((l) => l.id === vaccination?.lot_id)
+
+  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
+    if (count > 0 && dose > 0) {
+      const calc = Number((count * dose).toFixed(3))
+      setQuantityUsed(String(calc))
+      const itm = itemOverride || selectedItem
+      if (itm && itm.averageCost) {
+        setUnitCost(String(itm.averageCost))
+        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
+      }
+    }
+  }
+
+  const handleInventorySelect = (id: string) => {
+    setInventoryItemId(id)
+    const itm = inventory.find((i) => i.id === id)
+    if (itm) {
+      if (itm.unit) setDoseUnit(itm.unit)
+      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
+      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
+      if (itm.averageCost) {
+        setUnitCost(String(itm.averageCost))
+        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
+        if (qty > 0) {
+          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
+        }
+      }
+    }
+  }
+
+  const handleConfirm = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!performedDate) {
+      toast({ title: 'Informe a data realizada', variant: 'destructive' })
+      return
+    }
+
+    setIsSubmitting(true)
+    try {
+      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
+      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
+      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
+      const dQty = Number(discardedQuantity) || 0
+      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
+
+      const updatedPayload: Partial<Vaccination> = {
+        status: 'performed',
+        performed_date: performedDate,
+        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
+        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
+        dose_unit: doseUnit || vaccination?.dose_unit,
+        application_route: applicationRoute || vaccination?.application_route,
+        responsible: responsible.trim() || vaccination?.responsible,
+        inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
+        inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
+        batch_number: batchNumber.trim() || vaccination?.batch_number,
+        expiration_date: expirationDate || vaccination?.expiration_date,
+        quantity_used: qUsed > 0 ? qUsed : undefined,
+        unit_cost: uCost > 0 ? uCost : undefined,
+        total_cost: tCost > 0 ? tCost : undefined,
+        stock_deducted: deductStock && Boolean(inventoryItemId),
+        vial_status: (vialStatus as VialStatus) || undefined,
+        discarded_quantity: dQty > 0 ? dQty : undefined,
+        waste_cost: wCost > 0 ? wCost : undefined,
+        notes: notes.trim() || vaccination?.notes,
+      }
+
+      let stockMovement: {
+        inventoryItemId: string
+        movementPayload: any
+        updatePayload?: any
+      } | undefined = undefined
+
+      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
+        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
+        stockMovement = {
+          inventoryItemId,
+          movementPayload: {
+            organization_id: vaccination?.organization_id,
+            property_id: vaccination?.property_id,
+            inventory_item_id: inventoryItemId,
+            type: 'out',
+            quantity: qUsed,
+            unit_price: uCost,
+            total_price: tCost,
+            date: performedDate,
+            reason: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'})`,
+            notes: `Consumo na vacinação do lote ${lot?.name || 'Geral'}. Quantidade: ${qUsed} ${selectedItem.unit || 'un'}.`,
+          },
+          updatePayload: {
+            currentStock: newStock,
+          },
+        }
+      }
+
+      await onConfirm(updatedPayload, stockMovement)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-bold flex items-center gap-2">
+            <Syringe className="w-5 h-5 text-emerald-600" />
+            Registrar Aplicação de Vacina
+          </DialogTitle>
+        </DialogHeader>
+
+        {vaccination && (
+          <form onSubmit={handleConfirm} className="space-y-4 mt-2">
+            {/* Card resumo da programação */}
+            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
+                    Vacinação Programada
+                  </span>
+                  <h4 className="text-sm font-bold text-emerald-950">{vaccination.vaccine_name}</h4>
+                </div>
+                <Badge className="bg-emerald-600 text-white text-[10px]">
+                  {vaccination.disease_target || 'Sanidade'}
+                </Badge>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
+                <div>
+                  <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
+                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
+                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
+                </div>
+                <div>
+                  <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
+                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
+                </div>
+              </div>
+            </div>
+
+            {/* Confirmação de dados reais executados */}
+            <div className="space-y-3">
+              <span className="text-xs font-bold text-foreground block">
+                Dados da Aplicação Efetiva
+              </span>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Data Realizada *</Label>
+                  <Input
+                    type="date"
+                    value={performedDate}
+                    onChange={(e) => setPerformedDate(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Responsável / Aplicador *</Label>
+                  <Input
+                    placeholder="Nome do aplicador"
+                    value={responsible}
+                    onChange={(e) => setResponsible(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">Animais Vacinados</Label>
+                  <Input
+                    type="number"
+                    value={animalCount}
+                    onChange={(e) => {
+                      setAnimalCount(e.target.value)
+                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
+                    }}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="Ex: 4"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Dose Real / Ave</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={dosePerAnimal}
+                    onChange={(e) => {
+                      setDosePerAnimal(e.target.value)
+                      handleRecalcQty(Number(animalCount), Number(e.target.value))
+                    }}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="0.5"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Unidade</Label>
+                  <Input
+                    value={doseUnit}
+                    onChange={(e) => setDoseUnit(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="mL"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label className="text-xs">Via de Aplicação</Label>
+                <Select value={applicationRoute} onValueChange={setApplicationRoute}>
+                  <SelectTrigger className="h-10 text-xs rounded-xl">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="água">Água de bebida</SelectItem>
+                    <SelectItem value="ocular">Ocular / Nasal</SelectItem>
+                    <SelectItem value="oral">Oral direta</SelectItem>
+                    <SelectItem value="intramuscular">Intramuscular</SelectItem>
+                    <SelectItem value="subcutânea">Subcutânea</SelectItem>
+                    <SelectItem value="spray">Spray</SelectItem>
+                    <SelectItem value="ração">Ração</SelectItem>
+                    <SelectItem value="outra">Outra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Controle de Frasco Multidose */}
+            <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5">
+              <span className="text-xs font-bold text-foreground block">
+                Frascos Multidose & Perdas (Opcional)
+              </span>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
+                  <Select
+                    value={vialStatus}
+                    onValueChange={(v) => setVialStatus(v as VialStatus)}
+                  >
+                    <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
+                      <SelectItem value="closed">Frasco Fechado</SelectItem>
+                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {vialStatus === 'discarded' ? (
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
+                    <Input
+                      type="number"
+                      step="any"
+                      value={discardedQuantity}
+                      onChange={(e) => {
+                        setDiscardedQuantity(e.target.value)
+                        const dq = Number(e.target.value) || 0
+                        const uc = Number(unitCost) || selectedItem?.averageCost || 0
+                        if (dq > 0 && uc > 0) {
+                          setWasteCost(String(Number((dq * uc).toFixed(2))))
+                        }
+                      }}
+                      className="h-9 text-xs rounded-xl bg-white"
+                      placeholder="Doses perdidas"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex items-center pt-4 text-[11px] text-muted-foreground">
+                    Frasco em uso ou estoque reconstituído.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Estoque e Custos */}
+            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-foreground">
+                  Baixa de Estoque & Custo do Lote
+                </span>
+                <span className="text-[10px] text-muted-foreground">
+                  Não gera 2ª despesa financeira
+                </span>
+              </div>
+
+              <div>
+                <Label className="text-xs">Item Sanitário no Estoque *</Label>
+                <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
+                  <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
+                    <SelectValue placeholder="Selecione o produto no estoque para dar baixa" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum / Não baixar estoque</SelectItem>
+                    {inventory.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
+                        {(item.averageCost || 0).toFixed(2)}/{item.unit})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {selectedItem && (
+                <div className="p-2.5 rounded-xl bg-white/90 border border-border/80 text-[11px] space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Disponível no Estoque:</span>
+                    <strong className="text-foreground">
+                      {selectedItem.currentStock} {selectedItem.unit}
+                    </strong>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Custo Médio Unitário:</span>
+                    <strong className="text-emerald-700 font-bold">
+                      R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
+                    </strong>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">
+                    Qtd Consumida ({selectedItem?.unit || doseUnit || 'doses'})
+                  </Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={quantityUsed}
+                    onChange={(e) => {
+                      setQuantityUsed(e.target.value)
+                      const q = Number(e.target.value) || 0
+                      const uc = Number(unitCost) || selectedItem?.averageCost || 0
+                      setTotalCost(String(Number((q * uc).toFixed(2))))
+                    }}
+                    className="h-10 text-xs rounded-xl bg-white"
+                    placeholder="Qtd consumida"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Lote do Fabricante</Label>
+                  <Input
+                    value={batchNumber}
+                    onChange={(e) => setBatchNumber(e.target.value)}
+                    className="h-10 text-xs rounded-xl bg-white"
+                    placeholder="Ex: VAC-2026-X"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Custo Unitário (R$)</Label>
+                  <Input
+                    type="number"
+                    step="any"
+                    value={unitCost}
+                    onChange={(e) => {
+                      setUnitCost(e.target.value)
+                      const uc = Number(e.target.value) || 0
+                      const q = Number(quantityUsed) || 0
+                      setTotalCost(String(Number((q * uc).toFixed(2))))
+                    }}
+                    className="h-10 text-xs rounded-xl bg-white"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Custo Apropriado ao Lote (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={totalCost}
+                    onChange={(e) => setTotalCost(e.target.value)}
+                    className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-700"
+                  />
+                </div>
+              </div>
+
+              {inventoryItemId && (
+                <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
+                  <Checkbox
+                    id="applyVacStockDeduct"
+                    checked={deductStock}
+                    onCheckedChange={(v) => setDeductStock(Boolean(v))}
+                  />
+                  <label
+                    htmlFor="applyVacStockDeduct"
+                    className="text-xs font-semibold leading-none cursor-pointer text-foreground"
+                  >
+                    [✓] Efetuar baixa imediata no estoque ({quantityUsed || '0'}{' '}
+                    {selectedItem?.unit || doseUnit})
+                  </label>
+                </div>
+              )}
+            </div>
+
+            <div>
+              <Label className="text-xs">Observações da Aplicação</Label>
+              <Textarea
+                placeholder="Ex: Aplicação ocorreu sem intercorrências, lote reagiu bem."
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                className="text-xs rounded-xl"
+              />
+            </div>
+
+            <Button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white mt-2 gap-2"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              {isSubmitting ? 'Confirmando Aplicação...' : 'Confirmar Aplicação de Vacina 💉'}
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ====================================================================
+// SUB-COMPONENT: DIÁLOGO TRATAMENTO
+// ====================================================================State for Dialogs
+  const [vacModalOpen, setVacModalOpen] = useState(false)
 =======
 // ====================================================================
 // SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
