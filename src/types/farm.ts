@@ -112,6 +112,14 @@ export interface InventoryItem {
   lastUpdated: string
   packageWeight?: number
   brand?: string
+  // Novos campos para Vacinas, Medicamentos e Produtos Sanitários
+  packaging_type?: string // Frasco, Caixa, Bisnaga, Ampola, Seringa, Envelope, Balde, Saco, Outro
+  content_per_package?: number // Conteúdo/volume/doses por embalagem
+  consumption_unit?: string // dose, mL, L, mg, g, comprimido, cápsula, unidade, outra
+  custom_unit?: string // texto livre se consumption_unit === 'outra'
+  manufacturer_batch?: string // Lote do fabricante ativo/recente
+  expiration_date?: string // Validade ativa/recente
+  manufacturing_date?: string // Data de fabricação
 }
 
 export interface FeedConsumption {
@@ -366,6 +374,13 @@ export interface StockMovement {
   notes?: string
   generateExpense?: boolean
   user?: string
+  // Campos específicos de Embalagem, Lote Fabricante e Validade
+  package_quantity?: number
+  value_per_package?: number
+  manufacturer_batch?: string
+  manufacturing_date?: string
+  expiration_date?: string
+  purchase_date?: string
 }
 
 export type PeriodFilter = 'Hoje' | '7 dias' | 'Este mês' | 'Últimos 30 dias' | 'Este ano' | 'Todos'

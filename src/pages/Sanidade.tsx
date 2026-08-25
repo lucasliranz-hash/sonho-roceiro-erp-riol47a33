@@ -1480,10 +1480,36 @@ function VaccinationDialog({
   }
 
   // Update calculated quantity used whenever animalCount or dose changes
-  const handleAutoCalcQty = (count: number, dose: number) => {
+  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
+
+  // Update calculated quantity used whenever animalCount or dose changes
+  const handleAutoCalcQty = (count: number, dose: number, itemOverride?: any) => {
     if (count > 0 && dose > 0) {
       const calc = Number((count * dose).toFixed(3))
       setQuantityUsed(String(calc))
+      const itm = itemOverride || selectedItem
+      if (itm && itm.averageCost) {
+        setUnitCost(String(itm.averageCost))
+        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
+      }
+    }
+  }
+
+  const handleInventorySelect = (id: string) => {
+    setInventoryItemId(id)
+    const itm = inventory.find((i) => i.id === id)
+    if (itm) {
+      if (!vaccineName) setVaccineName(itm.name)
+      if (itm.unit) setDoseUnit(itm.unit)
+      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
+      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
+      if (itm.averageCost) {
+        setUnitCost(String(itm.averageCost))
+        const qty = Number(quantityUsed) || Number(animalCount) * Number(dosePerAnimal) || 0
+        if (qty > 0) {
+          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
+        }
+      }
     }
   }
 
@@ -1494,7 +1520,19 @@ function VaccinationDialog({
       return
     }
 
-    const selectedItem = inventory.find((i) => i.id === inventoryItemId)
+    // Validação de produto vencido
+    if (selectedItem?.expiration_date) {
+      const exp = new Date(selectedItem.expiration_date)
+      const now = new Date()
+      if (exp.getTime() < now.getTime()) {
+        toast({
+          title: 'Atenção: Produto Vencido!',
+          description: `O item ${selectedItem.name} venceu em ${selectedItem.expiration_date}. Verifique antes de aplicar.`,
+          variant: 'destructive',
+        })
+      }
+    }
+
     const selectedLot = lots.find((l) => l.id === lotId)
 
     const payload: Omit<Vaccination, 'id'> = {
@@ -1718,33 +1756,72 @@ function VaccinationDialog({
           {/* Estoque e Custos */}
           <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
             <span className="text-xs font-bold text-foreground block">
-              Vínculo com Estoque & Custos
+              Vínculo com Estoque & Custos (Rastreabilidade)
             </span>
             <div>
-              <Label className="text-xs">Item do Estoque (opcional)</Label>
-              <Select value={inventoryItemId} onValueChange={setInventoryItemId}>
+              <Label className="text-xs">Item do Estoque (Vacinas e Insumos)</Label>
+              <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
                 <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
                   <SelectValue placeholder="Selecione o frasco/produto do estoque" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="">Nenhum / Não vinculado</SelectItem>
                   {inventory.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name} (Atual: {item.currentStock} {item.unit})
+                      {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
+                      {(item.averageCost || 0).toFixed(2)}/{item.unit})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {selectedItem && (
+              <div className="p-2.5 rounded-xl bg-white/80 border border-border/80 text-[11px] space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Estoque disponível:</span>
+                  <strong className="text-foreground">
+                    {selectedItem.currentStock} {selectedItem.unit}
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Custo unitário:</span>
+                  <strong className="text-primary">
+                    R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
+                  </strong>
+                </div>
+                {selectedItem.expiration_date && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Validade do lote:</span>
+                    <strong
+                      className={
+                        new Date(selectedItem.expiration_date).getTime() < Date.now()
+                          ? 'text-rose-600 font-bold'
+                          : 'text-foreground'
+                      }
+                    >
+                      {selectedItem.expiration_date}
+                    </strong>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <Label className="text-xs">Qtd Total Consumida</Label>
+                <Label className="text-xs">
+                  Qtd Total Consumida ({selectedItem?.unit || doseUnit || 'doses'})
+                </Label>
                 <Input
                   type="number"
                   step="any"
                   value={quantityUsed}
-                  onChange={(e) => setQuantityUsed(e.target.value)}
+                  onChange={(e) => {
+                    setQuantityUsed(e.target.value)
+                    const q = Number(e.target.value) || 0
+                    const uc = Number(unitCost) || selectedItem?.averageCost || 0
+                    setTotalCost(String(Number((q * uc).toFixed(2))))
+                  }}
                   className="h-10 text-xs rounded-xl bg-white"
                   placeholder="Calculada automaticamente"
                 />
@@ -1760,9 +1837,39 @@ function VaccinationDialog({
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs">Custo Unitário (R$)</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={unitCost}
+                  onChange={(e) => {
+                    setUnitCost(e.target.value)
+                    const uc = Number(e.target.value) || 0
+                    const q = Number(quantityUsed) || 0
+                    setTotalCost(String(Number((q * uc).toFixed(2))))
+                  }}
+                  className="h-10 text-xs rounded-xl bg-white"
+                  placeholder="R$ 0,00"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Custo Total da Aplicação (R$)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={totalCost}
+                  onChange={(e) => setTotalCost(e.target.value)}
+                  className="h-10 text-xs rounded-xl bg-white font-bold text-primary"
+                  placeholder="R$ 0,00"
+                />
+              </div>
+            </div>
+
             {/* Baixa de estoque checkbox - visível se tiver item do estoque e status for realizado */}
             {inventoryItemId && status === 'performed' && (
-              <div className="flex items-center space-x-2 pt-1">
+              <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
                 <Checkbox
                   id="vacStockDeduct"
                   checked={stockDeducted}
@@ -1772,12 +1879,11 @@ function VaccinationDialog({
                   htmlFor="vacStockDeduct"
                   className="text-xs font-semibold leading-none cursor-pointer text-foreground"
                 >
-                  [✓] Dar baixa no estoque e calcular custo automaticamente
+                  [✓] Baixar do estoque e apropriar ao custo econômico do lote
                 </label>
               </div>
             )}
           </div>
-
           <div>
             <Label className="text-xs">Observações</Label>
             <Textarea
@@ -1885,6 +1991,26 @@ function TreatmentDialog({
     }
   }
 
+  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
+
+  const handleInventorySelect = (id: string) => {
+    setInventoryItemId(id)
+    const itm = inventory.find((i) => i.id === id)
+    if (itm) {
+      if (!medicationName) setMedicationName(itm.name)
+      if (itm.expiration_date) {
+        const exp = new Date(itm.expiration_date)
+        if (exp.getTime() < Date.now()) {
+          toast({
+            title: 'Atenção: Medicamento Vencido!',
+            description: `Validade: ${itm.expiration_date}`,
+            variant: 'destructive',
+          })
+        }
+      }
+    }
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!medicationName.trim()) {
@@ -1892,7 +2018,17 @@ function TreatmentDialog({
       return
     }
 
-    const selectedItem = inventory.find((i) => i.id === inventoryItemId)
+    if (
+      selectedItem?.expiration_date &&
+      new Date(selectedItem.expiration_date).getTime() < Date.now()
+    ) {
+      toast({
+        title: 'Atenção: Produto Vencido!',
+        description: `O medicamento ${selectedItem.name} venceu em ${selectedItem.expiration_date}.`,
+        variant: 'destructive',
+      })
+    }
+
     const selectedLot = lots.find((l) => l.id === lotId)
 
     const payload: Omit<Treatment, 'id'> = {
@@ -2081,39 +2217,73 @@ function TreatmentDialog({
           {/* Estoque e Custos */}
           <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
             <span className="text-xs font-bold text-foreground block">
-              Vínculo com Estoque & Custos
+              Vínculo com Estoque & Custos (Rastreabilidade)
             </span>
             <div>
-              <Label className="text-xs">Item do Estoque (opcional)</Label>
-              <Select value={inventoryItemId} onValueChange={setInventoryItemId}>
+              <Label className="text-xs">Item do Estoque (Medicamentos e Insumos)</Label>
+              <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
                 <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
                   <SelectValue placeholder="Selecione o frasco/produto do estoque" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhum</SelectItem>
+                  <SelectItem value="">Nenhum / Não vinculado</SelectItem>
                   {inventory.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
-                      {item.name} (Atual: {item.currentStock} {item.unit})
+                      {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
+                      {(item.averageCost || 0).toFixed(2)}/{item.unit})
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
 
+            {selectedItem && (
+              <div className="p-2.5 rounded-xl bg-white/80 border border-border/80 text-[11px] space-y-1">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Estoque disponível:</span>
+                  <strong className="text-foreground">
+                    {selectedItem.currentStock} {selectedItem.unit}
+                  </strong>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Custo unitário:</span>
+                  <strong className="text-primary">
+                    R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
+                  </strong>
+                </div>
+                {selectedItem.expiration_date && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Validade do lote:</span>
+                    <strong
+                      className={
+                        new Date(selectedItem.expiration_date).getTime() < Date.now()
+                          ? 'text-rose-600 font-bold'
+                          : 'text-foreground'
+                      }
+                    >
+                      {selectedItem.expiration_date}
+                    </strong>
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
-              <Label className="text-xs">Qtd Consumida do Estoque</Label>
+              <Label className="text-xs">
+                Qtd Consumida do Estoque ({selectedItem?.unit || 'unidades'})
+              </Label>
               <Input
                 type="number"
                 step="any"
                 value={quantityUsed}
                 onChange={(e) => setQuantityUsed(e.target.value)}
                 className="h-10 text-xs rounded-xl bg-white"
-                placeholder="Quantidade total utilizada (ex: 2 frascos ou 500 mL)"
+                placeholder="Quantidade total utilizada (ex: 50 mL ou 20 comprimidos)"
               />
             </div>
 
             {inventoryItemId && (status === 'completed' || status === 'in_progress') && (
-              <div className="flex items-center space-x-2 pt-1">
+              <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
                 <Checkbox
                   id="trtStockDeduct"
                   checked={stockDeducted}
@@ -2123,12 +2293,11 @@ function TreatmentDialog({
                   htmlFor="trtStockDeduct"
                   className="text-xs font-semibold leading-none cursor-pointer text-foreground"
                 >
-                  [✓] Dar baixa no estoque e alocar custo no lote
+                  [✓] Baixar do estoque e apropriar ao custo econômico do lote
                 </label>
               </div>
             )}
           </div>
-
           <div>
             <Label className="text-xs">Observações</Label>
             <Textarea

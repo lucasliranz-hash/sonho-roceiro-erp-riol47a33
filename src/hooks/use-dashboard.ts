@@ -369,7 +369,7 @@ export function useDashboardData() {
       }
     }
 
-    // b) ESTOQUE
+    // b) ESTOQUE E VALIDADE DE PRODUTOS SANITÁRIOS
     for (const item of inventory) {
       const avgDaily = feedAverageConsumptionLast7DaysByItem[item.id] || 0
       const current = Number(item.currentStock) || 0
@@ -390,13 +390,37 @@ export function useDashboardData() {
       }
 
       if (current <= min) {
-        // Only push if not already alerted for depletion to avoid redundancy
         if (!list.some((a) => a.id === `stock-deplete-${item.id}`)) {
           list.push({
             id: `stock-critical-${item.id}`,
             type: 'estoque',
             severity: 'warning',
-            message: `${item.name}: estoque crítico (${current} ${item.unit || 'kg'})`,
+            message: `${item.name}: estoque abaixo do mínimo (${current} ${item.unit || 'un'})`,
+            link: '/estoque',
+          })
+        }
+      }
+
+      // Validação de validade para vacinas e medicamentos
+      if (item.expiration_date) {
+        const expDate = new Date(item.expiration_date)
+        const now = new Date()
+        const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+
+        if (diffDays < 0) {
+          list.push({
+            id: `stock-expired-${item.id}`,
+            type: 'estoque',
+            severity: 'critical',
+            message: `PRODUTO VENCIDO: ${item.name} venceu em ${item.expiration_date}`,
+            link: '/estoque',
+          })
+        } else if (diffDays <= 30) {
+          list.push({
+            id: `stock-expiring-${item.id}`,
+            type: 'estoque',
+            severity: 'warning',
+            message: `Produto próximo da validade: ${item.name} vence em ${diffDays} dia(s) (${item.expiration_date})`,
             link: '/estoque',
           })
         }
