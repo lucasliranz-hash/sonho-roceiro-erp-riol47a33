@@ -26,6 +26,11 @@ import {
   Customer,
   Supplier,
   PeriodFilter,
+  Vaccination,
+  Treatment,
+  HealthOccurrence,
+  HealthProtocol,
+  ProtocolAssignment,
 } from '@/types/farm'
 
 function useFarmStoreImpl(orgId: string | undefined) {
@@ -57,6 +62,27 @@ function useFarmStoreImpl(orgId: string | undefined) {
     FARM_TABLES.stockMovements,
     orgId,
     'stockMovements',
+  )
+  const vaccinations = useSupabaseEntity<Vaccination>(
+    FARM_TABLES.vaccinations,
+    orgId,
+    'vaccinations',
+  )
+  const treatments = useSupabaseEntity<Treatment>(FARM_TABLES.treatments, orgId, 'treatments')
+  const healthOccurrences = useSupabaseEntity<HealthOccurrence>(
+    FARM_TABLES.healthOccurrences,
+    orgId,
+    'healthOccurrences',
+  )
+  const healthProtocols = useSupabaseEntity<HealthProtocol>(
+    FARM_TABLES.healthProtocols,
+    orgId,
+    'healthProtocols',
+  )
+  const protocolAssignments = useSupabaseEntity<ProtocolAssignment>(
+    FARM_TABLES.protocolAssignments,
+    orgId,
+    'protocolAssignments',
   )
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>('Todos')
@@ -603,6 +629,393 @@ function useFarmStoreImpl(orgId: string | undefined) {
     [feedLogs, inventory],
   )
 
+  // ==========================================
+  // SANIDADE — VACINAÇÕES (CRUD & BAIXA DE ESTOQUE)
+  // ==========================================
+  const addVaccination = useCallback(
+    async (vac: Omit<Vaccination, 'id'>) => {
+      const id = `vac-${Date.now()}`
+      let qtyUsed = vac.quantity_used
+      if ((qtyUsed === undefined || qtyUsed === 0) && vac.animal_count && vac.dose_per_animal) {
+        qtyUsed = Number((vac.animal_count * vac.dose_per_animal).toFixed(3))
+      }
+      qtyUsed = qtyUsed || 0
+
+      let unitCost = vac.unit_cost
+      let totalCost = vac.total_cost
+
+      // Se baixa no estoque marcada e item selecionado
+      if (vac.inventory_item_id && vac.stock_deducted) {
+        const item = inventory.items.find((i) => i.id === vac.inventory_item_id)
+        if (item) {
+          unitCost = item.averageCost || 0
+          totalCost = Number((qtyUsed * unitCost).toFixed(2))
+          await inventory.update(vac.inventory_item_id, {
+            currentStock: Math.max(0, (item.currentStock || 0) - qtyUsed),
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+        }
+      } else if (unitCost && qtyUsed && !totalCost) {
+        totalCost = Number((qtyUsed * unitCost).toFixed(2))
+      }
+
+      const record: Vaccination = {
+        ...vac,
+        id,
+        quantity_used: qtyUsed,
+        unit_cost: unitCost,
+        total_cost: totalCost,
+      }
+
+      return vaccinations.add(record)
+    },
+    [vaccinations, inventory],
+  )
+
+  const updateVaccination = useCallback(
+    async (id: string, updates: Partial<Vaccination>) => {
+      const old = vaccinations.items.find((v) => v.id === id)
+      if (!old) return { error: { message: 'Vacinação não encontrada' } }
+
+      const oldStockDeducted = Boolean(old.stock_deducted && old.inventory_item_id)
+      const newStockDeducted = Boolean(
+        (updates.stock_deducted !== undefined ? updates.stock_deducted : old.stock_deducted) &&
+        (updates.inventory_item_id !== undefined
+          ? updates.inventory_item_id
+          : old.inventory_item_id),
+      )
+      const oldItemId = old.inventory_item_id
+      const newItemId =
+        updates.inventory_item_id !== undefined ? updates.inventory_item_id : old.inventory_item_id
+      const oldQty = Number(old.quantity_used || 0)
+      const newQty = Number(
+        updates.quantity_used !== undefined ? updates.quantity_used : old.quantity_used || 0,
+      )
+
+      let unitCost = updates.unit_cost !== undefined ? updates.unit_cost : old.unit_cost
+      let totalCost = updates.total_cost !== undefined ? updates.total_cost : old.total_cost
+
+      // Ajustes de estoque se houve mudança
+      if (oldStockDeducted && !newStockDeducted) {
+        // Estornar quantidade do item antigo
+        if (oldItemId) {
+          const item = inventory.items.find((i) => i.id === oldItemId)
+          if (item) {
+            await inventory.update(oldItemId, {
+              currentStock: (item.currentStock || 0) + oldQty,
+              lastUpdated: new Date().toISOString().split('T')[0],
+            })
+          }
+        }
+      } else if (!oldStockDeducted && newStockDeducted) {
+        // Baixar novo item
+        if (newItemId) {
+          const item = inventory.items.find((i) => i.id === newItemId)
+          if (item) {
+            unitCost = item.averageCost || 0
+            totalCost = Number((newQty * unitCost).toFixed(2))
+            await inventory.update(newItemId, {
+              currentStock: Math.max(0, (item.currentStock || 0) - newQty),
+              lastUpdated: new Date().toISOString().split('T')[0],
+            })
+          }
+        }
+      } else if (oldStockDeducted && newStockDeducted) {
+        if (oldItemId === newItemId) {
+          // Mesmo item, ajusta a diferença
+          const diff = oldQty - newQty
+          if (diff !== 0 && newItemId) {
+            const item = inventory.items.find((i) => i.id === newItemId)
+            if (item) {
+              await inventory.update(newItemId, {
+                currentStock: Math.max(0, (item.currentStock || 0) + diff),
+                lastUpdated: new Date().toISOString().split('T')[0],
+              })
+            }
+          }
+          if (unitCost !== undefined) {
+            totalCost = Number((newQty * (unitCost || 0)).toFixed(2))
+          }
+        } else {
+          // Mudou de item: estorna o antigo e baixa o novo
+          if (oldItemId) {
+            const oldItem = inventory.items.find((i) => i.id === oldItemId)
+            if (oldItem) {
+              await inventory.update(oldItemId, {
+                currentStock: (oldItem.currentStock || 0) + oldQty,
+                lastUpdated: new Date().toISOString().split('T')[0],
+              })
+            }
+          }
+          if (newItemId) {
+            const newItem = inventory.items.find((i) => i.id === newItemId)
+            if (newItem) {
+              unitCost = newItem.averageCost || 0
+              totalCost = Number((newQty * unitCost).toFixed(2))
+              await inventory.update(newItemId, {
+                currentStock: Math.max(0, (newItem.currentStock || 0) - newQty),
+                lastUpdated: new Date().toISOString().split('T')[0],
+              })
+            }
+          }
+        }
+      }
+
+      return vaccinations.update(id, {
+        ...updates,
+        unit_cost: unitCost,
+        total_cost: totalCost,
+      })
+    },
+    [vaccinations, inventory],
+  )
+
+  const deleteVaccination = useCallback(
+    async (id: string) => {
+      const v = vaccinations.items.find((item) => item.id === id)
+      const { error } = await vaccinations.remove(id)
+      if (error) return { error }
+
+      // Se tinha estoque baixado, estorna de volta
+      if (v && v.stock_deducted && v.inventory_item_id && v.quantity_used) {
+        const item = inventory.items.find((i) => i.id === v.inventory_item_id)
+        if (item) {
+          await inventory.update(v.inventory_item_id, {
+            currentStock: (item.currentStock || 0) + Number(v.quantity_used),
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+        }
+      }
+      return { error: null }
+    },
+    [vaccinations, inventory],
+  )
+
+  // ==========================================
+  // SANIDADE — MEDICAMENTOS / TRATAMENTOS (CRUD & BAIXA DE ESTOQUE)
+  // ==========================================
+  const addTreatment = useCallback(
+    async (trt: Omit<Treatment, 'id'>) => {
+      const id = `trt-${Date.now()}`
+      let qtyUsed = Number(trt.quantity_used || 0)
+      let unitCost = trt.unit_cost
+      let totalCost = trt.total_cost
+
+      if (trt.inventory_item_id && trt.stock_deducted) {
+        const item = inventory.items.find((i) => i.id === trt.inventory_item_id)
+        if (item) {
+          unitCost = item.averageCost || 0
+          totalCost = Number((qtyUsed * unitCost).toFixed(2))
+          await inventory.update(trt.inventory_item_id, {
+            currentStock: Math.max(0, (item.currentStock || 0) - qtyUsed),
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+        }
+      } else if (unitCost && qtyUsed && !totalCost) {
+        totalCost = Number((qtyUsed * unitCost).toFixed(2))
+      }
+
+      const record: Treatment = {
+        ...trt,
+        id,
+        quantity_used: qtyUsed,
+        unit_cost: unitCost,
+        total_cost: totalCost,
+      }
+
+      return treatments.add(record)
+    },
+    [treatments, inventory],
+  )
+
+  const updateTreatment = useCallback(
+    async (id: string, updates: Partial<Treatment>) => {
+      const old = treatments.items.find((t) => t.id === id)
+      if (!old) return { error: { message: 'Tratamento não encontrado' } }
+
+      const oldStockDeducted = Boolean(old.stock_deducted && old.inventory_item_id)
+      const newStockDeducted = Boolean(
+        (updates.stock_deducted !== undefined ? updates.stock_deducted : old.stock_deducted) &&
+        (updates.inventory_item_id !== undefined
+          ? updates.inventory_item_id
+          : old.inventory_item_id),
+      )
+      const oldItemId = old.inventory_item_id
+      const newItemId =
+        updates.inventory_item_id !== undefined ? updates.inventory_item_id : old.inventory_item_id
+      const oldQty = Number(old.quantity_used || 0)
+      const newQty = Number(
+        updates.quantity_used !== undefined ? updates.quantity_used : old.quantity_used || 0,
+      )
+
+      let unitCost = updates.unit_cost !== undefined ? updates.unit_cost : old.unit_cost
+      let totalCost = updates.total_cost !== undefined ? updates.total_cost : old.total_cost
+
+      if (oldStockDeducted && !newStockDeducted) {
+        if (oldItemId) {
+          const item = inventory.items.find((i) => i.id === oldItemId)
+          if (item) {
+            await inventory.update(oldItemId, {
+              currentStock: (item.currentStock || 0) + oldQty,
+              lastUpdated: new Date().toISOString().split('T')[0],
+            })
+          }
+        }
+      } else if (!oldStockDeducted && newStockDeducted) {
+        if (newItemId) {
+          const item = inventory.items.find((i) => i.id === newItemId)
+          if (item) {
+            unitCost = item.averageCost || 0
+            totalCost = Number((newQty * unitCost).toFixed(2))
+            await inventory.update(newItemId, {
+              currentStock: Math.max(0, (item.currentStock || 0) - newQty),
+              lastUpdated: new Date().toISOString().split('T')[0],
+            })
+          }
+        }
+      } else if (oldStockDeducted && newStockDeducted) {
+        if (oldItemId === newItemId) {
+          const diff = oldQty - newQty
+          if (diff !== 0 && newItemId) {
+            const item = inventory.items.find((i) => i.id === newItemId)
+            if (item) {
+              await inventory.update(newItemId, {
+                currentStock: Math.max(0, (item.currentStock || 0) + diff),
+                lastUpdated: new Date().toISOString().split('T')[0],
+              })
+            }
+          }
+          if (unitCost !== undefined) {
+            totalCost = Number((newQty * (unitCost || 0)).toFixed(2))
+          }
+        } else {
+          if (oldItemId) {
+            const oldItem = inventory.items.find((i) => i.id === oldItemId)
+            if (oldItem) {
+              await inventory.update(oldItemId, {
+                currentStock: (oldItem.currentStock || 0) + oldQty,
+                lastUpdated: new Date().toISOString().split('T')[0],
+              })
+            }
+          }
+          if (newItemId) {
+            const newItem = inventory.items.find((i) => i.id === newItemId)
+            if (newItem) {
+              unitCost = newItem.averageCost || 0
+              totalCost = Number((newQty * unitCost).toFixed(2))
+              await inventory.update(newItemId, {
+                currentStock: Math.max(0, (newItem.currentStock || 0) - newQty),
+                lastUpdated: new Date().toISOString().split('T')[0],
+              })
+            }
+          }
+        }
+      }
+
+      return treatments.update(id, {
+        ...updates,
+        unit_cost: unitCost,
+        total_cost: totalCost,
+      })
+    },
+    [treatments, inventory],
+  )
+
+  const deleteTreatment = useCallback(
+    async (id: string) => {
+      const t = treatments.items.find((item) => item.id === id)
+      const { error } = await treatments.remove(id)
+      if (error) return { error }
+
+      if (t && t.stock_deducted && t.inventory_item_id && t.quantity_used) {
+        const item = inventory.items.find((i) => i.id === t.inventory_item_id)
+        if (item) {
+          await inventory.update(t.inventory_item_id, {
+            currentStock: (item.currentStock || 0) + Number(t.quantity_used),
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+        }
+      }
+      return { error: null }
+    },
+    [treatments, inventory],
+  )
+
+  // ==========================================
+  // SANIDADE — OCORRÊNCIAS
+  // ==========================================
+  const addHealthOccurrence = useCallback(
+    async (occ: Omit<HealthOccurrence, 'id'>) => {
+      const id = `occ-${Date.now()}`
+      return healthOccurrences.add({ ...occ, id })
+    },
+    [healthOccurrences],
+  )
+
+  const updateHealthOccurrence = useCallback(
+    async (id: string, updates: Partial<HealthOccurrence>) => {
+      return healthOccurrences.update(id, updates)
+    },
+    [healthOccurrences],
+  )
+
+  const deleteHealthOccurrence = useCallback(
+    async (id: string) => {
+      return healthOccurrences.remove(id)
+    },
+    [healthOccurrences],
+  )
+
+  // ==========================================
+  // SANIDADE — PROTOCOLOS
+  // ==========================================
+  const addHealthProtocol = useCallback(
+    async (prot: Omit<HealthProtocol, 'id'>) => {
+      const id = `prot-${Date.now()}`
+      return healthProtocols.add({ ...prot, id, steps: prot.steps || [] })
+    },
+    [healthProtocols],
+  )
+
+  const updateHealthProtocol = useCallback(
+    async (id: string, updates: Partial<HealthProtocol>) => {
+      return healthProtocols.update(id, updates)
+    },
+    [healthProtocols],
+  )
+
+  const deleteHealthProtocol = useCallback(
+    async (id: string) => {
+      return healthProtocols.remove(id)
+    },
+    [healthProtocols],
+  )
+
+  // ==========================================
+  // SANIDADE — PROTOCOL ASSIGNMENTS (VINCULAR A LOTE)
+  // ==========================================
+  const addProtocolAssignment = useCallback(
+    async (assignment: Omit<ProtocolAssignment, 'id'>) => {
+      const id = `pass-${Date.now()}`
+      return protocolAssignments.add({ ...assignment, id })
+    },
+    [protocolAssignments],
+  )
+
+  const updateProtocolAssignment = useCallback(
+    async (id: string, updates: Partial<ProtocolAssignment>) => {
+      return protocolAssignments.update(id, updates)
+    },
+    [protocolAssignments],
+  )
+
+  const deleteProtocolAssignment = useCallback(
+    async (id: string) => {
+      return protocolAssignments.remove(id)
+    },
+    [protocolAssignments],
+  )
+
   return {
     activities: activities.items,
     setActivities: activities.setItems,
@@ -698,13 +1111,38 @@ function useFarmStoreImpl(orgId: string | undefined) {
     addStockMovement,
     updateStockMovement,
     deleteStockMovement,
+    // Sanidade exports
+    vaccinations: vaccinations.items,
+    setVaccinations: vaccinations.setItems,
+    addVaccination,
+    updateVaccination,
+    deleteVaccination,
+    treatments: treatments.items,
+    setTreatments: treatments.setItems,
+    addTreatment,
+    updateTreatment,
+    deleteTreatment,
+    healthOccurrences: healthOccurrences.items,
+    setHealthOccurrences: healthOccurrences.setItems,
+    addHealthOccurrence,
+    updateHealthOccurrence,
+    deleteHealthOccurrence,
+    healthProtocols: healthProtocols.items,
+    setHealthProtocols: healthProtocols.setItems,
+    addHealthProtocol,
+    updateHealthProtocol,
+    deleteHealthProtocol,
+    protocolAssignments: protocolAssignments.items,
+    setProtocolAssignments: protocolAssignments.setItems,
+    addProtocolAssignment,
+    updateProtocolAssignment,
+    deleteProtocolAssignment,
     selectedPeriod,
     setSelectedPeriod,
     selectedLotId,
     setSelectedLotId,
   }
 }
-
 const FarmStoreContext = createContext<ReturnType<typeof useFarmStoreImpl> | undefined>(undefined)
 
 export function FarmStoreProvider({ children }: { children: ReactNode }) {

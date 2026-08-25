@@ -369,3 +369,203 @@ export interface StockMovement {
 }
 
 export type PeriodFilter = 'Hoje' | '7 dias' | 'Este mês' | 'Últimos 30 dias' | 'Este ano' | 'Todos'
+
+// ==========================================
+// SANIDADE (VACCINATION, TREATMENT, OCCURRENCE, PROTOCOLS)
+// ==========================================
+
+export type VaccinationStatus = 'scheduled' | 'performed' | 'delayed' | 'cancelled'
+export type VaccinationRoute =
+  | 'oral'
+  | 'intramuscular'
+  | 'ocular'
+  | 'água'
+  | 'ração'
+  | 'subcutânea'
+  | 'nasal'
+  | 'spray'
+  | 'outra'
+
+export interface Vaccination {
+  id: string
+  organization_id?: string
+  property_id?: string
+  activity_id?: string
+  lot_id?: string
+  lotName?: string
+  vaccine_name: string
+  disease_target?: string
+  scheduled_date?: string
+  performed_date?: string
+  animal_count?: number
+  dose_per_animal?: number
+  dose_unit?: string // ex: mL, gotas, comprimido, dose
+  application_route?: VaccinationRoute | string
+  responsible?: string
+  inventory_item_id?: string
+  inventory_item_name?: string
+  batch_number?: string
+  expiration_date?: string
+  quantity_used?: number
+  unit_cost?: number
+  total_cost?: number
+  stock_deducted?: boolean
+  notes?: string
+  status: VaccinationStatus
+  data?: Record<string, any>
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  created_by?: string
+}
+
+export type TreatmentStatus = 'scheduled' | 'in_progress' | 'completed' | 'cancelled'
+
+export interface Treatment {
+  id: string
+  organization_id?: string
+  property_id?: string
+  activity_id?: string
+  lot_id?: string
+  lotName?: string
+  medication_name: string
+  diagnosis_reason?: string
+  dosage?: string
+  frequency?: string
+  duration_days?: number
+  administration_route?: string
+  animal_count?: number
+  responsible?: string
+  inventory_item_id?: string
+  inventory_item_name?: string
+  quantity_used?: number
+  unit_cost?: number
+  total_cost?: number
+  stock_deducted?: boolean
+  withdrawal_period_days?: number // carência em dias
+  start_date?: string
+  end_date?: string
+  notes?: string
+  status: TreatmentStatus
+  data?: Record<string, any>
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  created_by?: string
+}
+
+export type HealthOccurrenceType =
+  | 'disease'
+  | 'symptom'
+  | 'injury'
+  | 'respiratory'
+  | 'diarrhea'
+  | 'locomotor'
+  | 'parasites'
+  | 'abnormal_behavior'
+  | 'other'
+
+export type HealthOccurrenceSeverity = 'low' | 'moderate' | 'high' | 'critical'
+
+export interface HealthOccurrence {
+  id: string
+  organization_id?: string
+  property_id?: string
+  activity_id?: string
+  lot_id?: string
+  lotName?: string
+  occurrence_date: string // timestamptz or YYYY-MM-DD
+  occurrence_type: HealthOccurrenceType
+  custom_type?: string
+  severity: HealthOccurrenceSeverity
+  affected_count?: number
+  symptoms?: string
+  description?: string
+  action_taken?: string
+  responsible?: string
+  notes?: string
+  data?: Record<string, any>
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  created_by?: string
+}
+
+export type HealthProtocolType =
+  | 'vaccination_program'
+  | 'deworming'
+  | 'preventive_treatment'
+  | 'biosecurity'
+  | 'cleaning_disinfection'
+  | 'other'
+
+export interface HealthProtocolStep {
+  day: number // dia de vida ou offset em dias
+  action: string
+  description?: string
+  inventory_item_id?: string
+  inventory_item_name?: string
+  dose?: string
+  route?: string
+  category?: 'vacina' | 'medicamento' | 'manejo' | 'outro'
+}
+
+export interface HealthProtocol {
+  id: string
+  organization_id?: string
+  property_id?: string
+  name: string
+  protocol_type: HealthProtocolType
+  activity_type?: string
+  age_range_start?: number
+  age_range_end?: number
+  steps: HealthProtocolStep[]
+  notes?: string
+  status: 'active' | 'inactive' | 'archived'
+  data?: Record<string, any>
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  created_by?: string
+}
+
+export interface GeneratedProtocolEntry {
+  day_offset: number
+  scheduled_date: string
+  action: string
+  description?: string
+  status: 'pending' | 'completed' | 'skipped'
+  vaccination_id?: string
+  treatment_id?: string
+}
+
+export interface ProtocolAssignment {
+  id: string
+  organization_id?: string
+  property_id?: string
+  lot_id?: string
+  lotName?: string
+  protocol_id: string
+  protocolName?: string
+  assigned_date: string
+  start_date: string
+  generated_entries: GeneratedProtocolEntry[]
+  notes?: string
+  data?: Record<string, any>
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  created_by?: string
+}
+
+export interface SanitaryApplication {
+  id: string
+  lot_id?: string
+  date: string
+  name: string
+  type: 'vaccination' | 'treatment'
+  total_cost: number
+  status: string
+  details?: string
+  stock_deducted?: boolean
+}

@@ -1,4 +1,12 @@
-import { Lot, Expense, Sale, StructureCost, Asset, FeedConsumption } from '@/types/farm'
+import {
+  Lot,
+  Expense,
+  Sale,
+  StructureCost,
+  Asset,
+  FeedConsumption,
+  SanitaryApplication,
+} from '@/types/farm'
 
 export interface PriceFromMarginResult {
   costPerUnit: number
@@ -94,6 +102,7 @@ export interface LotCostSummary {
   feedCost: number
   acquisitionCost: number
   opexCost: number
+  sanitaryCost: number
   costPerBirdHoused: number
   costPerBirdAlive: number
   costPerBirdSold: number
@@ -111,15 +120,18 @@ export function computeLotCosts(
   expenses: Expense[],
   sales: Sale[],
   feedLogs: FeedConsumption[] = [],
+  sanitaryApplications: SanitaryApplication[] = [],
 ): LotCostSummary {
   const lotExpenses = expenses.filter((e) => e.lotId === lot.id)
   const lotSales = sales.filter((s) => s.lotId === lot.id)
   const lotFeedLogs = feedLogs.filter((f) => f.lotId === lot.id)
+  const lotSanitary = sanitaryApplications.filter((s) => s.lot_id === lot.id)
 
   const feedCost = lotFeedLogs.reduce((acc, f) => acc + (f.totalCost || 0), 0)
+  const sanitaryCost = lotSanitary.reduce((acc, s) => acc + (s.total_cost || 0), 0)
   const opexCost = lotExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
   const acquisitionCost = lot.acquisitionCost || 0
-  const totalCost = opexCost + feedCost + acquisitionCost
+  const totalCost = opexCost + feedCost + acquisitionCost + sanitaryCost
   const revenue = lotSales.reduce((acc, s) => acc + s.totalPrice, 0)
   const totalSold = lotSales.reduce((acc, s) => acc + s.quantity, 0)
   const totalWeightSoldKg = lotSales.reduce((acc, s) => acc + (s.weightKg || 0), 0)
@@ -138,6 +150,7 @@ export function computeLotCosts(
     feedCost,
     acquisitionCost,
     opexCost,
+    sanitaryCost,
     costPerBirdHoused,
     costPerBirdAlive,
     costPerBirdSold,

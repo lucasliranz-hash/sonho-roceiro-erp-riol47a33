@@ -25,9 +25,20 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
-import { Layers, Plus, Search, ArrowLeft, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+  Layers,
+  Plus,
+  Search,
+  ArrowLeft,
+  ChevronDown,
+  ChevronUp,
+  HeartPulse,
+  Syringe,
+  Pill,
+  AlertTriangle,
+} from 'lucide-react'
 import { Link } from 'react-router-dom'
-import { Lot, LotType, LotStatus } from '@/types/farm'
+import { Lot, LotType, LotStatus, SanitaryApplication } from '@/types/farm'
 import { computeLotCosts } from '@/lib/calculations'
 import { toast } from '@/hooks/use-toast'
 import { logAudit } from '@/services/audit'
@@ -54,6 +65,9 @@ export default function Lotes() {
     sales,
     activities,
     feedLogs,
+    vaccinations,
+    treatments,
+    healthOccurrences,
   } = useFarmStore()
   const { canEdit, canDelete } = usePermissions()
   const [searchTerm, setSearchTerm] = useState('')
@@ -202,23 +216,44 @@ export default function Lotes() {
     const lotSales = sales.filter((s) => s.lotId === selectedLot.id)
     const lotFeedLogs = feedLogs.filter((f) => f.lotId === selectedLot.id)
 
+    // Build sanitary applications list for this lot
+    const lotVaccinations = vaccinations.filter(
+      (v) => v.lot_id === selectedLot.id && v.status === 'performed',
+    )
+    const lotTreatments = treatments.filter(
+      (t) =>
+        t.lot_id === selectedLot.id && (t.status === 'completed' || t.status === 'in_progress'),
+    )
+    const lotOccurrences = healthOccurrences.filter((o) => o.lot_id === selectedLot.id)
+
+    const sanitaryApplications: SanitaryApplication[] = [
+      ...lotVaccinations.map((v) => ({
+        id: v.id,
+        lot_id: v.lot_id,
+        date: v.performed_date || v.scheduled_date || '',
+        name: v.vaccine_name,
+        type: 'vaccination' as const,
+        total_cost: Number(v.total_cost || 0),
+        status: v.status,
+        details: v.disease_target ? `Alvo: ${v.disease_target}` : undefined,
+        stock_deducted: v.stock_deducted,
+      })),
+      ...lotTreatments.map((t) => ({
+        id: t.id,
+        lot_id: t.lot_id,
+        date: t.start_date || '',
+        name: t.medication_name,
+        type: 'treatment' as const,
+        total_cost: Number(t.total_cost || 0),
+        status: t.status,
+        details: t.diagnosis_reason ? `Motivo: ${t.diagnosis_reason}` : undefined,
+        stock_deducted: t.stock_deducted,
+      })),
+    ]
+
     const totalExp = lotExpenses.reduce((acc, e) => acc + e.totalValue, 0)
     const totalRev = lotSales.reduce((acc, s) => acc + s.totalPrice, 0)
-    const lotCosts = computeLotCosts(selectedLot, expenses, sales, feedLogs)
-
-    // Breakdown categories for Composição de Custos
-    const sanitizeCategories = [
-      'sanidade',
-      'medicamento',
-      'vacina',
-      'vermífugo',
-      'vermifugo',
-      'tratamento',
-    ]
-    const isSanityExpense = (e: (typeof expenses)[0]) => {
-      const cat = (e.category || '').toLowerCase()
-      return sanitizeCategories.some((kw) => cat.includes(kw))
-    }
+    const lotCosts = computeLotCosts(selectedLot, expenses, sales, feedLogs, sanitaryApplications)
 
     const isEnergyExpense = (e: (typeof expenses)[0]) => {
       const cat = (e.category || '').toLowerCase()
@@ -231,16 +266,15 @@ export default function Lotes() {
       )
     }
 
-    const sanityExpenses = lotExpenses.filter(isSanityExpense)
-    const energyExpenses = lotExpenses.filter((e) => !isSanityExpense(e) && isEnergyExpense(e))
-    const otherExpenses = lotExpenses.filter((e) => !isSanityExpense(e) && !isEnergyExpense(e))
+    const energyExpenses = lotExpenses.filter((e) => isEnergyExpense(e))
+    const otherExpenses = lotExpenses.filter((e) => !isEnergyExpense(e))
 
     const acquisitionCost = selectedLot.acquisitionCost || 0
     const feedCost = lotCosts.feedCost
-    const sanityCost = sanityExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
+    const sanityCost = lotCosts.sanitaryCost
     const energyCost = energyExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
     const otherCost = otherExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
-    const totalCompositionCost = acquisitionCost + feedCost + sanityCost + energyCost + otherCost
+    const totalCompositionCost = lotCosts.totalCost
     const costPerBirdAlive =
       selectedLot.currentQuantity > 0 ? totalCompositionCost / selectedLot.currentQuantity : 0
 
@@ -381,6 +415,9 @@ export default function Lotes() {
             <TabsTrigger value="mortalidade" className="rounded-xl text-xs">
               Mortalidade
             </TabsTrigger>
+            <TabsTrigger value="sanidade" className="rounded-xl text-xs flex items-center gap-1.5">
+              <HeartPulse className="w-3.5 h-3.5" /> Sanidade
+            </TabsTrigger>
             <TabsTrigger value="financeiro" className="rounded-xl text-xs">
               Despesas / Vendas
             </TabsTrigger>
@@ -510,21 +547,22 @@ export default function Lotes() {
                     </div>
                     {expandedOrigin === 'sanidade' && (
                       <div className="p-3 rounded-xl bg-secondary/50 border border-border/60 space-y-1.5 text-[11px] animate-fade-in">
-                        {sanityExpenses.length === 0 ? (
+                        {sanitaryApplications.length === 0 ? (
                           <p className="text-muted-foreground">
-                            Nenhuma despesa de sanidade registrada para este lote.
+                            Nenhuma aplicação sanitária com custo vinculada a este lote.
                           </p>
                         ) : (
-                          sanityExpenses.map((e) => (
+                          sanitaryApplications.map((s) => (
                             <div
-                              key={e.id}
+                              key={s.id}
                               className="flex items-center justify-between py-0.5 border-b border-border/30 last:border-b-0"
                             >
                               <span>
-                                {e.date} — {e.description || e.category}
+                                {s.type === 'vaccination' ? '💉 Vacinação' : '💊 Tratamento'}:{' '}
+                                {s.name} {s.date ? `(${s.date})` : ''}
                               </span>
                               <span className="font-medium text-foreground">
-                                R$ {e.totalValue.toFixed(2)}
+                                R$ {s.total_cost.toFixed(2)}
                               </span>
                             </div>
                           ))
@@ -655,6 +693,130 @@ export default function Lotes() {
                   ))}
                 </div>
               )}
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="sanidade" className="mt-4 space-y-4">
+            <Card className="rounded-2xl bg-white border-border p-5 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-border/60">
+                <div>
+                  <h3 className="text-sm font-bold flex items-center gap-2">
+                    <HeartPulse className="w-4 h-4 text-rose-600" /> Histórico de Sanidade do Lote
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Timeline de vacinações, tratamentos e ocorrências
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-muted-foreground block">Custo Acumulado</span>
+                  <span className="text-sm font-bold text-rose-600">
+                    R$ {sanityCost.toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Combined Timeline for this lot */}
+              {(() => {
+                const allEvents = [
+                  ...lotVaccinations.map((v) => ({
+                    id: v.id,
+                    type: 'vacina',
+                    date: v.performed_date || v.scheduled_date || '',
+                    title: `Vacinação: ${v.vaccine_name}`,
+                    subtitle: v.disease_target ? `Alvo: ${v.disease_target}` : undefined,
+                    cost: v.total_cost,
+                    status: v.status,
+                    responsible: v.responsible,
+                  })),
+                  ...lotTreatments.map((t) => ({
+                    id: t.id,
+                    type: 'tratamento',
+                    date: t.start_date || '',
+                    title: `Tratamento: ${t.medication_name}`,
+                    subtitle: t.diagnosis_reason ? `Motivo: ${t.diagnosis_reason}` : undefined,
+                    cost: t.total_cost,
+                    status: t.status,
+                    responsible: t.responsible,
+                  })),
+                  ...lotOccurrences.map((o) => ({
+                    id: o.id,
+                    type: 'ocorrencia',
+                    date: o.occurrence_date ? o.occurrence_date.split('T')[0] : '',
+                    title: `Ocorrência: ${o.occurrence_type === 'other' ? o.custom_type || 'Outro' : o.occurrence_type}`,
+                    subtitle: o.description || o.symptoms,
+                    cost: 0,
+                    status: o.severity,
+                    responsible: o.responsible,
+                  })),
+                ].sort((a, b) => b.date.localeCompare(a.date))
+
+                if (allEvents.length === 0) {
+                  return (
+                    <div className="text-center py-6">
+                      <HeartPulse className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                      <p className="text-xs font-semibold text-muted-foreground">
+                        Nenhum registro de sanidade para este lote
+                      </p>
+                      <Link to="/sanidade" className="inline-block mt-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 rounded-xl text-xs text-primary border-primary/20"
+                        >
+                          Ir para Módulo Sanidade
+                        </Button>
+                      </Link>
+                    </div>
+                  )
+                }
+
+                return (
+                  <div className="space-y-2.5">
+                    {allEvents.map((ev) => (
+                      <div
+                        key={ev.id}
+                        className="p-3 rounded-xl bg-secondary/40 border border-border/60 flex items-center justify-between text-xs"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-xl bg-white flex items-center justify-center shrink-0 border border-border">
+                            {ev.type === 'vacina' && (
+                              <Syringe className="w-4 h-4 text-emerald-600" />
+                            )}
+                            {ev.type === 'tratamento' && <Pill className="w-4 h-4 text-blue-600" />}
+                            {ev.type === 'ocorrencia' && (
+                              <AlertTriangle className="w-4 h-4 text-amber-600" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-foreground">{ev.title}</span>
+                              <span className="text-[10px] text-muted-foreground">{ev.date}</span>
+                            </div>
+                            {ev.subtitle && (
+                              <p className="text-[11px] text-muted-foreground">{ev.subtitle}</p>
+                            )}
+                            {ev.responsible && (
+                              <p className="text-[10px] text-muted-foreground">
+                                Resp: {ev.responsible}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0">
+                          {ev.cost ? (
+                            <span className="font-bold text-rose-600 block">
+                              R$ {ev.cost.toFixed(2)}
+                            </span>
+                          ) : null}
+                          <Badge variant="outline" className="text-[10px] uppercase">
+                            {ev.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
             </Card>
           </TabsContent>
 

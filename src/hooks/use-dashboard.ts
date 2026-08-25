@@ -111,6 +111,10 @@ export function useDashboardData() {
     energyLogs,
     activities,
     structures,
+    vaccinations,
+    treatments,
+    healthOccurrences,
+    protocolAssignments,
   } = useFarmStore()
 
   const todayStr = useMemo(() => getTodayString(), [])
@@ -241,6 +245,93 @@ export function useDashboardData() {
   // 9. ATENÇÃO HOJE (ALERTAS DINÂMICOS BASEADOS EM DADOS REAIS)
   const attentionAlerts = useMemo(() => {
     const list: DashboardAlert[] = []
+
+    // 0) SANIDADE (Vacinações, Tratamentos, Carência, Protocolos)
+    for (const v of vaccinations) {
+      const scheduled = v.scheduled_date || ''
+      const targetLotName = lots.find((l) => l.id === v.lot_id)?.name || 'Geral'
+      if (v.status === 'scheduled' || v.status === 'delayed') {
+        if (scheduled === todayStr) {
+          list.push({
+            id: `vac-today-${v.id}`,
+            type: 'sanidade' as any,
+            severity: 'critical',
+            message: `Vacinação programada para hoje: ${v.vaccine_name} — Lote ${targetLotName}`,
+            link: '/sanidade',
+          })
+        } else if (scheduled === tomorrowStr) {
+          list.push({
+            id: `vac-tom-${v.id}`,
+            type: 'sanidade' as any,
+            severity: 'info',
+            message: `Vacinação programada para amanhã: ${v.vaccine_name} — Lote ${targetLotName}`,
+            link: '/sanidade',
+          })
+        } else if (scheduled && scheduled < todayStr) {
+          list.push({
+            id: `vac-del-${v.id}`,
+            type: 'sanidade' as any,
+            severity: 'critical',
+            message: `Vacinação atrasada: ${v.vaccine_name} — Lote ${targetLotName} (programada para ${scheduled})`,
+            link: '/sanidade',
+          })
+        }
+      }
+    }
+
+    for (const t of treatments) {
+      const targetLotName = lots.find((l) => l.id === t.lot_id)?.name || 'Geral'
+      if (t.status === 'in_progress') {
+        list.push({
+          id: `trt-prog-${t.id}`,
+          type: 'sanidade' as any,
+          severity: 'warning',
+          message: `Tratamento em andamento: ${t.medication_name} — Lote ${targetLotName}`,
+          link: '/sanidade',
+        })
+      }
+
+      if (t.withdrawal_period_days && t.withdrawal_period_days > 0 && t.end_date) {
+        const endDate = new Date(t.end_date)
+        const carDate = new Date(endDate)
+        carDate.setDate(carDate.getDate() + t.withdrawal_period_days)
+        const carStr = carDate.toISOString().split('T')[0]
+        if (carStr >= todayStr) {
+          list.push({
+            id: `trt-car-${t.id}`,
+            type: 'sanidade' as any,
+            severity: 'critical',
+            message: `Período de carência ativo: ${t.medication_name} — Lote ${targetLotName} (até ${carStr})`,
+            link: '/sanidade',
+          })
+        }
+      }
+    }
+
+    for (const pa of protocolAssignments) {
+      const targetLotName = lots.find((l) => l.id === pa.lot_id)?.name || 'Geral'
+      for (const [idx, entry] of (pa.generated_entries || []).entries()) {
+        if (entry.status === 'pending') {
+          if (entry.scheduled_date === todayStr) {
+            list.push({
+              id: `prot-tod-${pa.id}-${idx}`,
+              type: 'sanidade' as any,
+              severity: 'warning',
+              message: `Protocolo com etapa pendente: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
+              link: '/sanidade',
+            })
+          } else if (entry.scheduled_date && entry.scheduled_date < todayStr) {
+            list.push({
+              id: `prot-del-${pa.id}-${idx}`,
+              type: 'sanidade' as any,
+              severity: 'critical',
+              message: `Etapa de protocolo atrasada: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
+              link: '/sanidade',
+            })
+          }
+        }
+      }
+    }
 
     // a) INCUBAÇÕES
     for (const inc of activeIncubations) {
@@ -397,6 +488,10 @@ export function useDashboardData() {
     sevenDaysAgoStr,
     expenses,
     tomorrowStr,
+    vaccinations,
+    treatments,
+    protocolAssignments,
+    lots,
   ])
 
   // 10. ATIVIDADES RECENTES (TIMELINE CONSOLIDADA, MÁXIMO 15 ITENS)
@@ -556,10 +651,79 @@ export function useDashboardData() {
       }
     }
 
+    // farm_vaccinations
+    for (const vac of vaccinations) {
+      if (vac.status === 'performed') {
+        const dateStr = vac.performed_date || vac.scheduled_date || todayStr
+        const ts = new Date(dateStr).getTime()
+        const lot = lots.find((l) => l.id === vac.lot_id)
+        timeline.push({
+          id: `vac-${vac.id}`,
+          iconType: 'sanidade' as any,
+          actionLabel: '💉 Vacinação realizada',
+          description: `${vac.vaccine_name}${vac.disease_target ? ` (${vac.disease_target})` : ''}`,
+          relatedEntity: lot ? `Lote ${lot.name}` : undefined,
+          date: dateStr,
+          formattedRelativeDate: formatRelativeActivityDate(dateStr),
+          timestamp: isNaN(ts) ? 0 : ts,
+        })
+      }
+    }
+
+    // farm_treatments
+    for (const trt of treatments) {
+      const dateStr = trt.start_date || todayStr
+      const ts = new Date(dateStr).getTime()
+      const lot = lots.find((l) => l.id === trt.lot_id)
+      timeline.push({
+        id: `trt-${trt.id}`,
+        iconType: 'sanidade' as any,
+        actionLabel: `💊 Tratamento ${trt.status === 'completed' ? 'concluído' : 'iniciado'}`,
+        description: `${trt.medication_name}${trt.diagnosis_reason ? ` — ${trt.diagnosis_reason}` : ''}`,
+        relatedEntity: lot ? `Lote ${lot.name}` : undefined,
+        date: dateStr,
+        formattedRelativeDate: formatRelativeActivityDate(dateStr),
+        timestamp: isNaN(ts) ? 0 : ts,
+      })
+    }
+
+    // farm_health_occurrences
+    for (const occ of healthOccurrences) {
+      const dateStr = occ.occurrence_date ? occ.occurrence_date.split('T')[0] : todayStr
+      const ts = new Date(dateStr).getTime()
+      const lot = lots.find((l) => l.id === occ.lot_id)
+      const typeDesc =
+        occ.occurrence_type === 'other' ? occ.custom_type || 'Outro' : occ.occurrence_type
+      timeline.push({
+        id: `occ-${occ.id}`,
+        iconType: 'sanidade' as any,
+        actionLabel: '⚠️ Ocorrência registrada',
+        description: `${typeDesc} (${occ.affected_count || 1} aves)`,
+        relatedEntity: lot ? `Lote ${lot.name}` : undefined,
+        date: dateStr,
+        formattedRelativeDate: formatRelativeActivityDate(dateStr),
+        timestamp: isNaN(ts) ? 0 : ts,
+      })
+    }
+
     // Sort descending by timestamp / date
     timeline.sort((a, b) => b.timestamp - a.timestamp || b.date.localeCompare(a.date))
     return timeline.slice(0, 15)
-  }, [mortality, feedLogs, weighings, eggs, sales, expenses, energyLogs, lots, incubations])
+  }, [
+    mortality,
+    feedLogs,
+    weighings,
+    eggs,
+    sales,
+    expenses,
+    energyLogs,
+    lots,
+    incubations,
+    vaccinations,
+    treatments,
+    healthOccurrences,
+    todayStr,
+  ])
 
   // 11. RESUMO DOS LOTES (ATÉ 5 ATIVOS)
   const topActiveLots = useMemo(() => {
@@ -700,5 +864,8 @@ export function useDashboardData() {
     hasLotsData: lots.length > 0,
     detailedActiveIncubations,
     detailedCriticalStock,
+    vaccinations,
+    treatments,
+    healthOccurrences,
   }
 }

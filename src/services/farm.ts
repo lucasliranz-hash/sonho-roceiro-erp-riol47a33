@@ -21,6 +21,11 @@ export const FARM_TABLES = {
   assets: 'farm_assets',
   alerts: 'farm_alerts',
   stockMovements: 'farm_stock_movements',
+  vaccinations: 'farm_vaccinations',
+  treatments: 'farm_treatments',
+  healthOccurrences: 'farm_health_occurrences',
+  healthProtocols: 'farm_health_protocols',
+  protocolAssignments: 'farm_protocol_assignments',
 } as const
 
 export type FarmTableName = (typeof FARM_TABLES)[keyof typeof FARM_TABLES]

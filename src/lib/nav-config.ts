@@ -23,6 +23,7 @@ import {
   CircleUser,
   Calculator,
   ListTodo,
+  HeartPulse,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -42,6 +43,7 @@ export const navGroups: NavGroup[] = [
     label: 'PRODUÇÃO',
     items: [
       { label: 'Lotes', path: '/lotes', icon: Layers },
+      { label: 'Sanidade', path: '/sanidade', icon: HeartPulse },
       { label: 'Ração', path: '/racao', icon: Wheat },
       { label: 'Pesagens', path: '/pesagens', icon: Scale },
       { label: 'Mortalidade', path: '/mortalidade', icon: Skull },

@@ -24,6 +24,9 @@ import {
   TrendingDown,
   Info,
   CheckCircle2,
+  HeartPulse,
+  Syringe,
+  Pill,
 } from 'lucide-react'
 
 export default function Dashboard() {
@@ -37,9 +40,11 @@ export default function Dashboard() {
     hasMonthlySales,
     financialSummary,
     topActiveLots,
-    hasLotsData,
     detailedActiveIncubations,
     detailedCriticalStock,
+    vaccinations,
+    treatments,
+    healthOccurrences,
   } = useDashboardData()
 
   // Capitalize first letter of todayFormatted (e.g. "Quinta-feira, 14 de agosto de 2025")
@@ -49,25 +54,27 @@ export default function Dashboard() {
   const renderActivityIcon = (iconType: string) => {
     switch (iconType) {
       case 'mortalidade':
-        return <Skull className="w-4 h-4 text-rose-600" />
+        return <Skull className="w-4 h-4 text-rose-500" />
       case 'racao':
-        return <Wheat className="w-4 h-4 text-amber-600" />
+        return <Wheat className="w-4 h-4 text-amber-500" />
       case 'pesagem':
-        return <Scale className="w-4 h-4 text-blue-600" />
+        return <Scale className="w-4 h-4 text-blue-500" />
       case 'producao':
-        return <Egg className="w-4 h-4 text-yellow-600" />
+        return <Egg className="w-4 h-4 text-emerald-500" />
       case 'venda':
-        return <DollarSign className="w-4 h-4 text-emerald-600" />
+        return <TrendingUp className="w-4 h-4 text-emerald-600" />
       case 'despesa':
-        return <DollarSign className="w-4 h-4 text-rose-600" />
+        return <TrendingDown className="w-4 h-4 text-rose-500" />
       case 'energia':
-        return <Zap className="w-4 h-4 text-purple-600" />
+        return <Zap className="w-4 h-4 text-amber-500" />
       case 'lote':
-        return <Bird className="w-4 h-4 text-primary" />
+        return <Layers className="w-4 h-4 text-primary" />
       case 'nascimento':
         return <Sparkles className="w-4 h-4 text-amber-500" />
+      case 'sanidade':
+        return <HeartPulse className="w-4 h-4 text-rose-600" />
       default:
-        return <Clock className="w-4 h-4 text-muted-foreground" />
+        return <Info className="w-4 h-4 text-muted-foreground" />
     }
   }
 
@@ -85,6 +92,64 @@ export default function Dashboard() {
           Visão rápida do que está acontecendo na propriedade.
         </p>
       </div>
+
+      {/* ====================================================
+          BLOCO SANIDADE HOJE (se houver dados)
+      ==================================================== */}
+      {(() => {
+        const scheduledVacCount = (vaccinations || []).filter(
+          (v) => v.status === 'scheduled' || v.status === 'delayed',
+        ).length
+        const activeTrtCount = (treatments || []).filter((t) => t.status === 'in_progress').length
+        const occurrencesCount = (healthOccurrences || []).length
+
+        if (scheduledVacCount === 0 && activeTrtCount === 0 && occurrencesCount === 0) {
+          return null
+        }
+
+        return (
+          <div className="p-4 rounded-3xl bg-gradient-to-r from-rose-50 via-white to-rose-50/40 border border-rose-200 shadow-subtle flex flex-col md:flex-row md:items-center justify-between gap-3 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-600 shrink-0">
+                <HeartPulse className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-xs font-bold text-foreground">Sanidade & Manejo Clínico</h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Status e alertas em tempo real do plantel
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 md:gap-3">
+              <div className="px-3 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center gap-1.5 text-xs shadow-sm">
+                <Syringe className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="font-extrabold text-foreground">{scheduledVacCount}</span>
+                <span className="text-muted-foreground text-[11px]">vacinações prog.</span>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center gap-1.5 text-xs shadow-sm">
+                <Pill className="w-3.5 h-3.5 text-blue-600" />
+                <span className="font-extrabold text-foreground">{activeTrtCount}</span>
+                <span className="text-muted-foreground text-[11px]">tratamentos ativos</span>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-white border border-rose-100 flex items-center gap-1.5 text-xs shadow-sm">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                <span className="font-extrabold text-foreground">{occurrencesCount}</span>
+                <span className="text-muted-foreground text-[11px]">ocorrências</span>
+              </div>
+              <Link to="/sanidade">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-8 rounded-xl text-xs font-semibold text-rose-600 border-rose-200 bg-white"
+                >
+                  Abrir Sanidade
+                </Button>
+              </Link>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ====================================================
           3. ATENÇÃO HOJE (Mobile Order #1)
@@ -410,6 +475,19 @@ export default function Dashboard() {
             <div>
               <p className="text-xs font-bold text-foreground">Nova Mortalidade</p>
               <p className="text-[10px] text-muted-foreground">Registrar perda</p>
+            </div>
+          </Link>
+
+          <Link
+            to="/sanidade"
+            className="p-3 rounded-2xl bg-white border border-border hover:border-primary/50 hover:shadow-subtle transition-all text-left flex flex-col justify-between group"
+          >
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-2 group-hover:scale-105 transition-transform">
+              <Syringe className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="text-xs font-bold text-foreground">Sanidade</p>
+              <p className="text-[10px] text-muted-foreground">Vacinas & Tratamentos</p>
             </div>
           </Link>
 

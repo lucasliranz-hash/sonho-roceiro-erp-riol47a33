@@ -14,6 +14,7 @@ import Layout from './components/Layout'
 import Index from './pages/Index'
 import Auth from './pages/Auth'
 import Lotes from './pages/Lotes'
+import Sanidade from './pages/Sanidade'
 import Estrutura from './pages/Estrutura'
 import Despesas from './pages/Despesas'
 import Estoque from './pages/Estoque'
@@ -68,6 +69,7 @@ function App() {
                   <Route element={<Layout />}>
                     <Route path="/" element={<Index />} />
                     <Route path="/lotes" element={<Lotes />} />
+                    <Route path="/sanidade" element={<Sanidade />} />
                     <Route path="/estrutura" element={<Estrutura />} />
                     <Route path="/despesas" element={<Despesas />} />
                     <Route path="/estoque" element={<Estoque />} />
