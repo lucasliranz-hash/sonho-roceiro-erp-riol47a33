@@ -73,7 +73,7 @@ export default function Configuracoes() {
       </Card>
 
       <p className="text-[10px] text-muted-foreground/70 text-center">
-        Sonho Roceiro ERP — v0.0.52
+        Sonho Roceiro ERP — v0.0.54
       </p>
     </div>
   )
