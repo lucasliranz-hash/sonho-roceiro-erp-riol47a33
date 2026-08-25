@@ -1,6 +1,7 @@
 -- Migration: Create sanity (sanidade) tables and policies
 -- Applies farm_vaccinations, farm_treatments, farm_health_occurrences, farm_health_protocols, farm_protocol_assignments
 -- Force schema cache reload and ensure tables exist for sanity module
+-- Applied for sanity module tables
 DO $$
 DECLARE
   tbl TEXT;
