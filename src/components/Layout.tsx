@@ -138,7 +138,7 @@ export default function Layout() {
               </p>
             </div>
           </Link>
-          <p className="text-[10px] text-muted-foreground/70 text-center mt-2">v0.0.24</p>
+          <p className="text-[10px] text-muted-foreground/70 text-center mt-2">v0.0.45</p>
         </div>
       </aside>
 
@@ -192,7 +192,7 @@ export default function Layout() {
       </div>
 
       <div className="lg:hidden fixed bottom-1 left-1/2 -translate-x-1/2 z-30 pointer-events-none">
-        <span className="text-[9px] text-muted-foreground/60">v0.0.24</span>
+        <span className="text-[9px] text-muted-foreground/60">v0.0.45</span>
       </div>
       <MobileBottomNav
         onNewEntry={() => setQuickActionsOpen(true)}
