@@ -18,9 +18,13 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
-import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import {
   Syringe,
   Pill,
@@ -36,6 +40,9 @@ import {
   XCircle,
   Link2,
   Trash2,
+  MoreVertical,
+  Eye,
+  Pencil,
 } from 'lucide-react'
 import {
   Vaccination,
@@ -2444,7 +2451,7 @@ export default function Sanidade() {
       await updateVaccination(selectedVacToApply.id, updatedVaccination)
 
       if (stockMovement && addStockMovement) {
-        await addStockMovement(stockMovement.movementPayload)
+        await addStockMovement(stockMovement.movementPayload as any)
         if (stockMovement.updatePayload && updateInventory) {
           await updateInventory(stockMovement.inventoryItemId, stockMovement.updatePayload)
         }
@@ -2484,7 +2491,6 @@ export default function Sanidade() {
           if (itm && addStockMovement) {
             const newStock = Math.max(0, (itm.currentStock || 0) - Number(data.quantity_used))
             await addStockMovement({
-              organization_id: organization?.id,
               property_id: currentProperty?.id,
               inventory_item_id: itm.id,
               inventoryItemName: itm.name,
@@ -2500,7 +2506,7 @@ export default function Sanidade() {
               lotName: data.lotName,
               notes: `Tratamento Veterinário: ${data.medication_name}`,
               generateExpense: false,
-            })
+            } as any)
             if (updateInventory) {
               await updateInventory(itm.id, {
                 currentStock: Number(newStock.toFixed(3)),
@@ -2953,67 +2959,93 @@ export default function Sanidade() {
                             </Badge>
                           )}
 
-                          <RecordActionMenu
-                            customActions={
-                              vac.status === 'scheduled' || isDelayed
-                                ? [
-                                    {
-                                      label: '💉 Registrar aplicação',
-                                      icon: <Syringe className="w-3.5 h-3.5 text-emerald-600" />,
-                                      onClick: () => {
-                                        setSelectedVacToApply(vac)
-                                        setApplyVacModalOpen(true)
-                                      },
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                                <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                              {(vac.status === 'scheduled' || isDelayed) && canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setSelectedVacToApply(vac)
+                                    setApplyVacModalOpen(true)
+                                  }}
+                                  className="text-xs font-semibold text-emerald-700 cursor-pointer gap-2"
+                                >
+                                  <Syringe className="w-3.5 h-3.5" /> 💉 Registrar aplicação
+                                </DropdownMenuItem>
+                              )}
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDetailsRecord({
+                                    open: true,
+                                    title: `Vacinação: ${vac.vaccine_name}`,
+                                    record: {
+                                      'Nome da Vacina': vac.vaccine_name,
+                                      'Alvo / Doença': vac.disease_target || '—',
+                                      'Lote Animal': lotName(vac.lot_id, vac.lotName),
+                                      Status:
+                                        vac.status === 'performed' ? 'Realizada' : 'Programada',
+                                      'Data Programada': vac.scheduled_date || '—',
+                                      'Data Realizada': vac.performed_date || '—',
+                                      'Qtd Animais': vac.animal_count || '—',
+                                      'Dose / Ave': `${vac.dose_per_animal || '—'} ${vac.dose_unit || 'mL'}`,
+                                      'Via de Aplicação': vac.application_route || '—',
+                                      'Status do Frasco': vac.vial_status || '—',
+                                      'Qtd Descartada': vac.discarded_quantity || '—',
+                                      'Custo de Perda': vac.waste_cost
+                                        ? `R$ ${Number(vac.waste_cost).toFixed(2)}`
+                                        : '—',
+                                      Responsável: vac.responsible || '—',
+                                      'Item Estoque Vinculado': vac.inventory_item_name || '—',
+                                      'Lote Fabricante': vac.batch_number || '—',
+                                      'Qtd Consumida do Estoque': vac.quantity_used
+                                        ? `${vac.quantity_used} ${vac.dose_unit || 'un'}`
+                                        : '—',
+                                      'Custo Total Apropriado': vac.total_cost
+                                        ? `R$ ${Number(vac.total_cost).toFixed(2)}`
+                                        : '—',
+                                      'Baixa em Estoque': vac.stock_deducted
+                                        ? 'Sim (Efetuada)'
+                                        : 'Não',
+                                      Observações: vac.notes || '—',
                                     },
-                                  ]
-                                : []
-                            }
-                            onViewDetails={() =>
-                              setDetailsRecord({
-                                open: true,
-                                title: `Vacinação: ${vac.vaccine_name}`,
-                                record: {
-                                  'Nome da Vacina': vac.vaccine_name,
-                                  'Alvo / Doença': vac.disease_target || '—',
-                                  'Lote Animal': lotName(vac.lot_id, vac.lotName),
-                                  Status: vac.status === 'performed' ? 'Realizada' : 'Programada',
-                                  'Data Programada': vac.scheduled_date || '—',
-                                  'Data Realizada': vac.performed_date || '—',
-                                  'Qtd Animais': vac.animal_count || '—',
-                                  'Dose / Ave': `${vac.dose_per_animal || '—'} ${vac.dose_unit || 'mL'}`,
-                                  'Via de Aplicação': vac.application_route || '—',
-                                  'Status do Frasco': vac.vial_status || '—',
-                                  'Qtd Descartada': vac.discarded_quantity || '—',
-                                  'Custo de Perda': vac.waste_cost
-                                    ? `R$ ${Number(vac.waste_cost).toFixed(2)}`
-                                    : '—',
-                                  Responsável: vac.responsible || '—',
-                                  'Item Estoque Vinculado': vac.inventory_item_name || '—',
-                                  'Lote Fabricante': vac.batch_number || '—',
-                                  'Qtd Consumida do Estoque': vac.quantity_used
-                                    ? `${vac.quantity_used} ${vac.dose_unit || 'un'}`
-                                    : '—',
-                                  'Custo Total Apropriado': vac.total_cost
-                                    ? `R$ ${Number(vac.total_cost).toFixed(2)}`
-                                    : '—',
-                                  'Baixa em Estoque': vac.stock_deducted ? 'Sim (Efetuada)' : 'Não',
-                                  Observações: vac.notes || '—',
-                                },
-                              })
-                            }
-                            onEdit={() => {
-                              setEditingVac(vac)
-                              setVacModalOpen(true)
-                            }}
-                            onDelete={() =>
-                              setDeleteConfirm({
-                                open: true,
-                                id: vac.id,
-                                name: vac.vaccine_name,
-                                type: 'vac',
-                              })
-                            }
-                          />
+                                  })
+                                }
+                                className="text-xs cursor-pointer gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Ver Detalhes
+                              </DropdownMenuItem>
+                              {canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingVac(vac)
+                                    setVacModalOpen(true)
+                                  }}
+                                  className="text-xs cursor-pointer gap-2"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" /> Editar
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setDeleteConfirm({
+                                      open: true,
+                                      id: vac.id,
+                                      name: vac.vaccine_name,
+                                      type: 'vac',
+                                    })
+                                  }
+                                  className="text-xs text-rose-600 focus:text-rose-600 cursor-pointer gap-2"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
 
@@ -3165,42 +3197,70 @@ export default function Sanidade() {
                           </Badge>
                         )}
 
-                        <RecordActionMenu
-                          onViewDetails={() =>
-                            setDetailsRecord({
-                              open: true,
-                              title: `Tratamento: ${trt.medication_name}`,
-                              record: {
-                                Medicamento: trt.medication_name,
-                                'Motivo / Diagnóstico': trt.diagnosis_reason || '—',
-                                Lote: lotName(trt.lot_id, trt.lotName),
-                                Status: trt.status,
-                                Dosagem: trt.dosage || '—',
-                                Frequência: trt.frequency || '—',
-                                Duração: `${trt.duration_days || '—'} dias`,
-                                'Período de Carência': `${trt.withdrawal_period_days || 0} dias`,
-                                'Data Início': trt.start_date || '—',
-                                'Data Término': trt.end_date || '—',
-                                Responsável: trt.responsible || '—',
-                                'Item de Estoque': trt.inventory_item_name || '—',
-                                'Qtd Consumida': trt.quantity_used ? `${trt.quantity_used}` : '—',
-                                Observações: trt.notes || '—',
-                              },
-                            })
-                          }
-                          onEdit={() => {
-                            setEditingTrt(trt)
-                            setTrtModalOpen(true)
-                          }}
-                          onDelete={() =>
-                            setDeleteConfirm({
-                              open: true,
-                              id: trt.id,
-                              name: trt.medication_name,
-                              type: 'trt',
-                            })
-                          }
-                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setDetailsRecord({
+                                  open: true,
+                                  title: `Tratamento: ${trt.medication_name}`,
+                                  record: {
+                                    Medicamento: trt.medication_name,
+                                    'Motivo / Diagnóstico': trt.diagnosis_reason || '—',
+                                    Lote: lotName(trt.lot_id, trt.lotName),
+                                    Status: trt.status,
+                                    Dosagem: trt.dosage || '—',
+                                    Frequência: trt.frequency || '—',
+                                    Duração: `${trt.duration_days || '—'} dias`,
+                                    'Período de Carência': `${trt.withdrawal_period_days || 0} dias`,
+                                    'Data Início': trt.start_date || '—',
+                                    'Data Término': trt.end_date || '—',
+                                    Responsável: trt.responsible || '—',
+                                    'Item de Estoque': trt.inventory_item_name || '—',
+                                    'Qtd Consumida': trt.quantity_used
+                                      ? `${trt.quantity_used}`
+                                      : '—',
+                                    Observações: trt.notes || '—',
+                                  },
+                                })
+                              }
+                              className="text-xs cursor-pointer gap-2"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Ver Detalhes
+                            </DropdownMenuItem>
+                            {canEdit && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditingTrt(trt)
+                                  setTrtModalOpen(true)
+                                }}
+                                className="text-xs cursor-pointer gap-2"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" /> Editar
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDeleteConfirm({
+                                    open: true,
+                                    id: trt.id,
+                                    name: trt.medication_name,
+                                    type: 'trt',
+                                  })
+                                }
+                                className="text-xs text-rose-600 focus:text-rose-600 cursor-pointer gap-2"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
@@ -3321,40 +3381,66 @@ export default function Sanidade() {
                             </Badge>
                           )}
 
-                          <RecordActionMenu
-                            onViewDetails={() =>
-                              setDetailsRecord({
-                                open: true,
-                                title: 'Ocorrência Clínica',
-                                record: {
-                                  Tipo: occ.occurrence_type,
-                                  Severidade: occ.severity,
-                                  Lote: lotName(occ.lot_id, occ.lotName),
-                                  'Data Notificada': occ.occurrence_date
-                                    ? occ.occurrence_date.split('T')[0]
-                                    : '—',
-                                  'Aves Afetadas': occ.affected_count || 1,
-                                  Sintomas: occ.symptoms || '—',
-                                  Descrição: occ.description || '—',
-                                  'Ação Tomada': occ.action_taken || '—',
-                                  Responsável: occ.responsible || '—',
-                                  Observações: occ.notes || '—',
-                                },
-                              })
-                            }
-                            onEdit={() => {
-                              setEditingOcc(occ)
-                              setOccModalOpen(true)
-                            }}
-                            onDelete={() =>
-                              setDeleteConfirm({
-                                open: true,
-                                id: occ.id,
-                                name: occ.symptoms || occ.description || 'Ocorrência',
-                                type: 'occ',
-                              })
-                            }
-                          />
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                                <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-44 rounded-xl">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDetailsRecord({
+                                    open: true,
+                                    title: 'Ocorrência Clínica',
+                                    record: {
+                                      Tipo: occ.occurrence_type,
+                                      Severidade: occ.severity,
+                                      Lote: lotName(occ.lot_id, occ.lotName),
+                                      'Data Notificada': occ.occurrence_date
+                                        ? occ.occurrence_date.split('T')[0]
+                                        : '—',
+                                      'Aves Afetadas': occ.affected_count || 1,
+                                      Sintomas: occ.symptoms || '—',
+                                      Descrição: occ.description || '—',
+                                      'Ação Tomada': occ.action_taken || '—',
+                                      Responsável: occ.responsible || '—',
+                                      Observações: occ.notes || '—',
+                                    },
+                                  })
+                                }
+                                className="text-xs cursor-pointer gap-2"
+                              >
+                                <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Ver Detalhes
+                              </DropdownMenuItem>
+                              {canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingOcc(occ)
+                                    setOccModalOpen(true)
+                                  }}
+                                  className="text-xs cursor-pointer gap-2"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-muted-foreground" /> Editar
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    setDeleteConfirm({
+                                      open: true,
+                                      id: occ.id,
+                                      name: occ.symptoms || occ.description || 'Ocorrência',
+                                      type: 'occ',
+                                    })
+                                  }
+                                  className="text-xs text-rose-600 focus:text-rose-600 cursor-pointer gap-2"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
 
@@ -3440,47 +3526,74 @@ export default function Sanidade() {
                               : 'Sanitário'}
                         </Badge>
 
-                        <RecordActionMenu
-                          customActions={[
-                            {
-                              label: 'Vincular a Lote 🔗',
-                              icon: <Link2 className="w-3.5 h-3.5 text-purple-600" />,
-                              onClick: () => {
-                                setSelectedProtocolToAssign(proto)
-                                setAssignModalOpen(true)
-                              },
-                            },
-                          ]}
-                          onViewDetails={() =>
-                            setDetailsRecord({
-                              open: true,
-                              title: `Protocolo: ${proto.name}`,
-                              record: {
-                                Nome: proto.name,
-                                Tipo: proto.protocol_type,
-                                Atividade: proto.activity_type || 'Avicultura',
-                                'Faixa de Idade': `${proto.age_range_start || 1} a ${proto.age_range_end || 60} dias`,
-                                'Total de Etapas': proto.steps?.length || 0,
-                                Etapas: (proto.steps || [])
-                                  .map((s) => `Dia ${s.day}: ${s.action}`)
-                                  .join(' | '),
-                                Observações: proto.notes || '—',
-                              },
-                            })
-                          }
-                          onEdit={() => {
-                            setEditingProto(proto)
-                            setProtoModalOpen(true)
-                          }}
-                          onDelete={() =>
-                            setDeleteConfirm({
-                              open: true,
-                              id: proto.id,
-                              name: proto.name,
-                              type: 'proto',
-                            })
-                          }
-                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg">
+                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48 rounded-xl">
+                            {canEdit && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setSelectedProtocolToAssign(proto)
+                                  setAssignModalOpen(true)
+                                }}
+                                className="text-xs font-semibold text-purple-700 cursor-pointer gap-2"
+                              >
+                                <Link2 className="w-3.5 h-3.5" /> Vincular a Lote 🔗
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setDetailsRecord({
+                                  open: true,
+                                  title: `Protocolo: ${proto.name}`,
+                                  record: {
+                                    Nome: proto.name,
+                                    Tipo: proto.protocol_type,
+                                    Atividade: proto.activity_type || 'Avicultura',
+                                    'Faixa de Idade': `${proto.age_range_start || 1} a ${proto.age_range_end || 60} dias`,
+                                    'Total de Etapas': proto.steps?.length || 0,
+                                    Etapas: (proto.steps || [])
+                                      .map((s) => `Dia ${s.day}: ${s.action}`)
+                                      .join(' | '),
+                                    Observações: proto.notes || '—',
+                                  },
+                                })
+                              }
+                              className="text-xs cursor-pointer gap-2"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-muted-foreground" /> Ver Detalhes
+                            </DropdownMenuItem>
+                            {canEdit && (
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  setEditingProto(proto)
+                                  setProtoModalOpen(true)
+                                }}
+                                className="text-xs cursor-pointer gap-2"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-muted-foreground" /> Editar
+                              </DropdownMenuItem>
+                            )}
+                            {canDelete && (
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDeleteConfirm({
+                                    open: true,
+                                    id: proto.id,
+                                    name: proto.name,
+                                    type: 'proto',
+                                  })
+                                }
+                                className="text-xs text-rose-600 focus:text-rose-600 cursor-pointer gap-2"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
 
@@ -3593,12 +3706,31 @@ export default function Sanidade() {
       />
 
       {/* Detalhes e Exclusão */}
-      <RecordDetailsDialog
+      <Dialog
         open={detailsRecord.open}
         onOpenChange={(open) => setDetailsRecord((prev) => ({ ...prev, open }))}
-        title={detailsRecord.title}
-        record={detailsRecord.record}
-      />
+      >
+        <DialogContent className="max-w-md rounded-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-foreground">
+              {detailsRecord.title}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            {Object.entries(detailsRecord.record).map(([k, v]) => (
+              <div
+                key={k}
+                className="flex items-start justify-between py-1.5 border-b border-border/40 text-xs gap-4"
+              >
+                <span className="text-muted-foreground font-medium shrink-0">{k}:</span>
+                <span className="text-foreground font-semibold text-right break-words">
+                  {String(v ?? '—')}
+                </span>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <DeleteConfirmDialog
         open={deleteConfirm.open}
