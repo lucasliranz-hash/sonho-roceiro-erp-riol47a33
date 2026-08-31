@@ -22,39 +22,48 @@ import { RecordActionMenu } from '@/components/RecordActionMenu'
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog'
 import { RecordDetailsDialog } from '@/components/RecordDetailsDialog'
 import {
-  HeartPulse,
   Syringe,
   Pill,
   AlertTriangle,
   FileText,
-  Calendar,
   Plus,
+  Calendar,
+  Layers,
   Search,
   CheckCircle2,
-  Trash2,
+  Clock,
+  AlertCircle,
+  XCircle,
   Link2,
+  Trash2,
 } from 'lucide-react'
 import {
   Vaccination,
-  VaccinationStatus,
-  VialStatus,
   Treatment,
-  TreatmentStatus,
   HealthOccurrence,
+  HealthProtocol,
+  VaccinationStatus,
+  TreatmentStatus,
   HealthOccurrenceType,
   HealthOccurrenceSeverity,
-  HealthProtocol,
   HealthProtocolStep,
-  ACTIVITY_TYPES,
+  VialStatus,
 } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
 
-// SUB-COMPONENT: DIÁLOGO TRATAMENTO
-// ====================================================================State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)
-=======
-  // State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)====================================================================
+// Helper to extract fields safely from either snake_case, camelCase or generic data
+function getVacField(vac: any, keys: string[], defaultVal: any = '') {
+  if (!vac) return defaultVal
+  for (const k of keys) {
+    if (vac[k] !== undefined && vac[k] !== null) return vac[k]
+    if (vac.data && vac.data[k] !== undefined && vac.data[k] !== null) return vac.data[k]
+  }
+  return defaultVal
+}
+
+const ACTIVITY_TYPES = ['Avicultura', 'Bovinocultura', 'Suinocultura', 'Piscicultura', 'Outro']
+
+// ====================================================================
 // SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
 // ====================================================================
 interface ApplyVaccinationDialogProps {
@@ -105,15 +114,27 @@ function ApplyVaccinationDialog({
     if (!open || !vaccination) return
 
     const v = vaccination as any
-    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
+    const aCount = getVacField(
+      v,
+      ['animal_count', 'animal_quantity', 'animalCount', 'animalQuantity'],
+      '',
+    )
     const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
     const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
-    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
+    const appRoute = getVacField(
+      v,
+      ['application_route', 'administration_route', 'applicationRoute', 'route'],
+      'água',
+    )
     const resp = getVacField(v, ['responsible'], '')
     const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
     const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
     const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
-    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
+    const qUsed = getVacField(
+      v,
+      ['quantity_used', 'consumed_quantity', 'quantityUsed', 'consumedQuantity'],
+      '',
+    )
     const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
     const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
     const obs = getVacField(v, ['notes', 'observations'], '')
@@ -139,7 +160,12 @@ function ApplyVaccinationDialog({
     // Calculate auto consumption if available
     const countNum = Number(aCount) || 0
     const doseNum = Number(dPerAnimal) || 0
-    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
+    const calculatedQty =
+      qUsed !== ''
+        ? Number(qUsed)
+        : countNum > 0 && doseNum > 0
+          ? Number((countNum * doseNum).toFixed(3))
+          : 0
     setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
 
     // Check inventory item for unit cost
@@ -182,7 +208,7 @@ function ApplyVaccinationDialog({
       if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
       if (itm.averageCost) {
         setUnitCost(String(itm.averageCost))
-        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
+        const qty = Number(quantityUsed) || Number(animalCount) * Number(dosePerAnimal) || 0
         if (qty > 0) {
           setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
         }
@@ -199,7 +225,7 @@ function ApplyVaccinationDialog({
 
     setIsSubmitting(true)
     try {
-      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
+      const qUsed = Number(quantityUsed) || Number(animalCount) * Number(dosePerAnimal) || 0
       const uCost = Number(unitCost) || selectedItem?.averageCost || 0
       const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
       const dQty = Number(discardedQuantity) || 0
@@ -209,7 +235,8 @@ function ApplyVaccinationDialog({
         status: 'performed',
         performed_date: performedDate,
         animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
-        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
+        dose_per_animal:
+          dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
         dose_unit: doseUnit || vaccination?.dose_unit,
         application_route: applicationRoute || vaccination?.application_route,
         responsible: responsible.trim() || vaccination?.responsible,
@@ -227,11 +254,13 @@ function ApplyVaccinationDialog({
         notes: notes.trim() || vaccination?.notes,
       }
 
-      let stockMovement: {
-        inventoryItemId: string
-        movementPayload: any
-        updatePayload?: any
-      } | undefined = undefined
+      let stockMovement:
+        | {
+            inventoryItemId: string
+            movementPayload: any
+            updatePayload?: any
+          }
+        | undefined = undefined
 
       if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
         const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
@@ -241,7 +270,7 @@ function ApplyVaccinationDialog({
             organization_id: vaccination?.organization_id,
             property_id: vaccination?.property_id,
             inventory_item_id: inventoryItemId,
-            type: 'out',
+            type: 'saida',
             quantity: qUsed,
             unit_price: uCost,
             total_price: tCost,
@@ -290,15 +319,21 @@ function ApplyVaccinationDialog({
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
-                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
+                  <strong className="font-semibold">
+                    {lot?.name || vaccination.lotName || 'Geral'}
+                  </strong>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
-                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
+                  <strong className="font-semibold">
+                    {vaccination.scheduled_date || 'Não definida'}
+                  </strong>
                 </div>
                 <div>
                   <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
-                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
+                  <strong className="font-semibold capitalize">
+                    {vaccination.application_route || 'água'}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -402,23 +437,24 @@ function ApplyVaccinationDialog({
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
-                  <Select
-                    value={vialStatus}
-                    onValueChange={(v) => setVialStatus(v as VialStatus)}
-                  >
+                  <Select value={vialStatus} onValueChange={(v) => setVialStatus(v as VialStatus)}>
                     <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
                       <SelectItem value="closed">Frasco Fechado</SelectItem>
-                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
+                      <SelectItem value="discarded">
+                        Frasco Descartado / Sobra Inutilizada
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 {vialStatus === 'discarded' ? (
                   <div>
-                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
+                    <Label className="text-[11px] text-muted-foreground">
+                      Qtd Descartada / Perdida
+                    </Label>
                     <Input
                       type="number"
                       step="any"
@@ -591,9 +627,9 @@ function ApplyVaccinationDialog({
   )
 }
 
-// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
 // ====================================================================
-=======
+// COMPONENTE PRINCIPAL: SANIDADE
+// ====================================================================
 export default function Sanidade() {
   const { currentProperty, organization } = useAuth()
   const { canEdit, canDelete } = usePermissions()
@@ -604,8 +640,6 @@ export default function Sanidade() {
     treatments,
     healthOccurrences,
     healthProtocols,
-    protocolAssignments,
-    activities,
     addVaccination,
     updateVaccination,
     deleteVaccination,
@@ -625,2500 +659,817 @@ export default function Sanidade() {
   } = useFarmStore()
 
   const [activeTab, setActiveTab] = useState('vacinacao')
-  const [searchTerm, setSearchTerm] = useState('')====================================================================
-// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
-// ====================================================================
-interface ApplyVaccinationDialogProps {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  vaccination: Vaccination | null
-  lots: any[]
-  inventory: any[]
-  onConfirm: (
-    updatedVaccination: Partial<Vaccination>,
-    stockMovement?: {
-      inventoryItemId: string
-      movementPayload: any
-      updatePayload?: any
-    },
-  ) => Promise<void>
-}
-
-function ApplyVaccinationDialog({
-  open,
-  onOpenChange,
-  vaccination,
-  lots,
-  inventory,
-  onConfirm,
-}: ApplyVaccinationDialogProps) {
-  const [performedDate, setPerformedDate] = useState('')
-  const [animalCount, setAnimalCount] = useState('')
-  const [dosePerAnimal, setDosePerAnimal] = useState('')
-  const [doseUnit, setDoseUnit] = useState('mL')
-  const [applicationRoute, setApplicationRoute] = useState('água')
-  const [responsible, setResponsible] = useState('')
-  const [inventoryItemId, setInventoryItemId] = useState('')
-  const [batchNumber, setBatchNumber] = useState('')
-  const [expirationDate, setExpirationDate] = useState('')
-  const [quantityUsed, setQuantityUsed] = useState('')
-  const [unitCost, setUnitCost] = useState('')
-  const [totalCost, setTotalCost] = useState('')
-  const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
-  const [discardedQuantity, setDiscardedQuantity] = useState('')
-  const [wasteCost, setWasteCost] = useState('')
-  const [deductStock, setDeductStock] = useState(true)
-  const [notes, setNotes] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Pre-fill automatically with scheduled data
-  useEffect(() => {
-    if (!open || !vaccination) return
-
-    const v = vaccination as any
-    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
-    const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
-    const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
-    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
-    const resp = getVacField(v, ['responsible'], '')
-    const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
-    const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
-    const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
-    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
-    const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
-    const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
-    const obs = getVacField(v, ['notes', 'observations'], '')
-    const vStat = getVacField(v, ['vial_status', 'vialStatus'], 'opened')
-    const discQty = getVacField(v, ['discarded_quantity', 'discardedQuantity'], '')
-    const wCost = getVacField(v, ['waste_cost', 'wasteCost'], '')
-
-    setPerformedDate(new Date().toISOString().split('T')[0])
-    setAnimalCount(aCount !== '' ? String(aCount) : '')
-    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
-    setDoseUnit(dUnit || 'mL')
-    setApplicationRoute(appRoute || 'água')
-    setResponsible(resp)
-    setInventoryItemId(invId)
-    setBatchNumber(bNum)
-    setExpirationDate(exp)
-    setVialStatus(vStat || 'opened')
-    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
-    setWasteCost(wCost !== '' ? String(wCost) : '')
-    setDeductStock(true)
-    setNotes(obs)
-
-    // Calculate auto consumption if available
-    const countNum = Number(aCount) || 0
-    const doseNum = Number(dPerAnimal) || 0
-    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
-    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
-
-    // Check inventory item for unit cost
-    const itm = inventory.find((i) => i.id === invId)
-    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
-    if (cost > 0) {
-      setUnitCost(String(cost))
-      if (calculatedQty > 0) {
-        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
-      } else {
-        setTotalCost(tCost !== '' ? String(tCost) : '')
-      }
-    } else {
-      setUnitCost(uCost !== '' ? String(uCost) : '')
-      setTotalCost(tCost !== '' ? String(tCost) : '')
-    }
-  }, [open, vaccination, inventory])
-
-  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
-  const lot = lots.find((l) => l.id === vaccination?.lot_id)
-
-  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
-    if (count > 0 && dose > 0) {
-      const calc = Number((count * dose).toFixed(3))
-      setQuantityUsed(String(calc))
-      const itm = itemOverride || selectedItem
-      if (itm && itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
-      }
-    }
-  }
-
-  const handleInventorySelect = (id: string) => {
-    setInventoryItemId(id)
-    const itm = inventory.find((i) => i.id === id)
-    if (itm) {
-      if (itm.unit) setDoseUnit(itm.unit)
-      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
-      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
-      if (itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-        if (qty > 0) {
-          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
-        }
-      }
-    }
-  }
-
-  const handleConfirm = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!performedDate) {
-      toast({ title: 'Informe a data realizada', variant: 'destructive' })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
-      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
-      const dQty = Number(discardedQuantity) || 0
-      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
-
-      const updatedPayload: Partial<Vaccination> = {
-        status: 'performed',
-        performed_date: performedDate,
-        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
-        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
-        dose_unit: doseUnit || vaccination?.dose_unit,
-        application_route: applicationRoute || vaccination?.application_route,
-        responsible: responsible.trim() || vaccination?.responsible,
-        inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
-        inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
-        batch_number: batchNumber.trim() || vaccination?.batch_number,
-        expiration_date: expirationDate || vaccination?.expiration_date,
-        quantity_used: qUsed > 0 ? qUsed : undefined,
-        unit_cost: uCost > 0 ? uCost : undefined,
-        total_cost: tCost > 0 ? tCost : undefined,
-        stock_deducted: deductStock && Boolean(inventoryItemId),
-        vial_status: (vialStatus as VialStatus) || undefined,
-        discarded_quantity: dQty > 0 ? dQty : undefined,
-        waste_cost: wCost > 0 ? wCost : undefined,
-        notes: notes.trim() || vaccination?.notes,
-      }
-
-      let stockMovement: {
-        inventoryItemId: string
-        movementPayload: any
-        updatePayload?: any
-      } | undefined = undefined
-
-      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
-        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
-        stockMovement = {
-          inventoryItemId,
-          movementPayload: {
-            organization_id: vaccination?.organization_id,
-            property_id: vaccination?.property_id,
-            inventory_item_id: inventoryItemId,
-            type: 'out',
-            quantity: qUsed,
-            unit_price: uCost,
-            total_price: tCost,
-            date: performedDate,
-            reason: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'})`,
-            notes: `Consumo na vacinação do lote ${lot?.name || 'Geral'}. Quantidade: ${qUsed} ${selectedItem.unit || 'un'}.`,
-          },
-          updatePayload: {
-            currentStock: newStock,
-          },
-        }
-      }
-
-      await onConfirm(updatedPayload, stockMovement)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold flex items-center gap-2">
-            <Syringe className="w-5 h-5 text-emerald-600" />
-            Registrar Aplicação de Vacina
-          </DialogTitle>
-        </DialogHeader>
-
-        {vaccination && (
-          <form onSubmit={handleConfirm} className="space-y-4 mt-2">
-            {/* Card resumo da programação */}
-            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
-                    Vacinação Programada
-                  </span>
-                  <h4 className="text-sm font-bold text-emerald-950">{vaccination.vaccine_name}</h4>
-                </div>
-                <Badge className="bg-emerald-600 text-white text-[10px]">
-                  {vaccination.disease_target || 'Sanidade'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
-                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
-                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
-                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Confirmação de dados reais executados */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-foreground block">
-                Dados da Aplicação Efetiva
-              </span>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Data Realizada *</Label>
-                  <Input
-                    type="date"
-                    value={performedDate}
-                    onChange={(e) => setPerformedDate(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Responsável / Aplicador *</Label>
-                  <Input
-                    placeholder="Nome do aplicador"
-                    value={responsible}
-                    onChange={(e) => setResponsible(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-xs">Animais Vacinados</Label>
-                  <Input
-                    type="number"
-                    value={animalCount}
-                    onChange={(e) => {
-                      setAnimalCount(e.target.value)
-                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="Ex: 4"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Dose Real / Ave</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={dosePerAnimal}
-                    onChange={(e) => {
-                      setDosePerAnimal(e.target.value)
-                      handleRecalcQty(Number(animalCount), Number(e.target.value))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="0.5"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Unidade</Label>
-                  <Input
-                    value={doseUnit}
-                    onChange={(e) => setDoseUnit(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="mL"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs">Via de Aplicação</Label>
-                <Select value={applicationRoute} onValueChange={setApplicationRoute}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="água">Água de bebida</SelectItem>
-                    <SelectItem value="ocular">Ocular / Nasal</SelectItem>
-                    <SelectItem value="oral">Oral direta</SelectItem>
-                    <SelectItem value="intramuscular">Intramuscular</SelectItem>
-                    <SelectItem value="subcutânea">Subcutânea</SelectItem>
-                    <SelectItem value="spray">Spray</SelectItem>
-                    <SelectItem value="ração">Ração</SelectItem>
-                    <SelectItem value="outra">Outra</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Controle de Frasco Multidose */}
-            <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5">
-              <span className="text-xs font-bold text-foreground block">
-                Frascos Multidose & Perdas (Opcional)
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
-                  <Select
-                    value={vialStatus}
-                    onValueChange={(v) => setVialStatus(v as VialStatus)}
-                  >
-                    <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
-                      <SelectItem value="closed">Frasco Fechado</SelectItem>
-                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {vialStatus === 'discarded' ? (
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={discardedQuantity}
-                      onChange={(e) => {
-                        setDiscardedQuantity(e.target.value)
-                        const dq = Number(e.target.value) || 0
-                        const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                        if (dq > 0 && uc > 0) {
-                          setWasteCost(String(Number((dq * uc).toFixed(2))))
-                        }
-                      }}
-                      className="h-9 text-xs rounded-xl bg-white"
-                      placeholder="Doses perdidas"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center pt-4 text-[11px] text-muted-foreground">
-                    Frasco em uso ou estoque reconstituído.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Estoque e Custos */}
-            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground">
-                  Baixa de Estoque & Custo do Lote
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  Não gera 2ª despesa financeira
-                </span>
-              </div>
-
-              <div>
-                <Label className="text-xs">Item Sanitário no Estoque *</Label>
-                <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
-                    <SelectValue placeholder="Selecione o produto no estoque para dar baixa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum / Não baixar estoque</SelectItem>
-                    {inventory.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
-                        {(item.averageCost || 0).toFixed(2)}/{item.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedItem && (
-                <div className="p-2.5 rounded-xl bg-white/90 border border-border/80 text-[11px] space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Disponível no Estoque:</span>
-                    <strong className="text-foreground">
-                      {selectedItem.currentStock} {selectedItem.unit}
-                    </strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Custo Médio Unitário:</span>
-                    <strong className="text-emerald-700 font-bold">
-                      R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">
-                    Qtd Consumida ({selectedItem?.unit || doseUnit || 'doses'})
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={quantityUsed}
-                    onChange={(e) => {
-                      setQuantityUsed(e.target.value)
-                      const q = Number(e.target.value) || 0
-                      const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Qtd consumida"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Lote do Fabricante</Label>
-                  <Input
-                    value={batchNumber}
-                    onChange={(e) => setBatchNumber(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Ex: VAC-2026-X"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Custo Unitário (R$)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={unitCost}
-                    onChange={(e) => {
-                      setUnitCost(e.target.value)
-                      const uc = Number(e.target.value) || 0
-                      const q = Number(quantityUsed) || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Custo Apropriado ao Lote (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={totalCost}
-                    onChange={(e) => setTotalCost(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-700"
-                  />
-                </div>
-              </div>
-
-              {inventoryItemId && (
-                <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
-                  <Checkbox
-                    id="applyVacStockDeduct"
-                    checked={deductStock}
-                    onCheckedChange={(v) => setDeductStock(Boolean(v))}
-                  />
-                  <label
-                    htmlFor="applyVacStockDeduct"
-                    className="text-xs font-semibold leading-none cursor-pointer text-foreground"
-                  >
-                    [✓] Efetuar baixa imediata no estoque ({quantityUsed || '0'}{' '}
-                    {selectedItem?.unit || doseUnit})
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="text-xs">Observações da Aplicação</Label>
-              <Textarea
-                placeholder="Ex: Aplicação ocorreu sem intercorrências, lote reagiu bem."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="text-xs rounded-xl"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white mt-2 gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {isSubmitting ? 'Confirmando Aplicação...' : 'Confirmar Aplicação de Vacina 💉'}
-            </Button>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO TRATAMENTO
-// ====================================================================State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)
-=======
-  const [activeTab, setActiveTab] = useState('vacinacao')
   const [searchTerm, setSearchTerm] = useState('')
+  const [lotFilter, setLotFilter] = useState('')
+  const [statusFilter, setStatusFilter] = useState('')
 
-  // State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)====================================================================
-=======
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
-// ====================================================================
-interface ApplyVaccinationDialogProps {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  vaccination: Vaccination | null
-  lots: any[]
-  inventory: any[]
-  onConfirm: (
-    updatedVaccination: Partial<Vaccination>,
-    stockMovement?: {
-      inventoryItemId: string
-      movementPayload: any
-      updatePayload?: any
-    },
-  ) => Promise<void>
-}
-
-function ApplyVaccinationDialog({
-  open,
-  onOpenChange,
-  vaccination,
-  lots,
-  inventory,
-  onConfirm,
-}: ApplyVaccinationDialogProps) {
-  const [performedDate, setPerformedDate] = useState('')
-  const [animalCount, setAnimalCount] = useState('')
-  const [dosePerAnimal, setDosePerAnimal] = useState('')
-  const [doseUnit, setDoseUnit] = useState('mL')
-  const [applicationRoute, setApplicationRoute] = useState('água')
-  const [responsible, setResponsible] = useState('')
-  const [inventoryItemId, setInventoryItemId] = useState('')
-  const [batchNumber, setBatchNumber] = useState('')
-  const [expirationDate, setExpirationDate] = useState('')
-  const [quantityUsed, setQuantityUsed] = useState('')
-  const [unitCost, setUnitCost] = useState('')
-  const [totalCost, setTotalCost] = useState('')
-  const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
-  const [discardedQuantity, setDiscardedQuantity] = useState('')
-  const [wasteCost, setWasteCost] = useState('')
-  const [deductStock, setDeductStock] = useState(true)
-  const [notes, setNotes] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Pre-fill automatically with scheduled data
-  useEffect(() => {
-    if (!open || !vaccination) return
-
-    const v = vaccination as any
-    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
-    const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
-    const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
-    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
-    const resp = getVacField(v, ['responsible'], '')
-    const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
-    const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
-    const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
-    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
-    const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
-    const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
-    const obs = getVacField(v, ['notes', 'observations'], '')
-    const vStat = getVacField(v, ['vial_status', 'vialStatus'], 'opened')
-    const discQty = getVacField(v, ['discarded_quantity', 'discardedQuantity'], '')
-    const wCost = getVacField(v, ['waste_cost', 'wasteCost'], '')
-
-    setPerformedDate(new Date().toISOString().split('T')[0])
-    setAnimalCount(aCount !== '' ? String(aCount) : '')
-    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
-    setDoseUnit(dUnit || 'mL')
-    setApplicationRoute(appRoute || 'água')
-    setResponsible(resp)
-    setInventoryItemId(invId)
-    setBatchNumber(bNum)
-    setExpirationDate(exp)
-    setVialStatus(vStat || 'opened')
-    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
-    setWasteCost(wCost !== '' ? String(wCost) : '')
-    setDeductStock(true)
-    setNotes(obs)
-
-    // Calculate auto consumption if available
-    const countNum = Number(aCount) || 0
-    const doseNum = Number(dPerAnimal) || 0
-    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
-    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
-
-    // Check inventory item for unit cost
-    const itm = inventory.find((i) => i.id === invId)
-    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
-    if (cost > 0) {
-      setUnitCost(String(cost))
-      if (calculatedQty > 0) {
-        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
-      } else {
-        setTotalCost(tCost !== '' ? String(tCost) : '')
-      }
-    } else {
-      setUnitCost(uCost !== '' ? String(uCost) : '')
-      setTotalCost(tCost !== '' ? String(tCost) : '')
-    }
-  }, [open, vaccination, inventory])
-
-  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
-  const lot = lots.find((l) => l.id === vaccination?.lot_id)
-
-  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
-    if (count > 0 && dose > 0) {
-      const calc = Number((count * dose).toFixed(3))
-      setQuantityUsed(String(calc))
-      const itm = itemOverride || selectedItem
-      if (itm && itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
-      }
-    }
-  }
-
-  const handleInventorySelect = (id: string) => {
-    setInventoryItemId(id)
-    const itm = inventory.find((i) => i.id === id)
-    if (itm) {
-      if (itm.unit) setDoseUnit(itm.unit)
-      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
-      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
-      if (itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-        if (qty > 0) {
-          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
-        }
-      }
-    }
-  }
-
-  const handleConfirm = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!performedDate) {
-      toast({ title: 'Informe a data realizada', variant: 'destructive' })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
-      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
-      const dQty = Number(discardedQuantity) || 0
-      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
-
-      const updatedPayload: Partial<Vaccination> = {
-        status: 'performed',
-        performed_date: performedDate,
-        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
-        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
-        dose_unit: doseUnit || vaccination?.dose_unit,
-        application_route: applicationRoute || vaccination?.application_route,
-        responsible: responsible.trim() || vaccination?.responsible,
-        inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
-        inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
-        batch_number: batchNumber.trim() || vaccination?.batch_number,
-        expiration_date: expirationDate || vaccination?.expiration_date,
-        quantity_used: qUsed > 0 ? qUsed : undefined,
-        unit_cost: uCost > 0 ? uCost : undefined,
-        total_cost: tCost > 0 ? tCost : undefined,
-        stock_deducted: deductStock && Boolean(inventoryItemId),
-        vial_status: (vialStatus as VialStatus) || undefined,
-        discarded_quantity: dQty > 0 ? dQty : undefined,
-        waste_cost: wCost > 0 ? wCost : undefined,
-        notes: notes.trim() || vaccination?.notes,
-      }
-
-      let stockMovement: {
-        inventoryItemId: string
-        movementPayload: any
-        updatePayload?: any
-      } | undefined = undefined
-
-      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
-        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
-        stockMovement = {
-          inventoryItemId,
-          movementPayload: {
-            organization_id: vaccination?.organization_id,
-            property_id: vaccination?.property_id,
-            inventory_item_id: inventoryItemId,
-            type: 'out',
-            quantity: qUsed,
-            unit_price: uCost,
-            total_price: tCost,
-            date: performedDate,
-            reason: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'})`,
-            notes: `Consumo na vacinação do lote ${lot?.name || 'Geral'}. Quantidade: ${qUsed} ${selectedItem.unit || 'un'}.`,
-          },
-          updatePayload: {
-            currentStock: newStock,
-          },
-        }
-      }
-
-      await onConfirm(updatedPayload, stockMovement)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold flex items-center gap-2">
-            <Syringe className="w-5 h-5 text-emerald-600" />
-            Registrar Aplicação de Vacina
-          </DialogTitle>
-        </DialogHeader>
-
-        {vaccination && (
-          <form onSubmit={handleConfirm} className="space-y-4 mt-2">
-            {/* Card resumo da programação */}
-            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
-                    Vacinação Programada
-                  </span>
-                  <h4 className="text-sm font-bold text-emerald-950">{vaccination.vaccine_name}</h4>
-                </div>
-                <Badge className="bg-emerald-600 text-white text-[10px]">
-                  {vaccination.disease_target || 'Sanidade'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
-                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
-                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
-                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Confirmação de dados reais executados */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-foreground block">
-                Dados da Aplicação Efetiva
-              </span>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Data Realizada *</Label>
-                  <Input
-                    type="date"
-                    value={performedDate}
-                    onChange={(e) => setPerformedDate(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Responsável / Aplicador *</Label>
-                  <Input
-                    placeholder="Nome do aplicador"
-                    value={responsible}
-                    onChange={(e) => setResponsible(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-xs">Animais Vacinados</Label>
-                  <Input
-                    type="number"
-                    value={animalCount}
-                    onChange={(e) => {
-                      setAnimalCount(e.target.value)
-                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="Ex: 4"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Dose Real / Ave</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={dosePerAnimal}
-                    onChange={(e) => {
-                      setDosePerAnimal(e.target.value)
-                      handleRecalcQty(Number(animalCount), Number(e.target.value))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="0.5"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Unidade</Label>
-                  <Input
-                    value={doseUnit}
-                    onChange={(e) => setDoseUnit(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="mL"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs">Via de Aplicação</Label>
-                <Select value={applicationRoute} onValueChange={setApplicationRoute}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="água">Água de bebida</SelectItem>
-                    <SelectItem value="ocular">Ocular / Nasal</SelectItem>
-                    <SelectItem value="oral">Oral direta</SelectItem>
-                    <SelectItem value="intramuscular">Intramuscular</SelectItem>
-                    <SelectItem value="subcutânea">Subcutânea</SelectItem>
-                    <SelectItem value="spray">Spray</SelectItem>
-                    <SelectItem value="ração">Ração</SelectItem>
-                    <SelectItem value="outra">Outra</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Controle de Frasco Multidose */}
-            <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5">
-              <span className="text-xs font-bold text-foreground block">
-                Frascos Multidose & Perdas (Opcional)
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
-                  <Select
-                    value={vialStatus}
-                    onValueChange={(v) => setVialStatus(v as VialStatus)}
-                  >
-                    <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
-                      <SelectItem value="closed">Frasco Fechado</SelectItem>
-                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {vialStatus === 'discarded' ? (
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={discardedQuantity}
-                      onChange={(e) => {
-                        setDiscardedQuantity(e.target.value)
-                        const dq = Number(e.target.value) || 0
-                        const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                        if (dq > 0 && uc > 0) {
-                          setWasteCost(String(Number((dq * uc).toFixed(2))))
-                        }
-                      }}
-                      className="h-9 text-xs rounded-xl bg-white"
-                      placeholder="Doses perdidas"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center pt-4 text-[11px] text-muted-foreground">
-                    Frasco em uso ou estoque reconstituído.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Estoque e Custos */}
-            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground">
-                  Baixa de Estoque & Custo do Lote
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  Não gera 2ª despesa financeira
-                </span>
-              </div>
-
-              <div>
-                <Label className="text-xs">Item Sanitário no Estoque *</Label>
-                <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
-                    <SelectValue placeholder="Selecione o produto no estoque para dar baixa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum / Não baixar estoque</SelectItem>
-                    {inventory.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
-                        {(item.averageCost || 0).toFixed(2)}/{item.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedItem && (
-                <div className="p-2.5 rounded-xl bg-white/90 border border-border/80 text-[11px] space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Disponível no Estoque:</span>
-                    <strong className="text-foreground">
-                      {selectedItem.currentStock} {selectedItem.unit}
-                    </strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Custo Médio Unitário:</span>
-                    <strong className="text-emerald-700 font-bold">
-                      R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">
-                    Qtd Consumida ({selectedItem?.unit || doseUnit || 'doses'})
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={quantityUsed}
-                    onChange={(e) => {
-                      setQuantityUsed(e.target.value)
-                      const q = Number(e.target.value) || 0
-                      const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Qtd consumida"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Lote do Fabricante</Label>
-                  <Input
-                    value={batchNumber}
-                    onChange={(e) => setBatchNumber(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Ex: VAC-2026-X"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Custo Unitário (R$)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={unitCost}
-                    onChange={(e) => {
-                      setUnitCost(e.target.value)
-                      const uc = Number(e.target.value) || 0
-                      const q = Number(quantityUsed) || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Custo Apropriado ao Lote (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={totalCost}
-                    onChange={(e) => setTotalCost(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-700"
-                  />
-                </div>
-              </div>
-
-              {inventoryItemId && (
-                <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
-                  <Checkbox
-                    id="applyVacStockDeduct"
-                    checked={deductStock}
-                    onCheckedChange={(v) => setDeductStock(Boolean(v))}
-                  />
-                  <label
-                    htmlFor="applyVacStockDeduct"
-                    className="text-xs font-semibold leading-none cursor-pointer text-foreground"
-                  >
-                    [✓] Efetuar baixa imediata no estoque ({quantityUsed || '0'}{' '}
-                    {selectedItem?.unit || doseUnit})
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="text-xs">Observações da Aplicação</Label>
-              <Textarea
-                placeholder="Ex: Aplicação ocorreu sem intercorrências, lote reagiu bem."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="text-xs rounded-xl"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white mt-2 gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {isSubmitting ? 'Confirmando Aplicação...' : 'Confirmar Aplicação de Vacina 💉'}
-            </Button>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO TRATAMENTO
-// ====================================================================State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)
-=======
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
-// ====================================================================
-interface ApplyVaccinationDialogProps {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  vaccination: Vaccination | null
-  lots: any[]
-  inventory: any[]
-  onConfirm: (
-    updatedVaccination: Partial<Vaccination>,
-    stockMovement?: {
-      inventoryItemId: string
-      movementPayload: any
-      updatePayload?: any
-    },
-  ) => Promise<void>
-}
-
-function ApplyVaccinationDialog({
-  open,
-  onOpenChange,
-  vaccination,
-  lots,
-  inventory,
-  onConfirm,
-}: ApplyVaccinationDialogProps) {
-  const [performedDate, setPerformedDate] = useState('')
-  const [animalCount, setAnimalCount] = useState('')
-  const [dosePerAnimal, setDosePerAnimal] = useState('')
-  const [doseUnit, setDoseUnit] = useState('mL')
-  const [applicationRoute, setApplicationRoute] = useState('água')
-  const [responsible, setResponsible] = useState('')
-  const [inventoryItemId, setInventoryItemId] = useState('')
-  const [batchNumber, setBatchNumber] = useState('')
-  const [expirationDate, setExpirationDate] = useState('')
-  const [quantityUsed, setQuantityUsed] = useState('')
-  const [unitCost, setUnitCost] = useState('')
-  const [totalCost, setTotalCost] = useState('')
-  const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
-  const [discardedQuantity, setDiscardedQuantity] = useState('')
-  const [wasteCost, setWasteCost] = useState('')
-  const [deductStock, setDeductStock] = useState(true)
-  const [notes, setNotes] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Pre-fill automatically with scheduled data
-  useEffect(() => {
-    if (!open || !vaccination) return
-
-    const v = vaccination as any
-    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
-    const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
-    const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
-    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
-    const resp = getVacField(v, ['responsible'], '')
-    const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
-    const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
-    const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
-    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
-    const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
-    const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
-    const obs = getVacField(v, ['notes', 'observations'], '')
-    const vStat = getVacField(v, ['vial_status', 'vialStatus'], 'opened')
-    const discQty = getVacField(v, ['discarded_quantity', 'discardedQuantity'], '')
-    const wCost = getVacField(v, ['waste_cost', 'wasteCost'], '')
-
-    setPerformedDate(new Date().toISOString().split('T')[0])
-    setAnimalCount(aCount !== '' ? String(aCount) : '')
-    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
-    setDoseUnit(dUnit || 'mL')
-    setApplicationRoute(appRoute || 'água')
-    setResponsible(resp)
-    setInventoryItemId(invId)
-    setBatchNumber(bNum)
-    setExpirationDate(exp)
-    setVialStatus(vStat || 'opened')
-    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
-    setWasteCost(wCost !== '' ? String(wCost) : '')
-    setDeductStock(true)
-    setNotes(obs)
-
-    // Calculate auto consumption if available
-    const countNum = Number(aCount) || 0
-    const doseNum = Number(dPerAnimal) || 0
-    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
-    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
-
-    // Check inventory item for unit cost
-    const itm = inventory.find((i) => i.id === invId)
-    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
-    if (cost > 0) {
-      setUnitCost(String(cost))
-      if (calculatedQty > 0) {
-        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
-      } else {
-        setTotalCost(tCost !== '' ? String(tCost) : '')
-      }
-    } else {
-      setUnitCost(uCost !== '' ? String(uCost) : '')
-      setTotalCost(tCost !== '' ? String(tCost) : '')
-    }
-  }, [open, vaccination, inventory])
-
-  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
-  const lot = lots.find((l) => l.id === vaccination?.lot_id)
-
-  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
-    if (count > 0 && dose > 0) {
-      const calc = Number((count * dose).toFixed(3))
-      setQuantityUsed(String(calc))
-      const itm = itemOverride || selectedItem
-      if (itm && itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
-      }
-    }
-  }
-
-  const handleInventorySelect = (id: string) => {
-    setInventoryItemId(id)
-    const itm = inventory.find((i) => i.id === id)
-    if (itm) {
-      if (itm.unit) setDoseUnit(itm.unit)
-      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
-      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
-      if (itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-        if (qty > 0) {
-          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
-        }
-      }
-    }
-  }
-
-  const handleConfirm = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!performedDate) {
-      toast({ title: 'Informe a data realizada', variant: 'destructive' })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
-      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
-      const dQty = Number(discardedQuantity) || 0
-      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
-
-      const updatedPayload: Partial<Vaccination> = {
-        status: 'performed',
-        performed_date: performedDate,
-        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
-        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
-        dose_unit: doseUnit || vaccination?.dose_unit,
-        application_route: applicationRoute || vaccination?.application_route,
-        responsible: responsible.trim() || vaccination?.responsible,
-        inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
-        inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
-        batch_number: batchNumber.trim() || vaccination?.batch_number,
-        expiration_date: expirationDate || vaccination?.expiration_date,
-        quantity_used: qUsed > 0 ? qUsed : undefined,
-        unit_cost: uCost > 0 ? uCost : undefined,
-        total_cost: tCost > 0 ? tCost : undefined,
-        stock_deducted: deductStock && Boolean(inventoryItemId),
-        vial_status: (vialStatus as VialStatus) || undefined,
-        discarded_quantity: dQty > 0 ? dQty : undefined,
-        waste_cost: wCost > 0 ? wCost : undefined,
-        notes: notes.trim() || vaccination?.notes,
-      }
-
-      let stockMovement: {
-        inventoryItemId: string
-        movementPayload: any
-        updatePayload?: any
-      } | undefined = undefined
-
-      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
-        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
-        stockMovement = {
-          inventoryItemId,
-          movementPayload: {
-            organization_id: vaccination?.organization_id,
-            property_id: vaccination?.property_id,
-            inventory_item_id: inventoryItemId,
-            type: 'out',
-            quantity: qUsed,
-            unit_price: uCost,
-            total_price: tCost,
-            date: performedDate,
-            reason: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'})`,
-            notes: `Consumo na vacinação do lote ${lot?.name || 'Geral'}. Quantidade: ${qUsed} ${selectedItem.unit || 'un'}.`,
-          },
-          updatePayload: {
-            currentStock: newStock,
-          },
-        }
-      }
-
-      await onConfirm(updatedPayload, stockMovement)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold flex items-center gap-2">
-            <Syringe className="w-5 h-5 text-emerald-600" />
-            Registrar Aplicação de Vacina
-          </DialogTitle>
-        </DialogHeader>
-
-        {vaccination && (
-          <form onSubmit={handleConfirm} className="space-y-4 mt-2">
-            {/* Card resumo da programação */}
-            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
-                    Vacinação Programada
-                  </span>
-                  <h4 className="text-sm font-bold text-emerald-950">{vaccination.vaccine_name}</h4>
-                </div>
-                <Badge className="bg-emerald-600 text-white text-[10px]">
-                  {vaccination.disease_target || 'Sanidade'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
-                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
-                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
-                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Confirmação de dados reais executados */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-foreground block">
-                Dados da Aplicação Efetiva
-              </span>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Data Realizada *</Label>
-                  <Input
-                    type="date"
-                    value={performedDate}
-                    onChange={(e) => setPerformedDate(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Responsável / Aplicador *</Label>
-                  <Input
-                    placeholder="Nome do aplicador"
-                    value={responsible}
-                    onChange={(e) => setResponsible(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-xs">Animais Vacinados</Label>
-                  <Input
-                    type="number"
-                    value={animalCount}
-                    onChange={(e) => {
-                      setAnimalCount(e.target.value)
-                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="Ex: 4"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Dose Real / Ave</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={dosePerAnimal}
-                    onChange={(e) => {
-                      setDosePerAnimal(e.target.value)
-                      handleRecalcQty(Number(animalCount), Number(e.target.value))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="0.5"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Unidade</Label>
-                  <Input
-                    value={doseUnit}
-                    onChange={(e) => setDoseUnit(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="mL"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs">Via de Aplicação</Label>
-                <Select value={applicationRoute} onValueChange={setApplicationRoute}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="água">Água de bebida</SelectItem>
-                    <SelectItem value="ocular">Ocular / Nasal</SelectItem>
-                    <SelectItem value="oral">Oral direta</SelectItem>
-                    <SelectItem value="intramuscular">Intramuscular</SelectItem>
-                    <SelectItem value="subcutânea">Subcutânea</SelectItem>
-                    <SelectItem value="spray">Spray</SelectItem>
-                    <SelectItem value="ração">Ração</SelectItem>
-                    <SelectItem value="outra">Outra</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Controle de Frasco Multidose */}
-            <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5">
-              <span className="text-xs font-bold text-foreground block">
-                Frascos Multidose & Perdas (Opcional)
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
-                  <Select
-                    value={vialStatus}
-                    onValueChange={(v) => setVialStatus(v as VialStatus)}
-                  >
-                    <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
-                      <SelectItem value="closed">Frasco Fechado</SelectItem>
-                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {vialStatus === 'discarded' ? (
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={discardedQuantity}
-                      onChange={(e) => {
-                        setDiscardedQuantity(e.target.value)
-                        const dq = Number(e.target.value) || 0
-                        const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                        if (dq > 0 && uc > 0) {
-                          setWasteCost(String(Number((dq * uc).toFixed(2))))
-                        }
-                      }}
-                      className="h-9 text-xs rounded-xl bg-white"
-                      placeholder="Doses perdidas"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center pt-4 text-[11px] text-muted-foreground">
-                    Frasco em uso ou estoque reconstituído.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Estoque e Custos */}
-            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground">
-                  Baixa de Estoque & Custo do Lote
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  Não gera 2ª despesa financeira
-                </span>
-              </div>
-
-              <div>
-                <Label className="text-xs">Item Sanitário no Estoque *</Label>
-                <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
-                    <SelectValue placeholder="Selecione o produto no estoque para dar baixa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum / Não baixar estoque</SelectItem>
-                    {inventory.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
-                        {(item.averageCost || 0).toFixed(2)}/{item.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedItem && (
-                <div className="p-2.5 rounded-xl bg-white/90 border border-border/80 text-[11px] space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Disponível no Estoque:</span>
-                    <strong className="text-foreground">
-                      {selectedItem.currentStock} {selectedItem.unit}
-                    </strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Custo Médio Unitário:</span>
-                    <strong className="text-emerald-700 font-bold">
-                      R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">
-                    Qtd Consumida ({selectedItem?.unit || doseUnit || 'doses'})
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={quantityUsed}
-                    onChange={(e) => {
-                      setQuantityUsed(e.target.value)
-                      const q = Number(e.target.value) || 0
-                      const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Qtd consumida"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Lote do Fabricante</Label>
-                  <Input
-                    value={batchNumber}
-                    onChange={(e) => setBatchNumber(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Ex: VAC-2026-X"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Custo Unitário (R$)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={unitCost}
-                    onChange={(e) => {
-                      setUnitCost(e.target.value)
-                      const uc = Number(e.target.value) || 0
-                      const q = Number(quantityUsed) || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Custo Apropriado ao Lote (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={totalCost}
-                    onChange={(e) => setTotalCost(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-700"
-                  />
-                </div>
-              </div>
-
-              {inventoryItemId && (
-                <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
-                  <Checkbox
-                    id="applyVacStockDeduct"
-                    checked={deductStock}
-                    onCheckedChange={(v) => setDeductStock(Boolean(v))}
-                  />
-                  <label
-                    htmlFor="applyVacStockDeduct"
-                    className="text-xs font-semibold leading-none cursor-pointer text-foreground"
-                  >
-                    [✓] Efetuar baixa imediata no estoque ({quantityUsed || '0'}{' '}
-                    {selectedItem?.unit || doseUnit})
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="text-xs">Observações da Aplicação</Label>
-              <Textarea
-                placeholder="Ex: Aplicação ocorreu sem intercorrências, lote reagiu bem."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="text-xs rounded-xl"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white mt-2 gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {isSubmitting ? 'Confirmando Aplicação...' : 'Confirmar Aplicação de Vacina 💉'}
-            </Button>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO TRATAMENTO
-// ====================================================================State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)
-=======
-  const [activeTab, setActiveTab] = useState('vacinacao')
-  const [searchTerm, setSearchTerm] = useState('')
-
-  // State for Dialogs
-  const [vacModalOpen, setVacModalOpen] = useState(false)====================================================================
-=======
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO REGISTRAR APLICAÇÃO (FLUXO PROGRAMADA -> REALIZADA)
-// ====================================================================
-interface ApplyVaccinationDialogProps {
-  open: boolean
-  onOpenChange: (v: boolean) => void
-  vaccination: Vaccination | null
-  lots: any[]
-  inventory: any[]
-  onConfirm: (
-    updatedVaccination: Partial<Vaccination>,
-    stockMovement?: {
-      inventoryItemId: string
-      movementPayload: any
-      updatePayload?: any
-    },
-  ) => Promise<void>
-}
-
-function ApplyVaccinationDialog({
-  open,
-  onOpenChange,
-  vaccination,
-  lots,
-  inventory,
-  onConfirm,
-}: ApplyVaccinationDialogProps) {
-  const [performedDate, setPerformedDate] = useState('')
-  const [animalCount, setAnimalCount] = useState('')
-  const [dosePerAnimal, setDosePerAnimal] = useState('')
-  const [doseUnit, setDoseUnit] = useState('mL')
-  const [applicationRoute, setApplicationRoute] = useState('água')
-  const [responsible, setResponsible] = useState('')
-  const [inventoryItemId, setInventoryItemId] = useState('')
-  const [batchNumber, setBatchNumber] = useState('')
-  const [expirationDate, setExpirationDate] = useState('')
-  const [quantityUsed, setQuantityUsed] = useState('')
-  const [unitCost, setUnitCost] = useState('')
-  const [totalCost, setTotalCost] = useState('')
-  const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
-  const [discardedQuantity, setDiscardedQuantity] = useState('')
-  const [wasteCost, setWasteCost] = useState('')
-  const [deductStock, setDeductStock] = useState(true)
-  const [notes, setNotes] = useState('')
-  const [isSubmitting, setIsSubmitting] = useState(false)
-
-  // Pre-fill automatically with scheduled data
-  useEffect(() => {
-    if (!open || !vaccination) return
-
-    const v = vaccination as any
-    const aCount = getVacField(v, ['animal_count', 'animal_quantity', 'animalCount'], '')
-    const dPerAnimal = getVacField(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
-    const dUnit = getVacField(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
-    const appRoute = getVacField(v, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
-    const resp = getVacField(v, ['responsible'], '')
-    const invId = getVacField(v, ['inventory_item_id', 'inventoryItemId'], '')
-    const bNum = getVacField(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
-    const exp = getVacField(v, ['expiration_date', 'expirationDate'], '')
-    const qUsed = getVacField(v, ['quantity_used', 'consumed_quantity', 'quantityUsed'], '')
-    const uCost = getVacField(v, ['unit_cost', 'unitCost'], '')
-    const tCost = getVacField(v, ['total_cost', 'totalCost'], '')
-    const obs = getVacField(v, ['notes', 'observations'], '')
-    const vStat = getVacField(v, ['vial_status', 'vialStatus'], 'opened')
-    const discQty = getVacField(v, ['discarded_quantity', 'discardedQuantity'], '')
-    const wCost = getVacField(v, ['waste_cost', 'wasteCost'], '')
-
-    setPerformedDate(new Date().toISOString().split('T')[0])
-    setAnimalCount(aCount !== '' ? String(aCount) : '')
-    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
-    setDoseUnit(dUnit || 'mL')
-    setApplicationRoute(appRoute || 'água')
-    setResponsible(resp)
-    setInventoryItemId(invId)
-    setBatchNumber(bNum)
-    setExpirationDate(exp)
-    setVialStatus(vStat || 'opened')
-    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
-    setWasteCost(wCost !== '' ? String(wCost) : '')
-    setDeductStock(true)
-    setNotes(obs)
-
-    // Calculate auto consumption if available
-    const countNum = Number(aCount) || 0
-    const doseNum = Number(dPerAnimal) || 0
-    let calculatedQty = qUsed !== '' ? Number(qUsed) : countNum > 0 && doseNum > 0 ? Number((countNum * doseNum).toFixed(3)) : 0
-    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
-
-    // Check inventory item for unit cost
-    const itm = inventory.find((i) => i.id === invId)
-    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
-    if (cost > 0) {
-      setUnitCost(String(cost))
-      if (calculatedQty > 0) {
-        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
-      } else {
-        setTotalCost(tCost !== '' ? String(tCost) : '')
-      }
-    } else {
-      setUnitCost(uCost !== '' ? String(uCost) : '')
-      setTotalCost(tCost !== '' ? String(tCost) : '')
-    }
-  }, [open, vaccination, inventory])
-
-  const selectedItem = inventory.find((i) => i.id === inventoryItemId)
-  const lot = lots.find((l) => l.id === vaccination?.lot_id)
-
-  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
-    if (count > 0 && dose > 0) {
-      const calc = Number((count * dose).toFixed(3))
-      setQuantityUsed(String(calc))
-      const itm = itemOverride || selectedItem
-      if (itm && itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
-      }
-    }
-  }
-
-  const handleInventorySelect = (id: string) => {
-    setInventoryItemId(id)
-    const itm = inventory.find((i) => i.id === id)
-    if (itm) {
-      if (itm.unit) setDoseUnit(itm.unit)
-      if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
-      if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
-      if (itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        const qty = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-        if (qty > 0) {
-          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
-        }
-      }
-    }
-  }
-
-  const handleConfirm = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!performedDate) {
-      toast({ title: 'Informe a data realizada', variant: 'destructive' })
-      return
-    }
-
-    setIsSubmitting(true)
-    try {
-      const qUsed = Number(quantityUsed) || (Number(animalCount) * Number(dosePerAnimal)) || 0
-      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
-      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
-      const dQty = Number(discardedQuantity) || 0
-      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
-
-      const updatedPayload: Partial<Vaccination> = {
-        status: 'performed',
-        performed_date: performedDate,
-        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
-        dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
-        dose_unit: doseUnit || vaccination?.dose_unit,
-        application_route: applicationRoute || vaccination?.application_route,
-        responsible: responsible.trim() || vaccination?.responsible,
-        inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
-        inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
-        batch_number: batchNumber.trim() || vaccination?.batch_number,
-        expiration_date: expirationDate || vaccination?.expiration_date,
-        quantity_used: qUsed > 0 ? qUsed : undefined,
-        unit_cost: uCost > 0 ? uCost : undefined,
-        total_cost: tCost > 0 ? tCost : undefined,
-        stock_deducted: deductStock && Boolean(inventoryItemId),
-        vial_status: (vialStatus as VialStatus) || undefined,
-        discarded_quantity: dQty > 0 ? dQty : undefined,
-        waste_cost: wCost > 0 ? wCost : undefined,
-        notes: notes.trim() || vaccination?.notes,
-      }
-
-      let stockMovement: {
-        inventoryItemId: string
-        movementPayload: any
-        updatePayload?: any
-      } | undefined = undefined
-
-      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
-        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
-        stockMovement = {
-          inventoryItemId,
-          movementPayload: {
-            organization_id: vaccination?.organization_id,
-            property_id: vaccination?.property_id,
-            inventory_item_id: inventoryItemId,
-            type: 'out',
-            quantity: qUsed,
-            unit_price: uCost,
-            total_price: tCost,
-            date: performedDate,
-            reason: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'})`,
-            notes: `Consumo na vacinação do lote ${lot?.name || 'Geral'}. Quantidade: ${qUsed} ${selectedItem.unit || 'un'}.`,
-          },
-          updatePayload: {
-            currentStock: newStock,
-          },
-        }
-      }
-
-      await onConfirm(updatedPayload, stockMovement)
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold flex items-center gap-2">
-            <Syringe className="w-5 h-5 text-emerald-600" />
-            Registrar Aplicação de Vacina
-          </DialogTitle>
-        </DialogHeader>
-
-        {vaccination && (
-          <form onSubmit={handleConfirm} className="space-y-4 mt-2">
-            {/* Card resumo da programação */}
-            <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
-                    Vacinação Programada
-                  </span>
-                  <h4 className="text-sm font-bold text-emerald-950">{vaccination.vaccine_name}</h4>
-                </div>
-                <Badge className="bg-emerald-600 text-white text-[10px]">
-                  {vaccination.disease_target || 'Sanidade'}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Lote Animal:</span>
-                  <strong className="font-semibold">{lot?.name || vaccination.lotName || 'Geral'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Data Prevista:</span>
-                  <strong className="font-semibold">{vaccination.scheduled_date || 'Não definida'}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block text-[10px]">Via de Aplicação:</span>
-                  <strong className="font-semibold capitalize">{vaccination.application_route || 'água'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Confirmação de dados reais executados */}
-            <div className="space-y-3">
-              <span className="text-xs font-bold text-foreground block">
-                Dados da Aplicação Efetiva
-              </span>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Data Realizada *</Label>
-                  <Input
-                    type="date"
-                    value={performedDate}
-                    onChange={(e) => setPerformedDate(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Responsável / Aplicador *</Label>
-                  <Input
-                    placeholder="Nome do aplicador"
-                    value={responsible}
-                    onChange={(e) => setResponsible(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2">
-                <div>
-                  <Label className="text-xs">Animais Vacinados</Label>
-                  <Input
-                    type="number"
-                    value={animalCount}
-                    onChange={(e) => {
-                      setAnimalCount(e.target.value)
-                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="Ex: 4"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Dose Real / Ave</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={dosePerAnimal}
-                    onChange={(e) => {
-                      setDosePerAnimal(e.target.value)
-                      handleRecalcQty(Number(animalCount), Number(e.target.value))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="0.5"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Unidade</Label>
-                  <Input
-                    value={doseUnit}
-                    onChange={(e) => setDoseUnit(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="mL"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-xs">Via de Aplicação</Label>
-                <Select value={applicationRoute} onValueChange={setApplicationRoute}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="água">Água de bebida</SelectItem>
-                    <SelectItem value="ocular">Ocular / Nasal</SelectItem>
-                    <SelectItem value="oral">Oral direta</SelectItem>
-                    <SelectItem value="intramuscular">Intramuscular</SelectItem>
-                    <SelectItem value="subcutânea">Subcutânea</SelectItem>
-                    <SelectItem value="spray">Spray</SelectItem>
-                    <SelectItem value="ração">Ração</SelectItem>
-                    <SelectItem value="outra">Outra</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Controle de Frasco Multidose */}
-            <div className="p-3.5 rounded-2xl bg-secondary/30 border border-border/60 space-y-2.5">
-              <span className="text-xs font-bold text-foreground block">
-                Frascos Multidose & Perdas (Opcional)
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-[11px] text-muted-foreground">Status do Frasco</Label>
-                  <Select
-                    value={vialStatus}
-                    onValueChange={(v) => setVialStatus(v as VialStatus)}
-                  >
-                    <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="opened">Frasco Aberto / Reconstituído</SelectItem>
-                      <SelectItem value="closed">Frasco Fechado</SelectItem>
-                      <SelectItem value="discarded">Frasco Descartado / Sobra Inutilizada</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {vialStatus === 'discarded' ? (
-                  <div>
-                    <Label className="text-[11px] text-muted-foreground">Qtd Descartada / Perdida</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={discardedQuantity}
-                      onChange={(e) => {
-                        setDiscardedQuantity(e.target.value)
-                        const dq = Number(e.target.value) || 0
-                        const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                        if (dq > 0 && uc > 0) {
-                          setWasteCost(String(Number((dq * uc).toFixed(2))))
-                        }
-                      }}
-                      className="h-9 text-xs rounded-xl bg-white"
-                      placeholder="Doses perdidas"
-                    />
-                  </div>
-                ) : (
-                  <div className="flex items-center pt-4 text-[11px] text-muted-foreground">
-                    Frasco em uso ou estoque reconstituído.
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Estoque e Custos */}
-            <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/60 space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground">
-                  Baixa de Estoque & Custo do Lote
-                </span>
-                <span className="text-[10px] text-muted-foreground">
-                  Não gera 2ª despesa financeira
-                </span>
-              </div>
-
-              <div>
-                <Label className="text-xs">Item Sanitário no Estoque *</Label>
-                <Select value={inventoryItemId} onValueChange={handleInventorySelect}>
-                  <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
-                    <SelectValue placeholder="Selecione o produto no estoque para dar baixa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum / Não baixar estoque</SelectItem>
-                    {inventory.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} — Estoque: {item.currentStock} {item.unit} (R${' '}
-                        {(item.averageCost || 0).toFixed(2)}/{item.unit})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {selectedItem && (
-                <div className="p-2.5 rounded-xl bg-white/90 border border-border/80 text-[11px] space-y-1">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Disponível no Estoque:</span>
-                    <strong className="text-foreground">
-                      {selectedItem.currentStock} {selectedItem.unit}
-                    </strong>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Custo Médio Unitário:</span>
-                    <strong className="text-emerald-700 font-bold">
-                      R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
-                    </strong>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">
-                    Qtd Consumida ({selectedItem?.unit || doseUnit || 'doses'})
-                  </Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={quantityUsed}
-                    onChange={(e) => {
-                      setQuantityUsed(e.target.value)
-                      const q = Number(e.target.value) || 0
-                      const uc = Number(unitCost) || selectedItem?.averageCost || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Qtd consumida"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Lote do Fabricante</Label>
-                  <Input
-                    value={batchNumber}
-                    onChange={(e) => setBatchNumber(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white"
-                    placeholder="Ex: VAC-2026-X"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Custo Unitário (R$)</Label>
-                  <Input
-                    type="number"
-                    step="any"
-                    value={unitCost}
-                    onChange={(e) => {
-                      setUnitCost(e.target.value)
-                      const uc = Number(e.target.value) || 0
-                      const q = Number(quantityUsed) || 0
-                      setTotalCost(String(Number((q * uc).toFixed(2))))
-                    }}
-                    className="h-10 text-xs rounded-xl bg-white"
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs">Custo Apropriado ao Lote (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    value={totalCost}
-                    onChange={(e) => setTotalCost(e.target.value)}
-                    className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-700"
-                  />
-                </div>
-              </div>
-
-              {inventoryItemId && (
-                <div className="flex items-center space-x-2 pt-1 border-t border-border/50">
-                  <Checkbox
-                    id="applyVacStockDeduct"
-                    checked={deductStock}
-                    onCheckedChange={(v) => setDeductStock(Boolean(v))}
-                  />
-                  <label
-                    htmlFor="applyVacStockDeduct"
-                    className="text-xs font-semibold leading-none cursor-pointer text-foreground"
-                  >
-                    [✓] Efetuar baixa imediata no estoque ({quantityUsed || '0'}{' '}
-                    {selectedItem?.unit || doseUnit})
-                  </label>
-                </div>
-              )}
-            </div>
-
-            <div>
-              <Label className="text-xs">Observações da Aplicação</Label>
-              <Textarea
-                placeholder="Ex: Aplicação ocorreu sem intercorrências, lote reagiu bem."
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                className="text-xs rounded-xl"
-              />
-            </div>
-
-            <Button
-              type="submit"
-              disabled={isSubmitting}
-              className="w-full h-11 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white mt-2 gap-2"
-            >
-              <CheckCircle2 className="w-4 h-4" />
-              {isSubmitting ? 'Confirmando Aplicação...' : 'Confirmar Aplicação de Vacina 💉'}
-            </Button>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-// ====================================================================
-// SUB-COMPONENT: DIÁLOGO TRATAMENTO
-// ====================================================================State for Dialogs
+  // Modais de Cadastro / Edição
   const [vacModalOpen, setVacModalOpen] = useState(false)
   const [editingVac, setEditingVac] = useState<Vaccination | null>(null)
-  const [applyVacModalOpen, setApplyVacModalOpen] = useState(false)
-  const [applyingVac, setApplyingVac] = useState<Vaccination | null>(null)
-  const [deletingVac, setDeletingVac] = useState<Vaccination | null>(null)
-  const [detailsVac, setDetailsVac] = useState<Vaccination | null>(null)
 
   const [trtModalOpen, setTrtModalOpen] = useState(false)
   const [editingTrt, setEditingTrt] = useState<Treatment | null>(null)
-  const [deletingTrt, setDeletingTrt] = useState<Treatment | null>(null)
-  const [detailsTrt, setDetailsTrt] = useState<Treatment | null>(null)
 
   const [occModalOpen, setOccModalOpen] = useState(false)
   const [editingOcc, setEditingOcc] = useState<HealthOccurrence | null>(null)
-  const [deletingOcc, setDeletingOcc] = useState<HealthOccurrence | null>(null)
-  const [detailsOcc, setDetailsOcc] = useState<HealthOccurrence | null>(null)
 
-  const [protModalOpen, setProtModalOpen] = useState(false)
-  const [editingProt, setEditingProt] = useState<HealthProtocol | null>(null)
-  const [deletingProt, setDeletingProt] = useState<HealthProtocol | null>(null)
-  const [detailsProt, setDetailsProt] = useState<HealthProtocol | null>(null)
+  const [protoModalOpen, setProtoModalOpen] = useState(false)
+  const [editingProto, setEditingProto] = useState<HealthProtocol | null>(null)
 
   const [assignModalOpen, setAssignModalOpen] = useState(false)
-  const [assigningProt, setAssigningProt] = useState<HealthProtocol | null>(null)
-
-  // Calendar filter state
-  const [calendarFilter, setCalendarFilter] = useState<'hoje' | '7dias' | '30dias' | 'atrasados'>(
-    '7dias',
+  const [selectedProtocolToAssign, setSelectedProtocolToAssign] = useState<HealthProtocol | null>(
+    null,
   )
 
-  // Helpers
-  const lotName = (id?: string) => lots.find((l) => l.id === id)?.name || 'Todos/Geral'
-  const itemName = (id?: string) => inventory.find((i) => i.id === id)?.name || '-'
+  // Modal Registrar Aplicação (Programada -> Realizada)
+  const [applyVacModalOpen, setApplyVacModalOpen] = useState(false)
+  const [selectedVacToApply, setSelectedVacToApply] = useState<Vaccination | null>(null)
 
-  // Filtered lists
+  // Diálogos de detalhes e exclusão genéricos
+  const [detailsRecord, setDetailsRecord] = useState<{
+    open: boolean
+    title: string
+    record: Record<string, any>
+  }>({
+    open: false,
+    title: '',
+    record: {},
+  })
+
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    open: boolean
+    id: string
+    name: string
+    type: 'vac' | 'trt' | 'occ' | 'proto' | 'assign'
+  }>({
+    open: false,
+    id: '',
+    name: '',
+    type: 'vac',
+  })
+
+  // ==========================================
+  // FILTRAGEM DE REGISTROS
+  // ==========================================
   const filteredVaccinations = useMemo(() => {
-    return vaccinations.filter(
-      (v) =>
-        v.vaccine_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        v.disease_target?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lotName(v.lot_id).toLowerCase().includes(searchTerm.toLowerCase()),
-    )
-  }, [vaccinations, searchTerm, lots])
+    return (vaccinations || []).filter((v) => {
+      const matchSearch =
+        !searchTerm ||
+        (v.vaccine_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.disease_target || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.lotName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (v.responsible || '').toLowerCase().includes(searchTerm.toLowerCase())
+      const matchLot = !lotFilter || v.lot_id === lotFilter
+      const matchStatus = !statusFilter || v.status === statusFilter
+      return matchSearch && matchLot && matchStatus
+    })
+  }, [vaccinations, searchTerm, lotFilter, statusFilter])
 
   const filteredTreatments = useMemo(() => {
-    return treatments.filter(
-      (t) =>
-        t.medication_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        t.diagnosis_reason?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lotName(t.lot_id).toLowerCase().includes(searchTerm.toLowerCase()),
-    )
-  }, [treatments, searchTerm, lots])
+    return (treatments || []).filter((t) => {
+      const matchSearch =
+        !searchTerm ||
+        (t.medication_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.diagnosis_reason || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.lotName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (t.responsible || '').toLowerCase().includes(searchTerm.toLowerCase())
+      const matchLot = !lotFilter || t.lot_id === lotFilter
+      const matchStatus = !statusFilter || t.status === statusFilter
+      return matchSearch && matchLot && matchStatus
+    })
+  }, [treatments, searchTerm, lotFilter, statusFilter])
 
   const filteredOccurrences = useMemo(() => {
-    return healthOccurrences.filter(
-      (o) =>
-        o.occurrence_type?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        o.symptoms?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        lotName(o.lot_id).toLowerCase().includes(searchTerm.toLowerCase()),
-    )
-  }, [healthOccurrences, searchTerm, lots])
+    return (healthOccurrences || []).filter((o) => {
+      const matchSearch =
+        !searchTerm ||
+        (o.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (o.symptoms || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (o.lotName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (o.responsible || '').toLowerCase().includes(searchTerm.toLowerCase())
+      const matchLot = !lotFilter || o.lot_id === lotFilter
+      return matchSearch && matchLot
+    })
+  }, [healthOccurrences, searchTerm, lotFilter])
 
   const filteredProtocols = useMemo(() => {
-    return healthProtocols.filter((p) => p.name?.toLowerCase().includes(searchTerm.toLowerCase()))
+    return (healthProtocols || []).filter((p) => {
+      const matchSearch =
+        !searchTerm ||
+        (p.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (p.activity_type || '').toLowerCase().includes(searchTerm.toLowerCase())
+      return matchSearch
+    })
   }, [healthProtocols, searchTerm])
 
+  // ==========================================
+  // KPI METRICS
+  // ==========================================
+  const stats = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0]
+    const scheduledVac = (vaccinations || []).filter((v) => v.status === 'scheduled').length
+    const performedVac = (vaccinations || []).filter((v) => v.status === 'performed').length
+    const delayedVac = (vaccinations || []).filter(
+      (v) => v.status === 'scheduled' && v.scheduled_date && v.scheduled_date < today,
+    ).length
+    const activeTreatments = (treatments || []).filter((t) => t.status === 'in_progress').length
+    const occurrencesCount = (healthOccurrences || []).length
+    const protocolsCount = (healthProtocols || []).length
+
+    return {
+      scheduledVac,
+      performedVac,
+      delayedVac,
+      activeTreatments,
+      occurrencesCount,
+      protocolsCount,
+    }
+  }, [vaccinations, treatments, healthOccurrences, healthProtocols])
+
+  // Helper para nome do lote
+  const lotName = (lotId?: string, fallback?: string) => {
+    if (!lotId) return fallback || 'Geral'
+    const l = lots.find((item) => item.id === lotId)
+    return l ? `${l.code} - ${l.name}` : fallback || 'Lote não identificado'
+  }
+
+  // ==========================================
+  // HANDLERS: VACINAÇÃO
+  // ==========================================
+  const handleSaveVaccination = async (data: Omit<Vaccination, 'id'>) => {
+    try {
+      if (editingVac) {
+        await updateVaccination(editingVac.id, data)
+        toast({ title: 'Vacinação atualizada com sucesso!' })
+      } else {
+        await addVaccination(data)
+        toast({ title: 'Vacinação cadastrada com sucesso!' })
+      }
+      setVacModalOpen(false)
+      setEditingVac(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao salvar vacinação',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleApplyVacConfirm = async (
+    updatedVaccination: Partial<Vaccination>,
+    stockMovement?: {
+      inventoryItemId: string
+      movementPayload: any
+      updatePayload?: any
+    },
+  ) => {
+    if (!selectedVacToApply) return
+    try {
+      // 1. Atualiza o registro de vacinação
+      await updateVaccination(selectedVacToApply.id, updatedVaccination)
+
+      // 2. Se houver movimentação de estoque para baixa
+      if (stockMovement && addStockMovement) {
+        await addStockMovement(stockMovement.movementPayload)
+        if (stockMovement.updatePayload && updateInventory) {
+          await updateInventory(stockMovement.inventoryItemId, stockMovement.updatePayload)
+        }
+      }
+
+      toast({
+        title: 'Aplicação registrada com sucesso! 💉',
+        description: stockMovement
+          ? 'Status alterado para Realizada e estoque devidamente baixado.'
+          : 'Status alterado para Realizada.',
+      })
+
+      setApplyVacModalOpen(false)
+      setSelectedVacToApply(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao registrar aplicação',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // ==========================================
+  // HANDLERS: TRATAMENTO
+  // ==========================================
+  const handleSaveTreatment = async (data: Omit<Treatment, 'id'>) => {
+    try {
+      if (editingTrt) {
+        await updateTreatment(editingTrt.id, data)
+        toast({ title: 'Tratamento atualizado com sucesso!' })
+      } else {
+        await addTreatment(data)
+
+        // Se marcou baixa no estoque e é um novo registro
+        if (data.stock_deducted && data.inventory_item_id && data.quantity_used) {
+          const itm = inventory.find((i) => i.id === data.inventory_item_id)
+          if (itm && addStockMovement) {
+            const newStock = Math.max(0, (itm.currentStock || 0) - Number(data.quantity_used))
+            await addStockMovement({
+              organization_id: organization?.id,
+              property_id: currentProperty?.id,
+              inventory_item_id: itm.id,
+              type: 'saida',
+              quantity: Number(data.quantity_used),
+              unit_price: itm.averageCost || 0,
+              total_price: Number(data.quantity_used) * (itm.averageCost || 0),
+              date: data.start_date || new Date().toISOString().split('T')[0],
+              reason: `Tratamento Veterinário: ${data.medication_name}`,
+              notes: `Consumo no tratamento do lote ${data.lotName || 'Geral'}.`,
+            })
+            if (updateInventory) {
+              await updateInventory(itm.id, { currentStock: newStock })
+            }
+          }
+        }
+
+        toast({ title: 'Tratamento cadastrado com sucesso!' })
+      }
+      setTrtModalOpen(false)
+      setEditingTrt(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao salvar tratamento',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // ==========================================
+  // HANDLERS: OCORRÊNCIA CLÍNICA
+  // ==========================================
+  const handleSaveOccurrence = async (data: Omit<HealthOccurrence, 'id'>) => {
+    try {
+      if (editingOcc) {
+        await updateHealthOccurrence(editingOcc.id, data)
+        toast({ title: 'Ocorrência atualizada com sucesso!' })
+      } else {
+        await addHealthOccurrence(data)
+        toast({ title: 'Ocorrência cadastrada com sucesso!' })
+      }
+      setOccModalOpen(false)
+      setEditingOcc(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao salvar ocorrência',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // ==========================================
+  // HANDLERS: PROTOCOLO SANITÁRIO
+  // ==========================================
+  const handleSaveProtocol = async (data: Omit<HealthProtocol, 'id'>) => {
+    try {
+      if (editingProto) {
+        await updateHealthProtocol(editingProto.id, data)
+        toast({ title: 'Protocolo sanitário atualizado com sucesso!' })
+      } else {
+        await addHealthProtocol(data)
+        toast({ title: 'Protocolo sanitário criado com sucesso!' })
+      }
+      setProtoModalOpen(false)
+      setEditingProto(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao salvar protocolo',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  const handleAssignProtocolConfirm = async (lotId: string, refDate: string) => {
+    if (!selectedProtocolToAssign) return
+    try {
+      const lot = lots.find((l) => l.id === lotId)
+
+      // 1. Cria a vinculação do protocolo
+      await addProtocolAssignment({
+        organization_id: organization?.id,
+        property_id: currentProperty?.id,
+        protocol_id: selectedProtocolToAssign.id,
+        protocolName: selectedProtocolToAssign.name,
+        lot_id: lotId,
+        lotName: lot?.name,
+        start_date: refDate,
+        status: 'active',
+      })
+
+      // 2. Cria as vacinações programadas automáticas baseadas nas etapas
+      if (selectedProtocolToAssign.steps && selectedProtocolToAssign.steps.length > 0) {
+        for (const st of selectedProtocolToAssign.steps) {
+          const d = new Date(refDate)
+          d.setDate(d.getDate() + (Number(st.day) || 0))
+          const scheduledDate = d.toISOString().split('T')[0]
+
+          await addVaccination({
+            organization_id: organization?.id,
+            property_id: currentProperty?.id,
+            lot_id: lotId,
+            lotName: lot?.name,
+            vaccine_name: st.action,
+            disease_target: selectedProtocolToAssign.name,
+            scheduled_date: scheduledDate,
+            dose_per_animal: 0.5,
+            dose_unit: 'mL',
+            application_route: 'água',
+            animal_count: lot?.initialQuantity || 100,
+            status: 'scheduled',
+            notes: `Gerado automaticamente pelo protocolo "${selectedProtocolToAssign.name}" (Dia ${st.day}). ${st.description || ''}`,
+          })
+        }
+      }
+
+      toast({
+        title: 'Protocolo vinculado com sucesso! ✨',
+        description: `${selectedProtocolToAssign.steps?.length || 0} tarefas programadas criadas no cronograma.`,
+      })
+
+      setAssignModalOpen(false)
+      setSelectedProtocolToAssign(null)
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao vincular protocolo',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  // ==========================================
+  // CONFIRMAÇÃO DE EXCLUSÃO
+  // ==========================================
+  const handleConfirmDelete = async () => {
+    try {
+      if (deleteConfirm.type === 'vac') {
+        await deleteVaccination(deleteConfirm.id)
+        toast({ title: 'Vacinação removida com sucesso' })
+      } else if (deleteConfirm.type === 'trt') {
+        await deleteTreatment(deleteConfirm.id)
+        toast({ title: 'Tratamento removido com sucesso' })
+      } else if (deleteConfirm.type === 'occ') {
+        await deleteHealthOccurrence(deleteConfirm.id)
+        toast({ title: 'Ocorrência removida com sucesso' })
+      } else if (deleteConfirm.type === 'proto') {
+        await deleteHealthProtocol(deleteConfirm.id)
+        toast({ title: 'Protocolo sanitário removido com sucesso' })
+      } else if (deleteConfirm.type === 'assign') {
+        await deleteProtocolAssignment(deleteConfirm.id)
+        toast({ title: 'Vínculo de protocolo removido com sucesso' })
+      }
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao excluir',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+    } finally {
+      setDeleteConfirm({ open: false, id: '', name: '', type: 'vac' })
+    }
+  }
+
   return (
-    <div className="space-y-6 animate-fade-in pb-12">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* HEADER PRINCIPAL */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
-            <HeartPulse className="w-6 h-6 text-rose-600" /> Sanidade e Saúde Animal
+          <h1 className="text-2xl font-black tracking-tight text-foreground flex items-center gap-2.5">
+            <Syringe className="w-7 h-7 text-emerald-600" />
+            Sanidade Animal & Biosseguridade
           </h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Gestão completa de vacinações, tratamentos veterinários, ocorrências clínicas e
-            protocolos sanitários.
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Manejo preventivo, calendário de vacinação, tratamentos veterinários e rastreabilidade
+            sanitária
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {activeTab === 'vacinacao' && (
-            <Button
-              onClick={() => {
-                setEditingVac(null)
-                setVacModalOpen(true)
-              }}
-              className="rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-xs gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Nova Vacinação
-            </Button>
-          )}
-          {activeTab === 'tratamentos' && (
-            <Button
-              onClick={() => {
-                setEditingTrt(null)
-                setTrtModalOpen(true)
-              }}
-              className="rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-xs gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Novo Tratamento
-            </Button>
-          )}
-          {activeTab === 'ocorrencias' && (
-            <Button
-              onClick={() => {
-                setEditingOcc(null)
-                setOccModalOpen(true)
-              }}
-              className="rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-xs gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Registrar Ocorrência
-            </Button>
-          )}
-          {activeTab === 'protocolos' && (
-            <Button
-              onClick={() => {
-                setEditingProt(null)
-                setProtModalOpen(true)
-              }}
-              className="rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold text-xs gap-1.5"
-            >
-              <Plus className="w-4 h-4" /> Novo Protocolo
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="bg-white border rounded-2xl p-1 grid grid-cols-2 sm:grid-cols-5 h-auto gap-1">
-          <TabsTrigger
-            value="vacinacao"
-            className="rounded-xl text-xs py-2 flex items-center gap-1.5"
-          >
-            <Syringe className="w-3.5 h-3.5 text-emerald-600" /> Vacinação
-          </TabsTrigger>
-          <TabsTrigger
-            value="tratamentos"
-            className="rounded-xl text-xs py-2 flex items-center gap-1.5"
-          >
-            <Pill className="w-3.5 h-3.5 text-blue-600" /> Medicamentos
-          </TabsTrigger>
-          <TabsTrigger
-            value="ocorrencias"
-            className="rounded-xl text-xs py-2 flex items-center gap-1.5"
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" /> Ocorrências
-          </TabsTrigger>
-          <TabsTrigger
-            value="protocolos"
-            className="rounded-xl text-xs py-2 flex items-center gap-1.5"
-          >
-            <FileText className="w-3.5 h-3.5 text-purple-600" /> Protocolos
-          </TabsTrigger>
-          <TabsTrigger
-            value="calendario"
-            className="rounded-xl text-xs py-2 flex items-center gap-1.5 col-span-2 sm:col-span-1"
-          >
-            <Calendar className="w-3.5 h-3.5 text-primary" /> Calendário
-          </TabsTrigger>
-        </TabsList>
-
-        {/* Global Search Bar (for lists) */}
-        {activeTab !== 'calendario' && (
-          <div className="relative mt-4">
-            <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-            <Input
-              placeholder="Buscar por nome, lote, motivo..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 h-10 rounded-2xl bg-white border-border text-xs"
-            />
-          </div>
-        )}
-
-        {/* ==========================================
-            ABA 1: VACINAÇÃO
-        ========================================== */}
-        <TabsContent value="vacinacao" className="mt-4 space-y-4">
-          {filteredVaccinations.length === 0 ? (
-            <Card className="rounded-3xl bg-white border-border shadow-subtle">
-              <CardContent className="p-8 text-center space-y-3">
-                <Syringe className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">
-                    Nenhuma vacinação cadastrada
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Cadastre o plano de imunização e registre aplicações com baixa automática no
-                    estoque.
-                  </p>
-                </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {canEdit && (
+            <>
+              {activeTab === 'vacinacao' && (
                 <Button
                   onClick={() => {
                     setEditingVac(null)
                     setVacModalOpen(true)
                   }}
-                  className="rounded-xl bg-primary text-white text-xs gap-1.5 font-bold"
+                  className="rounded-xl h-10 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-2 shadow-sm"
                 >
-                  <Plus className="w-4 h-4" /> Criar primeira vacinação
+                  <Plus className="w-4 h-4" /> Nova Vacinação
                 </Button>
-              </CardContent>
+              )}
+              {activeTab === 'tratamentos' && (
+                <Button
+                  onClick={() => {
+                    setEditingTrt(null)
+                    setTrtModalOpen(true)
+                  }}
+                  className="rounded-xl h-10 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" /> Novo Tratamento
+                </Button>
+              )}
+              {activeTab === 'ocorrencias' && (
+                <Button
+                  onClick={() => {
+                    setEditingOcc(null)
+                    setOccModalOpen(true)
+                  }}
+                  className="rounded-xl h-10 text-xs font-bold bg-amber-600 hover:bg-amber-700 text-white gap-2 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" /> Nova Ocorrência
+                </Button>
+              )}
+              {activeTab === 'protocolos' && (
+                <Button
+                  onClick={() => {
+                    setEditingProto(null)
+                    setProtoModalOpen(true)
+                  }}
+                  className="rounded-xl h-10 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white gap-2 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" /> Novo Protocolo
+                </Button>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* KPI METRICS */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-[11px] font-semibold">Vacinas Previstas</span>
+              <Calendar className="w-3.5 h-3.5 text-blue-500" />
+            </div>
+            <div className="text-xl font-black text-foreground">{stats.scheduledVac}</div>
+            <span className="text-[10px] text-muted-foreground">No cronograma</span>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-[11px] font-semibold">Realizadas</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+            </div>
+            <div className="text-xl font-black text-emerald-600">{stats.performedVac}</div>
+            <span className="text-[10px] text-muted-foreground">Aplicações feitas</span>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-[11px] font-semibold">Atrasadas</span>
+              <AlertCircle className="w-3.5 h-3.5 text-rose-500" />
+            </div>
+            <div className="text-xl font-black text-rose-600">{stats.delayedVac}</div>
+            <span className="text-[10px] text-rose-500 font-medium">Requer atenção</span>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-[11px] font-semibold">Tratamentos Ativos</span>
+              <Pill className="w-3.5 h-3.5 text-blue-500" />
+            </div>
+            <div className="text-xl font-black text-blue-600">{stats.activeTreatments}</div>
+            <span className="text-[10px] text-muted-foreground">Em andamento</span>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-[11px] font-semibold">Ocorrências</span>
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            </div>
+            <div className="text-xl font-black text-amber-600">{stats.occurrencesCount}</div>
+            <span className="text-[10px] text-muted-foreground">Registros clínicos</span>
+          </CardContent>
+        </Card>
+
+        <Card className="rounded-2xl border border-border/60 bg-card shadow-sm">
+          <CardContent className="p-3.5 space-y-1">
+            <div className="flex items-center justify-between text-muted-foreground">
+              <span className="text-[11px] font-semibold">Protocolos</span>
+              <FileText className="w-3.5 h-3.5 text-purple-500" />
+            </div>
+            <div className="text-xl font-black text-purple-600">{stats.protocolsCount}</div>
+            <span className="text-[10px] text-muted-foreground">Modelos padrão</span>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ABAS & FILTROS */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/60 pb-3">
+          <TabsList className="bg-secondary/60 p-1 rounded-xl">
+            <TabsTrigger
+              value="vacinacao"
+              className="rounded-lg text-xs font-semibold gap-1.5 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+            >
+              <Syringe className="w-3.5 h-3.5" /> Vacinação ({vaccinations?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger
+              value="tratamentos"
+              className="rounded-lg text-xs font-semibold gap-1.5 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+            >
+              <Pill className="w-3.5 h-3.5" /> Tratamentos ({treatments?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger
+              value="ocorrencias"
+              className="rounded-lg text-xs font-semibold gap-1.5 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+            >
+              <AlertTriangle className="w-3.5 h-3.5" /> Ocorrências (
+              {healthOccurrences?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger
+              value="protocolos"
+              className="rounded-lg text-xs font-semibold gap-1.5 data-[state=active]:bg-card data-[state=active]:shadow-sm"
+            >
+              <FileText className="w-3.5 h-3.5" /> Protocolos ({healthProtocols?.length || 0})
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Barra de Filtros Rápida */}
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Buscar por nome, lote, motivo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-8 h-9 text-xs rounded-xl"
+              />
+            </div>
+
+            <Select value={lotFilter} onValueChange={setLotFilter}>
+              <SelectTrigger className="h-9 text-xs rounded-xl w-36">
+                <SelectValue placeholder="Todos os Lotes" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todos os Lotes</SelectItem>
+                {lots.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.code} - {l.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {(activeTab === 'vacinacao' || activeTab === 'tratamentos') && (
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-9 text-xs rounded-xl w-32">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {activeTab === 'vacinacao' ? (
+                    <>
+                      <SelectItem value="scheduled">Programada</SelectItem>
+                      <SelectItem value="performed">Realizada</SelectItem>
+                      <SelectItem value="delayed">Atrasada</SelectItem>
+                      <SelectItem value="cancelled">Cancelada</SelectItem>
+                    </>
+                  ) : (
+                    <>
+                      <SelectItem value="scheduled">Programado</SelectItem>
+                      <SelectItem value="in_progress">Em Andamento</SelectItem>
+                      <SelectItem value="completed">Concluído</SelectItem>
+                      <SelectItem value="cancelled">Cancelado</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+        </div>
+
+        {/* TAB 1: VACINAÇÃO */}
+        <TabsContent value="vacinacao" className="space-y-3 mt-0">
+          {filteredVaccinations.length === 0 ? (
+            <Card className="rounded-2xl border border-dashed border-border p-8 text-center bg-card/50">
+              <Syringe className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-foreground">Nenhuma vacinação cadastrada</h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                Planeje as vacinas preventivas dos seus lotes ou registre aplicações com baixa no
+                estoque.
+              </p>
+              {canEdit && (
+                <Button
+                  onClick={() => {
+                    setEditingVac(null)
+                    setVacModalOpen(true)
+                  }}
+                  className="rounded-xl h-9 text-xs font-bold mt-4 bg-emerald-600 hover:bg-emerald-700 text-white gap-2"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Cadastrar Primeira Vacinação
+                </Button>
+              )}
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
               {filteredVaccinations.map((vac) => {
-                const isPerformed = vac.status === 'performed'
-                const isDelayed = vac.status === 'delayed'
-                const isCancelled = vac.status === 'cancelled'
-
-                let badgeClass = 'bg-blue-100 text-blue-900 border-blue-200'
-                let badgeLabel = 'Programada'
-                if (isPerformed) {
-                  badgeClass = 'bg-emerald-100 text-emerald-900 border-emerald-200'
-                  badgeLabel = 'Realizada'
-                } else if (isDelayed) {
-                  badgeClass = 'bg-rose-100 text-rose-900 border-rose-200'
-                  badgeLabel = 'Atrasada'
-                } else if (isCancelled) {
-                  badgeClass = 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                  badgeLabel = 'Cancelada'
-                }
+                const isDelayed =
+                  vac.status === 'scheduled' &&
+                  vac.scheduled_date &&
+                  vac.scheduled_date < new Date().toISOString().split('T')[0]
 
                 return (
                   <Card
                     key={vac.id}
-                    className="rounded-3xl bg-white border-border shadow-subtle hover:shadow-elevation transition-all flex flex-col justify-between"
+                    className="rounded-2xl border border-border/70 hover:border-emerald-500/50 transition-all duration-200 bg-card shadow-xs overflow-hidden flex flex-col justify-between"
                   >
                     <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge className={`text-[10px] font-bold ${badgeClass}`}>
-                          {badgeLabel}
-                        </Badge>
-                        <RecordActionMenu
-                          onView={() => setDetailsVac(vac)}
-                          onEdit={
-                            canEdit
-                              ? () => {
-                                  setEditingVac(vac)
-                                  setVacModalOpen(true)
-                                }
-                              : undefined
-                          }
-                          extraItems={
-                            canEdit && vac.status === 'scheduled'
-                              ? [
-                                  {
-                                    label: 'Registrar aplicação',
-                                    icon: <Syringe className="h-3.5 w-3.5 text-emerald-600" />,
-                                    onClick: () => {
-                                      setApplyingVac(vac)
-                                      setApplyVacModalOpen(true)
+                      {/* Top Header Card */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-xs font-bold text-foreground">
+                              {vac.vaccine_name}
+                            </span>
+                            {vac.disease_target && (
+                              <span className="text-[10px] text-muted-foreground">
+                                • {vac.disease_target}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-emerald-800 font-semibold flex items-center gap-1">
+                            <Layers className="w-3 h-3 text-emerald-600" />
+                            {lotName(vac.lot_id, vac.lotName)}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          {vac.status === 'performed' && (
+                            <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 text-[10px] gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Realizada
+                            </Badge>
+                          )}
+                          {vac.status === 'scheduled' && !isDelayed && (
+                            <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border border-blue-200 text-[10px] gap-1">
+                              <Clock className="w-3 h-3" /> Programada
+                            </Badge>
+                          )}
+                          {isDelayed && (
+                            <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-100 border border-rose-200 text-[10px] gap-1">
+                              <AlertCircle className="w-3 h-3" /> Atrasada
+                            </Badge>
+                          )}
+                          {vac.status === 'cancelled' && (
+                            <Badge className="bg-zinc-100 text-zinc-700 hover:bg-zinc-100 border border-zinc-200 text-[10px] gap-1">
+                              <XCircle className="w-3 h-3" /> Cancelada
+                            </Badge>
+                          )}
+
+                          <RecordActionMenu
+                            customActions={
+                              vac.status === 'scheduled' || isDelayed
+                                ? [
+                                    {
+                                      label: 'Registrar aplicação 💉',
+                                      icon: <Syringe className="w-3.5 h-3.5 text-emerald-600" />,
+                                      onClick: () => {
+                                        setSelectedVacToApply(vac)
+                                        setApplyVacModalOpen(true)
+                                      },
                                     },
-                                  },
-                                ]
-                              : undefined
-                          }
-                          onDelete={canDelete ? () => setDeletingVac(vac) : undefined}
-                          disabled={!canEdit}
-                        />
-                      </div>
-
-                      <div>
-                        <h3 className="font-extrabold text-sm text-foreground flex items-center gap-1.5">
-                          <Syringe className="w-4 h-4 text-emerald-600 shrink-0" />
-                          {vac.vaccine_name}
-                        </h3>
-                        {vac.disease_target && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Alvo: {vac.disease_target}
-                          </p>
-                        )}
-                        <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-secondary text-foreground">
-                          Lote: {lotName(vac.lot_id)}
-                        </span>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 bg-secondary/30 p-2.5 rounded-2xl text-xs">
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">
-                            Data Programada
-                          </span>
-                          <span className="font-semibold text-foreground">
-                            {vac.scheduled_date || '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">
-                            Data Realizada
-                          </span>
-                          <span className="font-semibold text-foreground">
-                            {vac.performed_date || '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Animais</span>
-                          <span className="font-semibold text-foreground">
-                            {vac.animal_count || '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">
-                            Custo Total
-                          </span>
-                          <span className="font-semibold text-rose-600">
-                            {vac.total_cost ? `R$ ${Number(vac.total_cost).toFixed(2)}` : 'R$ 0,00'}
-                          </span>
+                                  ]
+                                : []
+                            }
+                            onViewDetails={() =>
+                              setDetailsRecord({
+                                open: true,
+                                title: `Vacinação: ${vac.vaccine_name}`,
+                                record: {
+                                  'Nome da Vacina': vac.vaccine_name,
+                                  'Alvo / Doença': vac.disease_target || '—',
+                                  'Lote Animal': lotName(vac.lot_id, vac.lotName),
+                                  Status: vac.status === 'performed' ? 'Realizada' : 'Programada',
+                                  'Data Programada': vac.scheduled_date || '—',
+                                  'Data Realizada': vac.performed_date || '—',
+                                  'Qtd Animais': vac.animal_count || '—',
+                                  'Dose / Ave': `${vac.dose_per_animal || '—'} ${vac.dose_unit || 'mL'}`,
+                                  'Via de Aplicação': vac.application_route || '—',
+                                  'Status do Frasco': vac.vial_status || '—',
+                                  'Qtd Descartada': vac.discarded_quantity || '—',
+                                  'Custo de Perda': vac.waste_cost
+                                    ? `R$ ${Number(vac.waste_cost).toFixed(2)}`
+                                    : '—',
+                                  Responsável: vac.responsible || '—',
+                                  'Item Estoque Vinculado': vac.inventory_item_name || '—',
+                                  'Lote Fabricante': vac.batch_number || '—',
+                                  'Qtd Consumida do Estoque': vac.quantity_used
+                                    ? `${vac.quantity_used} ${vac.dose_unit || 'un'}`
+                                    : '—',
+                                  'Custo Total Apropriado': vac.total_cost
+                                    ? `R$ ${Number(vac.total_cost).toFixed(2)}`
+                                    : '—',
+                                  'Baixa em Estoque': vac.stock_deducted ? 'Sim (Efetuada)' : 'Não',
+                                  Observações: vac.notes || '—',
+                                },
+                              })
+                            }
+                            onEdit={() => {
+                              setEditingVac(vac)
+                              setVacModalOpen(true)
+                            }}
+                            onDelete={() =>
+                              setDeleteConfirm({
+                                open: true,
+                                id: vac.id,
+                                name: vac.vaccine_name,
+                                type: 'vac',
+                              })
+                            }
+                          />
                         </div>
                       </div>
 
-                      {vac.stock_deducted && (
-                        <p className="text-[10px] text-emerald-700 font-medium flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Baixa realizada no
-                          estoque
-                        </p>
+                      {/* Informações centrais */}
+                      <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">
+                            {vac.status === 'performed' ? 'Realizada em:' : 'Prevista para:'}
+                          </span>
+                          <strong className="text-foreground flex items-center gap-1 font-semibold">
+                            <Calendar className="w-3 h-3 text-muted-foreground" />
+                            {vac.status === 'performed'
+                              ? vac.performed_date || vac.scheduled_date
+                              : vac.scheduled_date || 'A definir'}
+                          </strong>
+                        </div>
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">
+                            Dose / Aplicação:
+                          </span>
+                          <strong className="text-foreground font-semibold">
+                            {vac.dose_per_animal || '0.5'} {vac.dose_unit || 'mL'} (
+                            {vac.application_route || 'água'})
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Detalhes de estoque e custos */}
+                      {(vac.quantity_used || vac.total_cost || vac.vial_status) && (
+                        <div className="p-2 rounded-xl bg-secondary/40 border border-border/60 text-[11px] space-y-1">
+                          {vac.quantity_used && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Consumo do item:</span>
+                              <strong className="text-foreground">
+                                {vac.quantity_used} {vac.dose_unit || 'doses'}
+                              </strong>
+                            </div>
+                          )}
+                          {vac.total_cost && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Custo apropriado:</span>
+                              <strong className="text-emerald-700 font-bold">
+                                R$ {Number(vac.total_cost).toFixed(2)}
+                              </strong>
+                            </div>
+                          )}
+                          {vac.vial_status && (
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Status do frasco:</span>
+                              <span className="font-medium capitalize text-foreground">
+                                {vac.vial_status === 'opened'
+                                  ? 'Aberto/Uso'
+                                  : vac.vial_status === 'closed'
+                                    ? 'Fechado'
+                                    : 'Descartado'}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Botão de Ação Rápida para Programadas */}
+                      {canEdit && (vac.status === 'scheduled' || isDelayed) && (
+                        <Button
+                          onClick={() => {
+                            setSelectedVacToApply(vac)
+                            setApplyVacModalOpen(true)
+                          }}
+                          size="sm"
+                          className="w-full h-8 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-xs"
+                        >
+                          <Syringe className="w-3.5 h-3.5" /> Registrar Aplicação
+                        </Button>
                       )}
                     </CardContent>
                   </Card>
@@ -3128,1073 +1479,501 @@ function ApplyVaccinationDialog({
           )}
         </TabsContent>
 
-        {/* ==========================================
-            ABA 2: MEDICAMENTOS / TRATAMENTOS
-        ========================================== */}
-        <TabsContent value="tratamentos" className="mt-4 space-y-4">
+        {/* TAB 2: TRATAMENTOS */}
+        <TabsContent value="tratamentos" className="space-y-3 mt-0">
           {filteredTreatments.length === 0 ? (
-            <Card className="rounded-3xl bg-white border-border shadow-subtle">
-              <CardContent className="p-8 text-center space-y-3">
-                <Pill className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">
-                    Nenhum tratamento registrado
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Controle administrações de antibióticos, vermífugos, suplementos e período de
-                    carência.
-                  </p>
-                </div>
+            <Card className="rounded-2xl border border-dashed border-border p-8 text-center bg-card/50">
+              <Pill className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-foreground">Nenhum tratamento registrado</h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                Controle medicamentos, períodos de carência de ovos/carne e dosagens por lote.
+              </p>
+              {canEdit && (
                 <Button
                   onClick={() => {
                     setEditingTrt(null)
                     setTrtModalOpen(true)
                   }}
-                  className="rounded-xl bg-primary text-white text-xs gap-1.5 font-bold"
+                  className="rounded-xl h-9 text-xs font-bold mt-4 bg-blue-600 hover:bg-blue-700 text-white gap-2"
                 >
-                  <Plus className="w-4 h-4" /> Novo Tratamento
+                  <Plus className="w-3.5 h-3.5" /> Registrar Tratamento
                 </Button>
-              </CardContent>
+              )}
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {filteredTreatments.map((trt) => {
-                let badgeClass = 'bg-blue-100 text-blue-900 border-blue-200'
-                let badgeLabel = 'Programado'
-                if (trt.status === 'in_progress') {
-                  badgeClass = 'bg-amber-100 text-amber-900 border-amber-200'
-                  badgeLabel = 'Em andamento'
-                } else if (trt.status === 'completed') {
-                  badgeClass = 'bg-emerald-100 text-emerald-900 border-emerald-200'
-                  badgeLabel = 'Concluído'
-                } else if (trt.status === 'cancelled') {
-                  badgeClass = 'bg-zinc-100 text-zinc-700 border-zinc-200'
-                  badgeLabel = 'Cancelado'
-                }
-
-                return (
-                  <Card
-                    key={trt.id}
-                    className="rounded-3xl bg-white border-border shadow-subtle hover:shadow-elevation transition-all flex flex-col justify-between"
-                  >
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge className={`text-[10px] font-bold ${badgeClass}`}>
-                          {badgeLabel}
-                        </Badge>
-                        <RecordActionMenu
-                          onView={() => setDetailsTrt(trt)}
-                          onEdit={
-                            canEdit
-                              ? () => {
-                                  setEditingTrt(trt)
-                                  setTrtModalOpen(true)
-                                }
-                              : undefined
-                          }
-                          onDelete={canDelete ? () => setDeletingTrt(trt) : undefined}
-                          disabled={!canEdit}
-                        />
-                      </div>
-
-                      <div>
-                        <h3 className="font-extrabold text-sm text-foreground flex items-center gap-1.5">
-                          <Pill className="w-4 h-4 text-blue-600 shrink-0" />
-                          {trt.medication_name}
-                        </h3>
-                        {trt.diagnosis_reason && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5">
-                            Motivo: {trt.diagnosis_reason}
-                          </p>
-                        )}
-                        <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-secondary text-foreground">
-                          Lote: {lotName(trt.lot_id)}
+              {filteredTreatments.map((trt) => (
+                <Card
+                  key={trt.id}
+                  className="rounded-2xl border border-border/70 hover:border-blue-500/50 transition-all duration-200 bg-card shadow-xs overflow-hidden flex flex-col justify-between"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-foreground">
+                            {trt.medication_name}
+                          </span>
+                          {trt.diagnosis_reason && (
+                            <span className="text-[10px] text-muted-foreground">
+                              • {trt.diagnosis_reason}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-blue-800 font-semibold flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-blue-600" />
+                          {lotName(trt.lot_id, trt.lotName)}
                         </span>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2 bg-secondary/30 p-2.5 rounded-2xl text-xs">
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Dosagem</span>
-                          <span className="font-semibold text-foreground">{trt.dosage || '—'}</span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Duração</span>
-                          <span className="font-semibold text-foreground">
-                            {trt.duration_days ? `${trt.duration_days} dias` : '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Início</span>
-                          <span className="font-semibold text-foreground">
-                            {trt.start_date || '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">
-                            Carência Abate
-                          </span>
-                          <span className="font-bold text-amber-600">
-                            {trt.withdrawal_period_days
-                              ? `${trt.withdrawal_period_days} dias`
-                              : '0 dias'}
-                          </span>
-                        </div>
+                      <div className="flex items-center gap-1">
+                        {trt.status === 'in_progress' && (
+                          <Badge className="bg-blue-100 text-blue-800 hover:bg-blue-100 border border-blue-200 text-[10px] gap-1">
+                            <Clock className="w-3 h-3" /> Em Andamento
+                          </Badge>
+                        )}
+                        {trt.status === 'completed' && (
+                          <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100 border border-emerald-200 text-[10px] gap-1">
+                            <CheckCircle2 className="w-3 h-3" /> Concluído
+                          </Badge>
+                        )}
+                        {trt.status === 'scheduled' && (
+                          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100 border border-amber-200 text-[10px] gap-1">
+                            <Clock className="w-3 h-3" /> Programado
+                          </Badge>
+                        )}
+
+                        <RecordActionMenu
+                          onViewDetails={() =>
+                            setDetailsRecord({
+                              open: true,
+                              title: `Tratamento: ${trt.medication_name}`,
+                              record: {
+                                Medicamento: trt.medication_name,
+                                'Motivo / Diagnóstico': trt.diagnosis_reason || '—',
+                                Lote: lotName(trt.lot_id, trt.lotName),
+                                Status: trt.status,
+                                Dosagem: trt.dosage || '—',
+                                Frequência: trt.frequency || '—',
+                                Duração: `${trt.duration_days || '—'} dias`,
+                                'Período de Carência': `${trt.withdrawal_period_days || 0} dias`,
+                                'Data Início': trt.start_date || '—',
+                                'Data Término': trt.end_date || '—',
+                                Responsável: trt.responsible || '—',
+                                'Item de Estoque': trt.inventory_item_name || '—',
+                                'Qtd Consumida': trt.quantity_used ? `${trt.quantity_used}` : '—',
+                                Observações: trt.notes || '—',
+                              },
+                            })
+                          }
+                          onEdit={() => {
+                            setEditingTrt(trt)
+                            setTrtModalOpen(true)
+                          }}
+                          onDelete={() =>
+                            setDeleteConfirm({
+                              open: true,
+                              id: trt.id,
+                              name: trt.medication_name,
+                              type: 'trt',
+                            })
+                          }
+                        />
                       </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/50">
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">
+                          Dose / Frequência:
+                        </span>
+                        <strong className="text-foreground font-semibold">
+                          {trt.dosage || '—'} ({trt.frequency || '1x/dia'})
+                        </strong>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-muted-foreground block">
+                          Carência (Abate/Ovos):
+                        </span>
+                        <strong className="text-amber-700 font-bold">
+                          {trt.withdrawal_period_days || 0} dias
+                        </strong>
+                      </div>
+                    </div>
+
+                    {trt.notes && (
+                      <p className="text-[11px] text-muted-foreground line-clamp-2 bg-secondary/30 p-2 rounded-xl">
+                        {trt.notes}
+                      </p>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>
 
-        {/* ==========================================
-            ABA 3: OCORRÊNCIAS CLÍNICAS
-        ========================================== */}
-        <TabsContent value="ocorrencias" className="mt-4 space-y-4">
+        {/* TAB 3: OCORRÊNCIAS CLÍNICAS */}
+        <TabsContent value="ocorrencias" className="space-y-3 mt-0">
           {filteredOccurrences.length === 0 ? (
-            <Card className="rounded-3xl bg-white border-border shadow-subtle">
-              <CardContent className="p-8 text-center space-y-3">
-                <AlertTriangle className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">
-                    Nenhuma ocorrência clínica registrada
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Registre sintomas atípicos, lesões, surtos respiratórios ou digestivos para
-                    acompanhamento.
-                  </p>
-                </div>
+            <Card className="rounded-2xl border border-dashed border-border p-8 text-center bg-card/50">
+              <AlertTriangle className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-foreground">
+                Nenhuma ocorrência clínica registrada
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                Registre sintomas, suspeitas de enfermidades e ações corretivas no plantel.
+              </p>
+              {canEdit && (
                 <Button
                   onClick={() => {
                     setEditingOcc(null)
                     setOccModalOpen(true)
                   }}
-                  className="rounded-xl bg-primary text-white text-xs gap-1.5 font-bold"
+                  className="rounded-xl h-9 text-xs font-bold mt-4 bg-amber-600 hover:bg-amber-700 text-white gap-2"
                 >
-                  <Plus className="w-4 h-4" /> Registrar Ocorrência
+                  <Plus className="w-3.5 h-3.5" /> Registrar Ocorrência
                 </Button>
-              </CardContent>
+              )}
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              {filteredOccurrences.map((occ) => {
-                let badgeClass = 'bg-emerald-100 text-emerald-900 border-emerald-200'
-                let badgeLabel = 'Baixa'
-                if (occ.severity === 'moderate') {
-                  badgeClass = 'bg-amber-100 text-amber-900 border-amber-200'
-                  badgeLabel = 'Moderada'
-                } else if (occ.severity === 'high') {
-                  badgeClass = 'bg-orange-100 text-orange-900 border-orange-200'
-                  badgeLabel = 'Alta'
-                } else if (occ.severity === 'critical') {
-                  badgeClass = 'bg-rose-100 text-rose-900 border-rose-200'
-                  badgeLabel = 'Crítica'
-                }
+              {filteredOccurrences.map((occ) => (
+                <Card
+                  key={occ.id}
+                  className="rounded-2xl border border-border/70 hover:border-amber-500/50 transition-all duration-200 bg-card shadow-xs overflow-hidden flex flex-col justify-between"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-xs font-bold text-foreground">
+                            {occ.occurrence_type === 'other'
+                              ? occ.custom_type || 'Outro'
+                              : occ.occurrence_type || 'Ocorrência'}
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-amber-800 font-semibold flex items-center gap-1">
+                          <Layers className="w-3 h-3 text-amber-600" />
+                          {lotName(occ.lot_id, occ.lotName)}
+                        </span>
+                      </div>
 
-                const occTypeName =
-                  occ.occurrence_type === 'other' ? occ.custom_type || 'Outro' : occ.occurrence_type
-
-                return (
-                  <Card
-                    key={occ.id}
-                    className="rounded-3xl bg-white border-border shadow-subtle hover:shadow-elevation transition-all flex flex-col justify-between"
-                  >
-                    <CardContent className="p-4 space-y-3">
-                      <div className="flex items-center justify-between">
-                        <Badge className={`text-[10px] font-bold ${badgeClass}`}>
-                          Severidade: {badgeLabel}
-                        </Badge>
-                        <RecordActionMenu
-                          onView={() => setDetailsOcc(occ)}
-                          onEdit={
-                            canEdit
-                              ? () => {
-                                  setEditingOcc(occ)
-                                  setOccModalOpen(true)
-                                }
-                              : undefined
+                      <div className="flex items-center gap-1">
+                        <Badge
+                          className={
+                            occ.severity === 'critical'
+                              ? 'bg-rose-100 text-rose-800 border-rose-200 text-[10px]'
+                              : occ.severity === 'high'
+                                ? 'bg-orange-100 text-orange-800 border-orange-200 text-[10px]'
+                                : 'bg-amber-100 text-amber-800 border-amber-200 text-[10px]'
                           }
-                          onDelete={canDelete ? () => setDeletingOcc(occ) : undefined}
-                          disabled={!canEdit}
+                        >
+                          {occ.severity === 'critical'
+                            ? 'Crítica'
+                            : occ.severity === 'high'
+                              ? 'Alta'
+                              : occ.severity === 'moderate'
+                                ? 'Moderada'
+                                : 'Baixa'}
+                        </Badge>
+
+                        <RecordActionMenu
+                          onViewDetails={() =>
+                            setDetailsRecord({
+                              open: true,
+                              title: `Ocorrência Clínica: ${occ.occurrence_type}`,
+                              record: {
+                                Tipo:
+                                  occ.occurrence_type === 'other'
+                                    ? occ.custom_type
+                                    : occ.occurrence_type,
+                                Lote: lotName(occ.lot_id, occ.lotName),
+                                Severidade: occ.severity,
+                                Data: occ.occurrence_date ? occ.occurrence_date.split('T')[0] : '—',
+                                'Aves Afetadas': occ.affected_count || '1',
+                                Sintomas: occ.symptoms || '—',
+                                Descrição: occ.description || '—',
+                                'Ação Tomada': occ.action_taken || '—',
+                                Responsável: occ.responsible || '—',
+                                Observações: occ.notes || '—',
+                              },
+                            })
+                          }
+                          onEdit={() => {
+                            setEditingOcc(occ)
+                            setOccModalOpen(true)
+                          }}
+                          onDelete={() =>
+                            setDeleteConfirm({
+                              open: true,
+                              id: occ.id,
+                              name: occ.occurrence_type || 'Ocorrência',
+                              type: 'occ',
+                            })
+                          }
                         />
                       </div>
+                    </div>
 
-                      <div>
-                        <h3 className="font-extrabold text-sm text-foreground flex items-center gap-1.5 capitalize">
-                          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                          {occTypeName}
-                        </h3>
-                        {occ.description && (
-                          <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
-                            {occ.description}
+                    <div className="space-y-1.5 text-xs pt-1 border-t border-border/50">
+                      {occ.symptoms && (
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">Sintomas:</span>
+                          <p className="text-foreground font-medium line-clamp-1">{occ.symptoms}</p>
+                        </div>
+                      )}
+                      {occ.action_taken && (
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block">
+                            Ação Tomada:
+                          </span>
+                          <p className="text-emerald-700 font-semibold line-clamp-1">
+                            {occ.action_taken}
                           </p>
-                        )}
-                        <span className="inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-secondary text-foreground">
-                          Lote: {lotName(occ.lot_id)}
-                        </span>
-                      </div>
+                        </div>
+                      )}
+                    </div>
 
-                      <div className="grid grid-cols-2 gap-2 bg-secondary/30 p-2.5 rounded-2xl text-xs">
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Data</span>
-                          <span className="font-semibold text-foreground">
-                            {occ.occurrence_date ? occ.occurrence_date.split('T')[0] : '—'}
-                          </span>
-                        </div>
-                        <div>
-                          <span className="text-[10px] text-muted-foreground block">Afetados</span>
-                          <span className="font-semibold text-foreground">
-                            {occ.affected_count || 1} aves
-                          </span>
-                        </div>
-                        {occ.action_taken && (
-                          <div className="col-span-2">
-                            <span className="text-[10px] text-muted-foreground block">
-                              Ação Tomada
-                            </span>
-                            <span className="font-medium text-foreground text-[11px] truncate block">
-                              {occ.action_taken}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
+                    <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-1 border-t border-border/40">
+                      <span>{occ.occurrence_date ? occ.occurrence_date.split('T')[0] : ''}</span>
+                      <span>{occ.affected_count || 1} ave(s) afetada(s)</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
         </TabsContent>
 
-        {/* ==========================================
-            ABA 4: PROTOCOLOS
-        ========================================== */}
-        <TabsContent value="protocolos" className="mt-4 space-y-4">
+        {/* TAB 4: PROTOCOLOS SANITÁRIOS */}
+        <TabsContent value="protocolos" className="space-y-3 mt-0">
           {filteredProtocols.length === 0 ? (
-            <Card className="rounded-3xl bg-white border-border shadow-subtle">
-              <CardContent className="p-8 text-center space-y-3">
-                <FileText className="w-10 h-10 text-muted-foreground/40 mx-auto" />
-                <div>
-                  <p className="text-sm font-semibold text-muted-foreground">
-                    Nenhum protocolo cadastrado
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Crie planos sanitários reutilizáveis (ex: Programa de Vacinação Inicial de
-                    Pintinhos) e vincule aos lotes.
-                  </p>
-                </div>
+            <Card className="rounded-2xl border border-dashed border-border p-8 text-center bg-card/50">
+              <FileText className="w-10 h-10 text-muted-foreground/50 mx-auto mb-2" />
+              <h3 className="text-sm font-bold text-foreground">Nenhum protocolo cadastrado</h3>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1">
+                Crie planos sanitários reutilizáveis (ex: Programa de Vacinação Inicial de
+                Pintainhas) e aplique com 1 clique a qualquer lote.
+              </p>
+              {canEdit && (
                 <Button
                   onClick={() => {
-                    setEditingProt(null)
-                    setProtModalOpen(true)
+                    setEditingProto(null)
+                    setProtoModalOpen(true)
                   }}
-                  className="rounded-xl bg-primary text-white text-xs gap-1.5 font-bold"
+                  className="rounded-xl h-9 text-xs font-bold mt-4 bg-purple-600 hover:bg-purple-700 text-white gap-2"
                 >
-                  <Plus className="w-4 h-4" /> Criar Protocolo
+                  <Plus className="w-3.5 h-3.5" /> Criar Primeiro Protocolo
                 </Button>
-              </CardContent>
+              )}
             </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {filteredProtocols.map((prot) => {
-                const stepCount = prot.steps?.length || 0
-                return (
-                  <Card
-                    key={prot.id}
-                    className="rounded-3xl bg-white border-border shadow-subtle hover:shadow-elevation transition-all flex flex-col justify-between"
-                  >
-                    <CardContent className="p-5 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <Badge className="bg-purple-100 text-purple-900 border-purple-200 text-[10px] font-bold">
-                          {prot.protocol_type}
-                        </Badge>
-                        <div className="flex items-center gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              setAssigningProt(prot)
-                              setAssignModalOpen(true)
-                            }}
-                            className="h-7 text-[11px] rounded-xl text-primary border-primary/20 gap-1"
-                          >
-                            <Link2 className="w-3.5 h-3.5" /> Vincular a Lote
-                          </Button>
-                          <RecordActionMenu
-                            onView={() => setDetailsProt(prot)}
-                            onEdit={
-                              canEdit
-                                ? () => {
-                                    setEditingProt(prot)
-                                    setProtModalOpen(true)
-                                  }
-                                : undefined
-                            }
-                            onDelete={canDelete ? () => setDeletingProt(prot) : undefined}
-                            disabled={!canEdit}
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <h3 className="font-extrabold text-base text-foreground flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-purple-600 shrink-0" />
-                          {prot.name}
-                        </h3>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Atividade: {prot.activity_type || 'Todas'} • {stepCount}{' '}
-                          {stepCount === 1 ? 'etapa' : 'etapas'}
-                        </p>
-                      </div>
-
-                      {/* Etapas preview */}
-                      <div className="space-y-1.5 bg-secondary/30 p-3 rounded-2xl">
-                        <span className="text-[11px] font-bold text-foreground block">
-                          Cronograma de Etapas
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+              {filteredProtocols.map((proto) => (
+                <Card
+                  key={proto.id}
+                  className="rounded-2xl border border-border/70 hover:border-purple-500/50 transition-all duration-200 bg-card shadow-xs overflow-hidden flex flex-col justify-between"
+                >
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <span className="text-xs font-bold text-foreground block">
+                          {proto.name}
                         </span>
-                        {stepCount === 0 ? (
-                          <p className="text-[11px] text-muted-foreground">
-                            Nenhuma etapa configurada.
-                          </p>
-                        ) : (
-                          <div className="space-y-1">
-                            {prot.steps.slice(0, 4).map((step, idx) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between text-xs py-1 border-b border-border/40 last:border-0"
-                              >
-                                <span className="font-semibold text-primary">Dia {step.day}:</span>
-                                <span className="text-foreground truncate flex-1 ml-2">
-                                  {step.action}
-                                </span>
-                              </div>
-                            ))}
-                            {stepCount > 4 && (
-                              <p className="text-[10px] text-muted-foreground pt-1">
-                                + {stepCount - 4} etapas adicionais...
-                              </p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )
-              })}
-            </div>
-          )}
-
-          {/* Vínculos de protocolo existentes */}
-          {protocolAssignments.length > 0 && (
-            <div className="mt-8 space-y-3">
-              <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-primary" /> Vínculos Ativos a Lotes
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {protocolAssignments.map((pa) => {
-                  const prot = healthProtocols.find((p) => p.id === pa.protocol_id)
-                  const lot = lots.find((l) => l.id === pa.lot_id)
-                  return (
-                    <Card key={pa.id} className="rounded-2xl bg-white border-border p-4 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-primary">
-                          {lot?.name || 'Lote'}
+                        <span className="text-[10px] text-purple-700 font-semibold block">
+                          {proto.activity_type || 'Geral'} • {proto.steps?.length || 0} Etapas
                         </span>
-                        {canDelete && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={async () => {
-                              const res = await deleteProtocolAssignment(pa.id)
-                              if (res?.error) {
-                                toast({
-                                  title: 'Erro ao excluir vínculo',
-                                  description: res.error.message || 'Tente novamente',
-                                  variant: 'destructive',
-                                })
-                                return
-                              }
-                              toast({ title: 'Vínculo excluído com sucesso' })
-                            }}
-                            className="h-7 w-7 p-0 text-rose-600 hover:bg-rose-50 rounded-lg"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </Button>
-                        )}
                       </div>
-                      <p className="text-xs text-foreground font-semibold">
-                        Protocolo: {prot?.name || pa.protocolName || '—'}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground">
-                        Data de Ref (Alojamento): {pa.start_date}
-                      </p>
-                      <div className="text-[10px] text-muted-foreground bg-secondary/50 p-2 rounded-xl">
-                        {pa.generated_entries?.length || 0} ações geradas
+
+                      <div className="flex items-center gap-1">
+                        <RecordActionMenu
+                          customActions={[
+                            {
+                              label: 'Vincular a um lote 🔗',
+                              icon: <Link2 className="w-3.5 h-3.5 text-primary" />,
+                              onClick: () => {
+                                setSelectedProtocolToAssign(proto)
+                                setAssignModalOpen(true)
+                              },
+                            },
+                          ]}
+                          onViewDetails={() =>
+                            setDetailsRecord({
+                              open: true,
+                              title: `Protocolo Sanitário: ${proto.name}`,
+                              record: {
+                                'Nome do Protocolo': proto.name,
+                                Tipo: proto.protocol_type || 'Programa de Vacinação',
+                                Atividade: proto.activity_type || 'Avicultura',
+                                'Faixa Etária': `${proto.age_range_start || 1} a ${proto.age_range_end || 60} dias`,
+                                'Qtd de Etapas': proto.steps?.length || 0,
+                                Etapas: (proto.steps || [])
+                                  .map((s) => `Dia ${s.day}: ${s.action} (${s.description || ''})`)
+                                  .join(' | '),
+                                Observações: proto.notes || '—',
+                              },
+                            })
+                          }
+                          onEdit={() => {
+                            setEditingProto(proto)
+                            setProtoModalOpen(true)
+                          }}
+                          onDelete={() =>
+                            setDeleteConfirm({
+                              open: true,
+                              id: proto.id,
+                              name: proto.name,
+                              type: 'proto',
+                            })
+                          }
+                        />
                       </div>
-                    </Card>
-                  )
-                })}
-              </div>
-            </div>
-          )}
-        </TabsContent>
+                    </div>
 
-        {/* ==========================================
-            ABA 5: CALENDÁRIO & TIMELINE
-        ========================================== */}
-        <TabsContent value="calendario" className="mt-4 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-border">
-            <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                variant={calendarFilter === 'hoje' ? 'default' : 'outline'}
-                onClick={() => setCalendarFilter('hoje')}
-                className="h-8 rounded-xl text-xs"
-              >
-                Hoje
-              </Button>
-              <Button
-                size="sm"
-                variant={calendarFilter === '7dias' ? 'default' : 'outline'}
-                onClick={() => setCalendarFilter('7dias')}
-                className="h-8 rounded-xl text-xs"
-              >
-                Próximos 7 dias
-              </Button>
-              <Button
-                size="sm"
-                variant={calendarFilter === '30dias' ? 'default' : 'outline'}
-                onClick={() => setCalendarFilter('30dias')}
-                className="h-8 rounded-xl text-xs"
-              >
-                Próximos 30 dias
-              </Button>
-              <Button
-                size="sm"
-                variant={calendarFilter === 'atrasados' ? 'default' : 'outline'}
-                onClick={() => setCalendarFilter('atrasados')}
-                className="h-8 rounded-xl text-xs text-rose-600"
-              >
-                Atrasados
-              </Button>
-            </div>
-          </div>
-
-          {/* Consolidated Timeline list */}
-          {(() => {
-            const todayStr = new Date().toISOString().split('T')[0]
-            const d7 = new Date()
-            d7.setDate(d7.getDate() + 7)
-            const d7Str = d7.toISOString().split('T')[0]
-
-            const d30 = new Date()
-            d30.setDate(d30.getDate() + 30)
-            const d30Str = d30.toISOString().split('T')[0]
-
-            // Combine vaccinations and treatments
-            const items: {
-              id: string
-              type: 'vacina' | 'tratamento'
-              title: string
-              lot_name: string
-              date: string
-              status: string
-              isDelayed: boolean
-              responsible?: string
-            }[] = []
-
-            for (const v of vaccinations) {
-              const targetDate = v.scheduled_date || v.performed_date || ''
-              const isDelayed = Boolean(
-                v.status === 'delayed' ||
-                (v.status === 'scheduled' && targetDate && targetDate < todayStr),
-              )
-              items.push({
-                id: v.id,
-                type: 'vacina',
-                title: `Vacina: ${v.vaccine_name}`,
-                lot_name: lotName(v.lot_id),
-                date: targetDate,
-                status: v.status,
-                isDelayed,
-                responsible: v.responsible,
-              })
-            }
-
-            for (const t of treatments) {
-              const targetDate = t.start_date || ''
-              const isDelayed = Boolean(
-                t.status === 'scheduled' && targetDate && targetDate < todayStr,
-              )
-              items.push({
-                id: t.id,
-                type: 'tratamento',
-                title: `Tratamento: ${t.medication_name}`,
-                lot_name: lotName(t.lot_id),
-                date: targetDate,
-                status: t.status,
-                isDelayed,
-                responsible: t.responsible,
-              })
-            }
-
-            // Filter
-            const filtered = items.filter((it) => {
-              if (calendarFilter === 'atrasados') return it.isDelayed
-              if (calendarFilter === 'hoje') return it.date === todayStr
-              if (calendarFilter === '7dias') return it.date >= todayStr && it.date <= d7Str
-              if (calendarFilter === '30dias') return it.date >= todayStr && it.date <= d30Str
-              return true
-            })
-
-            // Group by date
-            const grouped: Record<string, typeof items> = {}
-            for (const it of filtered.sort((a, b) => a.date.localeCompare(b.date))) {
-              const key = it.date || 'Sem data definida'
-              if (!grouped[key]) grouped[key] = []
-              grouped[key].push(it)
-            }
-
-            const dates = Object.keys(grouped)
-
-            if (dates.length === 0) {
-              return (
-                <Card className="rounded-3xl bg-white border-border shadow-subtle p-8 text-center">
-                  <Calendar className="w-10 h-10 text-muted-foreground/40 mx-auto mb-2" />
-                  <p className="text-sm font-semibold text-muted-foreground">
-                    Nenhum procedimento encontrado para este filtro
-                  </p>
-                </Card>
-              )
-            }
-
-            return (
-              <div className="space-y-4">
-                {dates.map((dateKey) => (
-                  <div key={dateKey} className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 rounded-full bg-primary" />
-                      <span className="text-xs font-bold text-foreground">
-                        {dateKey === todayStr ? `Hoje (${dateKey})` : dateKey}
+                    {/* Preview de Etapas */}
+                    <div className="space-y-1.5 pt-1 border-t border-border/50">
+                      <span className="text-[10px] text-muted-foreground uppercase font-semibold tracking-wider block">
+                        Cronograma de Etapas:
                       </span>
+                      <div className="space-y-1 max-h-32 overflow-y-auto pr-1">
+                        {(proto.steps || []).map((st, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between text-[11px] p-1.5 rounded-lg bg-secondary/40 border border-border/50"
+                          >
+                            <span className="font-bold text-primary w-12 shrink-0">
+                              Dia {st.day}
+                            </span>
+                            <span className="truncate text-foreground flex-1 font-medium">
+                              {st.action}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                      {grouped[dateKey].map((it) => (
-                        <div
-                          key={it.id}
-                          className={`p-3.5 rounded-2xl border flex items-center justify-between text-xs bg-white ${
-                            it.isDelayed ? 'border-rose-300 bg-rose-50/40' : 'border-border'
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center shrink-0">
-                              {it.type === 'vacina' ? (
-                                <Syringe className="w-4 h-4 text-emerald-600" />
-                              ) : (
-                                <Pill className="w-4 h-4 text-blue-600" />
-                              )}
-                            </div>
-                            <div>
-                              <p className="font-bold text-foreground">{it.title}</p>
-                              <p className="text-[11px] text-muted-foreground">
-                                Lote: {it.lot_name}
-                                {it.responsible ? ` • Resp: ${it.responsible}` : ''}
-                              </p>
-                            </div>
-                          </div>
-                          <div>
-                            {it.isDelayed ? (
-                              <Badge className="bg-rose-100 text-rose-900 border-rose-200 text-[10px]">
-                                Atrasado
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] uppercase">
-                                {it.status}
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )
-          })()}
+                    {/* Botão para vincular a lote */}
+                    {canEdit && (
+                      <Button
+                        onClick={() => {
+                          setSelectedProtocolToAssign(proto)
+                          setAssignModalOpen(true)
+                        }}
+                        size="sm"
+                        className="w-full h-8 text-xs font-bold rounded-xl bg-purple-600 hover:bg-purple-700 text-white gap-1.5 shadow-xs"
+                      >
+                        <Link2 className="w-3.5 h-3.5" /> Vincular a um Lote
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 
-      {/* ==========================================
-          MODAIS E DIÁLOGOS
-      ========================================== */}
+      {/* ==================================================================== */}
+      {/* MODAIS E DIÁLOGOS DE EDIÇÃO / CADASTRO */}
+      {/* ==================================================================== */}
       <VaccinationDialog
         open={vacModalOpen}
-        onOpenChange={setVacModalOpen}
+        onOpenChange={(v) => {
+          setVacModalOpen(v)
+          if (!v) setEditingVac(null)
+        }}
         editing={editingVac}
         lots={lots}
         activities={activities}
         inventory={inventory}
         orgId={organization?.id}
         propertyId={currentProperty?.id}
-        onSubmit={async (payload) => {
-          if (editingVac) {
-            const result = await updateVaccination(editingVac.id, payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao atualizar vacinação',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Vacinação atualizada com sucesso! 💉' })
-          } else {
-            const result = await addVaccination(payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao cadastrar vacinação',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Vacinação cadastrada com sucesso! 💉' })
-          }
-          setVacModalOpen(false)
+        onSubmit={handleSaveVaccination}
+      />
+
+      <ApplyVaccinationDialog
+        open={applyVacModalOpen}
+        onOpenChange={(v) => {
+          setApplyVacModalOpen(v)
+          if (!v) setSelectedVacToApply(null)
         }}
+        vaccination={selectedVacToApply}
+        lots={lots}
+        inventory={inventory}
+        onConfirm={handleApplyVacConfirm}
       />
 
       <TreatmentDialog
         open={trtModalOpen}
-        onOpenChange={setTrtModalOpen}
+        onOpenChange={(v) => {
+          setTrtModalOpen(v)
+          if (!v) setEditingTrt(null)
+        }}
         editing={editingTrt}
         lots={lots}
         activities={activities}
         inventory={inventory}
         orgId={organization?.id}
         propertyId={currentProperty?.id}
-        onSubmit={async (payload) => {
-          if (editingTrt) {
-            const result = await updateTreatment(editingTrt.id, payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao atualizar tratamento',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Tratamento atualizado com sucesso! 💊' })
-          } else {
-            const result = await addTreatment(payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao cadastrar tratamento',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Tratamento cadastrado com sucesso! 💊' })
-          }
-          setTrtModalOpen(false)
-        }}
+        onSubmit={handleSaveTreatment}
       />
 
       <OccurrenceDialog
         open={occModalOpen}
-        onOpenChange={setOccModalOpen}
+        onOpenChange={(v) => {
+          setOccModalOpen(v)
+          if (!v) setEditingOcc(null)
+        }}
         editing={editingOcc}
         lots={lots}
         activities={activities}
         orgId={organization?.id}
         propertyId={currentProperty?.id}
-        onSubmit={async (payload) => {
-          if (editingOcc) {
-            const result = await updateHealthOccurrence(editingOcc.id, payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao atualizar ocorrência',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Ocorrência atualizada! ⚠️' })
-          } else {
-            const result = await addHealthOccurrence(payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao registrar ocorrência',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Ocorrência registrada com sucesso! ⚠️' })
-          }
-          setOccModalOpen(false)
-        }}
+        onSubmit={handleSaveOccurrence}
       />
 
       <ProtocolDialog
-        open={protModalOpen}
-        onOpenChange={setProtModalOpen}
-        editing={editingProt}
+        open={protoModalOpen}
+        onOpenChange={(v) => {
+          setProtoModalOpen(v)
+          if (!v) setEditingProto(null)
+        }}
+        editing={editingProto}
         inventory={inventory}
         orgId={organization?.id}
         propertyId={currentProperty?.id}
-        onSubmit={async (payload) => {
-          if (editingProt) {
-            const result = await updateHealthProtocol(editingProt.id, payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao atualizar protocolo',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Protocolo atualizado! 📋' })
-          } else {
-            const result = await addHealthProtocol(payload)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao criar protocolo',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Protocolo criado com sucesso! 📋' })
-          }
-          setProtModalOpen(false)
-        }}
+        onSubmit={handleSaveProtocol}
       />
 
       <AssignProtocolDialog
         open={assignModalOpen}
-        onOpenChange={setAssignModalOpen}
-        protocol={assigningProt}
+        onOpenChange={(v) => {
+          setAssignModalOpen(v)
+          if (!v) setSelectedProtocolToAssign(null)
+        }}
+        protocol={selectedProtocolToAssign}
         lots={lots}
         orgId={organization?.id}
         propertyId={currentProperty?.id}
-        onAssign={async (lotId, refDate) => {
-          if (!assigningProt) return
-          const lot = lots.find((l) => l.id === lotId)
-          const ref = new Date(refDate)
-
-          const entries = (assigningProt.steps || []).map((st) => {
-            const entryDate = new Date(ref)
-            entryDate.setDate(entryDate.getDate() + Number(st.day || 0))
-            return {
-              day_offset: st.day,
-              scheduled_date: entryDate.toISOString().split('T')[0],
-              action: st.action,
-              description: st.description,
-              status: 'pending' as const,
-            }
-          })
-
-          const result = await addProtocolAssignment({
-            organization_id: organization?.id,
-            property_id: currentProperty?.id,
-            lot_id: lotId,
-            lotName: lot?.name,
-            protocol_id: assigningProt.id,
-            protocolName: assigningProt.name,
-            assigned_date: new Date().toISOString().split('T')[0],
-            start_date: refDate,
-            generated_entries: entries,
-          })
-
-          if (result?.error) {
-            toast({
-              title: 'Erro ao vincular protocolo ao lote',
-              description: result.error.message || 'Tente novamente',
-              variant: 'destructive',
-            })
-            return
-          }
-
-          toast({
-            title: 'Protocolo vinculado ao lote! ✨',
-            description: `${entries.length} etapas programadas a partir de ${refDate}.`,
-          })
-          setAssignModalOpen(false)
-        }}
+        onAssign={handleAssignProtocolConfirm}
       />
 
-      {/* Delete Dialogs */}
-      <DeleteConfirmDialog
-        open={!!deletingVac}
-        onOpenChange={(v) => !v && setDeletingVac(null)}
-        onConfirm={async () => {
-          if (deletingVac) {
-            const result = await deleteVaccination(deletingVac.id)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao excluir vacinação',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Vacinação excluída' })
-            setDeletingVac(null)
-          }
-        }}
-      />
-
-      <DeleteConfirmDialog
-        open={!!deletingTrt}
-        onOpenChange={(v) => !v && setDeletingTrt(null)}
-        onConfirm={async () => {
-          if (deletingTrt) {
-            const result = await deleteTreatment(deletingTrt.id)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao excluir tratamento',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Tratamento excluído' })
-            setDeletingTrt(null)
-          }
-        }}
-      />
-
-      <DeleteConfirmDialog
-        open={!!deletingOcc}
-        onOpenChange={(v) => !v && setDeletingOcc(null)}
-        onConfirm={async () => {
-          if (deletingOcc) {
-            const result = await deleteHealthOccurrence(deletingOcc.id)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao excluir ocorrência',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Ocorrência excluída' })
-            setDeletingOcc(null)
-          }
-        }}
-      />
-
-      <DeleteConfirmDialog
-        open={!!deletingProt}
-        onOpenChange={(v) => !v && setDeletingProt(null)}
-        onConfirm={async () => {
-          if (deletingProt) {
-            const result = await deleteHealthProtocol(deletingProt.id)
-            if (result?.error) {
-              toast({
-                title: 'Erro ao excluir protocolo',
-                description: result.error.message || 'Tente novamente',
-                variant: 'destructive',
-              })
-              return
-            }
-            toast({ title: 'Protocolo excluído' })
-            setDeletingProt(null)
-          }
-        }}
-      />
-
-      {/* Diálogo Registrar Aplicação */}
-      <ApplyVaccinationDialog
-        open={applyVacModalOpen}
-        onOpenChange={(v) => {
-          setApplyVacModalOpen(v)
-          if (!v) setApplyingVac(null)
-        }}
-        vaccination={applyingVac}
-        lots={lots}
-        inventory={inventory}
-        onConfirm={async (updatedData, stockMovement) => {
-          if (!applyingVac) return
-
-          // 1. Atualizar registro da vacinação
-          const result = await updateVaccination(applyingVac.id, updatedData)
-          if (result?.error) {
-            toast({
-              title: 'Erro ao registrar aplicação',
-              description: result.error.message || 'Tente novamente',
-              variant: 'destructive',
-            })
-            return
-          }
-
-          // 2. Se houver movimentação de estoque solicitada
-          if (stockMovement) {
-            const { error: moveError } = await addStockMovement(stockMovement.movementPayload)
-            if (moveError) {
-              toast({
-                title: 'Aviso: Erro ao registrar baixa no estoque',
-                description: moveError.message,
-                variant: 'destructive',
-              })
-            } else if (stockMovement.updatePayload && stockMovement.inventoryItemId) {
-              await updateInventory(stockMovement.inventoryItemId, stockMovement.updatePayload)
-            }
-          }
-
-          toast({
-            title: 'Aplicação registrada com sucesso! 💉',
-            description: stockMovement
-              ? 'Status alterado para Realizada, estoque baixado e custo apropriado ao lote.'
-              : 'Status alterado para Realizada e custo apropriado ao lote.',
-          })
-          setApplyVacModalOpen(false)
-          setApplyingVac(null)
-        }}
-      />
-
-      {/* Details View Dialogs */}
+      {/* Detalhes de Registro Genérico */}
       <RecordDetailsDialog
-        open={!!detailsVac}
-        onOpenChange={(v) => !v && setDetailsVac(null)}
-        title={`Vacinação — ${detailsVac?.vaccine_name || ''}`}
-        badge={
-          detailsVac
-            ? {
-                label:
-                  detailsVac.status === 'performed'
-                    ? 'Realizada'
-                    : detailsVac.status === 'scheduled'
-                      ? 'Programada'
-                      : detailsVac.status === 'delayed'
-                        ? 'Atrasada'
-                        : 'Cancelada',
-                className:
-                  detailsVac.status === 'performed'
-                    ? 'bg-emerald-100 text-emerald-800 text-[10px]'
-                    : detailsVac.status === 'scheduled'
-                      ? 'bg-blue-100 text-blue-800 text-[10px]'
-                      : 'bg-zinc-100 text-zinc-800 text-[10px]',
-              }
-            : null
-        }
-        rows={
-          detailsVac
-            ? [
-                { label: 'Vacina', value: detailsVac.vaccine_name },
-                { label: 'Doença / Alvo', value: detailsVac.disease_target },
-                { label: 'Lote', value: lotName(detailsVac.lot_id) },
-                { label: 'Data Programada', value: detailsVac.scheduled_date },
-                { label: 'Data Realizada', value: detailsVac.performed_date },
-                { label: 'Animais', value: detailsVac.animal_count },
-                {
-                  label: 'Dose por animal',
-                  value: `${detailsVac.dose_per_animal ?? ''} ${detailsVac.dose_unit ?? ''}`,
-                },
-                { label: 'Via de Aplicação', value: detailsVac.application_route },
-                {
-                  label: 'Status do Frasco',
-                  value:
-                    detailsVac.vial_status === 'opened'
-                      ? 'Frasco Aberto / Reconstituído'
-                      : detailsVac.vial_status === 'discarded'
-                        ? 'Frasco Descartado'
-                        : detailsVac.vial_status === 'closed'
-                          ? 'Frasco Fechado'
-                          : undefined,
-                },
-                { label: 'Item do Estoque', value: itemName(detailsVac.inventory_item_id) },
-                { label: 'Qtd Usada', value: detailsVac.quantity_used },
-                {
-                  label: 'Custo Total',
-                  value: detailsVac.total_cost
-                    ? `R$ ${Number(detailsVac.total_cost).toFixed(2)}`
-                    : 'R$ 0,00',
-                },
-                { label: 'Baixa no Estoque', value: detailsVac.stock_deducted ? 'Sim' : 'Não' },
-                { label: 'Lote do Fabricante', value: detailsVac.batch_number },
-                { label: 'Validade', value: detailsVac.expiration_date },
-                { label: 'Responsável', value: detailsVac.responsible },
-                { label: 'Observações', value: detailsVac.notes },
-              ]
-            : []
-        }
+        open={detailsRecord.open}
+        onOpenChange={(open) => setDetailsRecord((prev) => ({ ...prev, open }))}
+        title={detailsRecord.title}
+        record={detailsRecord.record}
       />
 
-      <RecordDetailsDialog
-        open={!!detailsTrt}
-        onOpenChange={(v) => !v && setDetailsTrt(null)}
-        title={`Tratamento — ${detailsTrt?.medication_name || ''}`}
-        badge={
-          detailsTrt
-            ? { label: detailsTrt.status, className: 'bg-blue-100 text-blue-800 text-[10px]' }
-            : null
-        }
-        rows={
-          detailsTrt
-            ? [
-                { label: 'Medicamento', value: detailsTrt.medication_name },
-                { label: 'Diagnóstico / Motivo', value: detailsTrt.diagnosis_reason },
-                { label: 'Lote', value: lotName(detailsTrt.lot_id) },
-                { label: 'Dosagem', value: detailsTrt.dosage },
-                { label: 'Frequência', value: detailsTrt.frequency },
-                { label: 'Duração (dias)', value: detailsTrt.duration_days },
-                { label: 'Data Início', value: detailsTrt.start_date },
-                { label: 'Data Fim', value: detailsTrt.end_date },
-                { label: 'Carência (dias)', value: detailsTrt.withdrawal_period_days },
-                { label: 'Item do Estoque', value: itemName(detailsTrt.inventory_item_id) },
-                { label: 'Qtd Usada', value: detailsTrt.quantity_used },
-                {
-                  label: 'Custo Total',
-                  value: detailsTrt.total_cost
-                    ? `R$ ${Number(detailsTrt.total_cost).toFixed(2)}`
-                    : 'R$ 0,00',
-                },
-                { label: 'Responsável', value: detailsTrt.responsible },
-                { label: 'Observações', value: detailsTrt.notes },
-              ]
-            : []
-        }
-      />
-
-      <RecordDetailsDialog
-        open={!!detailsOcc}
-        onOpenChange={(v) => !v && setDetailsOcc(null)}
-        title={`Ocorrência — ${detailsOcc?.occurrence_type || ''}`}
-        badge={
-          detailsOcc
-            ? {
-                label: `Severidade: ${detailsOcc.severity}`,
-                className: 'bg-amber-100 text-amber-800 text-[10px]',
-              }
-            : null
-        }
-        rows={
-          detailsOcc
-            ? [
-                { label: 'Data', value: detailsOcc.occurrence_date },
-                {
-                  label: 'Tipo',
-                  value:
-                    detailsOcc.occurrence_type === 'other'
-                      ? detailsOcc.custom_type
-                      : detailsOcc.occurrence_type,
-                },
-                { label: 'Severidade', value: detailsOcc.severity },
-                { label: 'Lote', value: lotName(detailsOcc.lot_id) },
-                { label: 'Animais Afetados', value: detailsOcc.affected_count },
-                { label: 'Sintomas', value: detailsOcc.symptoms },
-                { label: 'Descrição', value: detailsOcc.description },
-                { label: 'Ação Tomada', value: detailsOcc.action_taken },
-                { label: 'Responsável', value: detailsOcc.responsible },
-                { label: 'Observações', value: detailsOcc.notes },
-              ]
-            : []
-        }
+      {/* Confirmação de Exclusão */}
+      <DeleteConfirmDialog
+        open={deleteConfirm.open}
+        onOpenChange={(open) => setDeleteConfirm((prev) => ({ ...prev, open }))}
+        title={`Excluir ${deleteConfirm.name}`}
+        description="Esta ação não poderá ser desfeita. Deseja realmente remover este registro sanitário?"
+        onConfirm={handleConfirmDelete}
       />
     </div>
   )
@@ -4203,16 +1982,6 @@ function ApplyVaccinationDialog({
 // ====================================================================
 // SUB-COMPONENT: DIÁLOGO VACINAÇÃO
 // ====================================================================
-// Helper to extract fields safely from either snake_case, camelCase or generic data
-function getVacField(vac: any, keys: string[], defaultVal: any = '') {
-  if (!vac) return defaultVal
-  for (const k of keys) {
-    if (vac[k] !== undefined && vac[k] !== null) return vac[k]
-    if (vac.data && vac.data[k] !== undefined && vac.data[k] !== null) return vac.data[k]
-  }
-  return defaultVal
-}
-
 function VaccinationDialog({
   open,
   onOpenChange,
@@ -4265,20 +2034,36 @@ function VaccinationDialog({
     if (editing) {
       const e = editing as any
       const vName = getVacField(e, ['vaccine_name', 'vaccineName', 'name'], '')
-      const target = getVacField(e, ['disease_target', 'target_disease', 'targetDisease', 'diseaseTarget'], '')
+      const target = getVacField(
+        e,
+        ['disease_target', 'target_disease', 'targetDisease', 'diseaseTarget'],
+        '',
+      )
       const actId = getVacField(e, ['activity_id', 'activityId', 'activity'], '')
       const lId = getVacField(e, ['lot_id', 'lotId', 'lot'], '')
       const sDate = getVacField(e, ['scheduled_date', 'scheduledDate'], '')
       const pDate = getVacField(e, ['performed_date', 'performedDate'], '')
-      const aCount = getVacField(e, ['animal_count', 'animal_quantity', 'animalCount', 'animalQuantity'], '')
+      const aCount = getVacField(
+        e,
+        ['animal_count', 'animal_quantity', 'animalCount', 'animalQuantity'],
+        '',
+      )
       const dPerAnimal = getVacField(e, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
       const dUnit = getVacField(e, ['dose_unit', 'doseUnit', 'unit'], 'mL')
-      const appRoute = getVacField(e, ['application_route', 'administration_route', 'applicationRoute', 'route'], 'água')
+      const appRoute = getVacField(
+        e,
+        ['application_route', 'administration_route', 'applicationRoute', 'route'],
+        'água',
+      )
       const resp = getVacField(e, ['responsible'], '')
       const invId = getVacField(e, ['inventory_item_id', 'inventoryItemId'], '')
       const bNumber = getVacField(e, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
       const expDate = getVacField(e, ['expiration_date', 'expirationDate'], '')
-      const qUsed = getVacField(e, ['quantity_used', 'consumed_quantity', 'quantityUsed', 'consumedQuantity'], '')
+      const qUsed = getVacField(
+        e,
+        ['quantity_used', 'consumed_quantity', 'quantityUsed', 'consumedQuantity'],
+        '',
+      )
       const uCost = getVacField(e, ['unit_cost', 'unitCost'], '')
       const tCost = getVacField(e, ['total_cost', 'totalCost'], '')
       const sDeducted = Boolean(getVacField(e, ['stock_deducted', 'stockDeducted'], false))
@@ -4340,7 +2125,6 @@ function VaccinationDialog({
 
   const selectedItem = inventory.find((i) => i.id === inventoryItemId)
 
-  // Update calculated quantity used whenever animalCount or dose changes
   const handleAutoCalcQty = (count: number, dose: number, itemOverride?: any) => {
     if (count > 0 && dose > 0) {
       const calc = Number((count * dose).toFixed(3))
@@ -4611,10 +2395,7 @@ function VaccinationDialog({
           <div className="grid grid-cols-2 gap-3 p-3 rounded-2xl bg-secondary/30 border border-border/50">
             <div>
               <Label className="text-xs">Status do Frasco (Multidose)</Label>
-              <Select
-                value={vialStatus}
-                onValueChange={(v) => setVialStatus(v as VialStatus)}
-              >
+              <Select value={vialStatus} onValueChange={(v) => setVialStatus(v as VialStatus)}>
                 <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
                   <SelectValue placeholder="Padrão / Não especificado" />
                 </SelectTrigger>
