@@ -97,6 +97,8 @@ export function NovoItemDialog({ open, onOpenChange, editingItem }: NovoItemDial
   const [manufacturerBatch, setManufacturerBatch] = useState('')
   const [manufacturingDate, setManufacturingDate] = useState('')
   const [expirationDate, setExpirationDate] = useState('')
+  const [canKeepOpened, setCanKeepOpened] = useState(false)
+  const [reconstitutionAllowed, setReconstitutionAllowed] = useState(false)
 
   const isSanitary = SANITARY_CATEGORIES.includes(category)
   const isEditing = Boolean(editingItem)
@@ -131,6 +133,8 @@ export function NovoItemDialog({ open, onOpenChange, editingItem }: NovoItemDial
       setManufacturerBatch(editingItem.manufacturer_batch || '')
       setManufacturingDate(editingItem.manufacturing_date || '')
       setExpirationDate(editingItem.expiration_date || '')
+      setCanKeepOpened(Boolean(editingItem.can_keep_opened))
+      setReconstitutionAllowed(Boolean(editingItem.reconstitution_allowed))
       setInitialPackageQty('1')
       setValuePerPackage('0')
     } else {
@@ -153,6 +157,8 @@ export function NovoItemDialog({ open, onOpenChange, editingItem }: NovoItemDial
       setManufacturerBatch('')
       setManufacturingDate('')
       setExpirationDate('')
+      setCanKeepOpened(false)
+      setReconstitutionAllowed(true)
     }
   }
 
@@ -185,6 +191,8 @@ export function NovoItemDialog({ open, onOpenChange, editingItem }: NovoItemDial
           manufacturer_batch: manufacturerBatch.trim() || undefined,
           manufacturing_date: manufacturingDate || undefined,
           expiration_date: expirationDate || undefined,
+          can_keep_opened: canKeepOpened,
+          reconstitution_allowed: reconstitutionAllowed,
           lastUpdated: new Date().toISOString().split('T')[0],
         }
 
@@ -227,6 +235,8 @@ export function NovoItemDialog({ open, onOpenChange, editingItem }: NovoItemDial
           manufacturer_batch: manufacturerBatch.trim() || undefined,
           manufacturing_date: manufacturingDate || undefined,
           expiration_date: expirationDate || undefined,
+          can_keep_opened: canKeepOpened,
+          reconstitution_allowed: reconstitutionAllowed,
         }
 
         const { error } = await addInventoryItem(payload)
@@ -488,6 +498,49 @@ export function NovoItemDialog({ open, onOpenChange, editingItem }: NovoItemDial
                     className="h-9 text-xs rounded-xl bg-white"
                   />
                 </div>
+              </div>
+
+              {/* Configurações de Reconstituição e Frasco Aberto */}
+              <div className="space-y-2 pt-2 border-t border-emerald-200/40 text-xs">
+                <span className="font-semibold text-emerald-950 block text-[11px]">
+                  Regras de Conservação & Frasco Aberto:
+                </span>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="reconstitutionAllowed"
+                    checked={reconstitutionAllowed}
+                    onChange={(e) => setReconstitutionAllowed(e.target.checked)}
+                    className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                  />
+                  <label
+                    htmlFor="reconstitutionAllowed"
+                    className="text-emerald-900 cursor-pointer text-xs"
+                  >
+                    Produto liofilizado / requer reconstituição (ex: Newcastle viva)
+                  </label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="canKeepOpened"
+                    checked={canKeepOpened}
+                    onChange={(e) => setCanKeepOpened(e.target.checked)}
+                    className="rounded border-emerald-300 text-emerald-600 focus:ring-emerald-500 h-4 w-4"
+                  />
+                  <label
+                    htmlFor="canKeepOpened"
+                    className="text-emerald-900 cursor-pointer text-xs"
+                  >
+                    Permite guardar sobra reconstituída / aberta para uso posterior
+                  </label>
+                </div>
+                {!canKeepOpened && (
+                  <p className="text-[10px] text-amber-700 bg-amber-50 p-2 rounded-lg border border-amber-200">
+                    ℹ️ Ao aplicar, qualquer sobra do frasco aberto será considerada perda técnica /
+                    descarte contábil.
+                  </p>
+                )}
               </div>
 
               {/* Se for criação, permite entrada inicial calculada */}

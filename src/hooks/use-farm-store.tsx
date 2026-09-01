@@ -27,6 +27,7 @@ import {
   Supplier,
   PeriodFilter,
   Vaccination,
+  VaccinationSession,
   Treatment,
   HealthOccurrence,
   HealthProtocol,
@@ -67,6 +68,11 @@ function useFarmStoreImpl(orgId: string | undefined) {
     FARM_TABLES.vaccinations,
     orgId,
     'vaccinations',
+  )
+  const vaccinationSessions = useSupabaseEntity<VaccinationSession>(
+    FARM_TABLES.vaccinationSessions,
+    orgId,
+    'vaccinationSessions',
   )
   const treatments = useSupabaseEntity<Treatment>(FARM_TABLES.treatments, orgId, 'treatments')
   const healthOccurrences = useSupabaseEntity<HealthOccurrence>(
@@ -635,7 +641,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const addVaccination = useCallback(
     async (vac: Omit<Vaccination, 'id'>) => {
       const id = `vac-${Date.now()}`
-      let qtyUsed = vac.quantity_used
+      let qtyUsed = vac.total_downloaded ?? vac.quantity_used
       if ((qtyUsed === undefined || qtyUsed === 0) && vac.animal_count && vac.dose_per_animal) {
         qtyUsed = Number((vac.animal_count * vac.dose_per_animal).toFixed(3))
       }
@@ -1117,6 +1123,11 @@ function useFarmStoreImpl(orgId: string | undefined) {
     addVaccination,
     updateVaccination,
     deleteVaccination,
+    vaccinationSessions: vaccinationSessions.items,
+    setVaccinationSessions: vaccinationSessions.setItems,
+    addVaccinationSession: vaccinationSessions.add,
+    updateVaccinationSession: vaccinationSessions.update,
+    deleteVaccinationSession: vaccinationSessions.remove,
     treatments: treatments.items,
     setTreatments: treatments.setItems,
     addTreatment,

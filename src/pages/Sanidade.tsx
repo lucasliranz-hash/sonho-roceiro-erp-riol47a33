@@ -55,7 +55,10 @@ import {
   HealthOccurrenceSeverity,
   HealthProtocolStep,
   VialStatus,
+  VialDestiny,
+  VaccinationSession,
 } from '@/types/farm'
+import { VaccinationSessionDialog } from '@/components/sanidade/VaccinationSessionDialog'
 import { toast } from '@/hooks/use-toast'
 
 // Helper seguro para ler campos em snake_case, camelCase ou aninhados em data
@@ -105,19 +108,18 @@ function ApplyVaccinationDialog({
 }: ApplyVaccinationDialogProps) {
   const [performedDate, setPerformedDate] = useState('')
   const [animalCount, setAnimalCount] = useState('')
-  const [dosePerAnimal, setDosePerAnimal] = useState('')
-  const [doseUnit, setDoseUnit] = useState('mL')
-  const [applicationRoute, setApplicationRoute] = useState('água')
+  const [dosePerAnimal, setDosePerAnimal] = useState('1')
+  const [volumePerDose, setVolumePerDose] = useState('0.03')
+  const [volumeUnit, setVolumeUnit] = useState('mL')
+  const [applicationRoute, setApplicationRoute] = useState('ocular')
   const [responsible, setResponsible] = useState('')
   const [inventoryItemId, setInventoryItemId] = useState('')
   const [batchNumber, setBatchNumber] = useState('')
   const [expirationDate, setExpirationDate] = useState('')
-  const [quantityUsed, setQuantityUsed] = useState('')
-  const [unitCost, setUnitCost] = useState('')
-  const [totalCost, setTotalCost] = useState('')
   const [vialStatus, setVialStatus] = useState<VialStatus | ''>('opened')
-  const [discardedQuantity, setDiscardedQuantity] = useState('')
-  const [wasteCost, setWasteCost] = useState('')
+  const [vialDestiny, setVialDestiny] = useState<VialDestiny>('discarded')
+  const [vialCapacity, setVialCapacity] = useState('100')
+  const [vialCost, setVialCost] = useState('65')
   const [deductStock, setDeductStock] = useState(true)
   const [notes, setNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -132,102 +134,107 @@ function ApplyVaccinationDialog({
       ['animal_count', 'animal_quantity', 'animalCount', 'animalQuantity'],
       '',
     )
-    const dPerAnimal = getFieldValue(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
-    const dUnit = getFieldValue(v, ['dose_unit', 'doseUnit', 'unit'], 'mL')
+    const dPerAnimal = getFieldValue(v, ['dose_per_animal', 'dosePerAnimal', 'dose'], '1')
+    const vPerDose = getFieldValue(v, ['volume_per_dose', 'volumePerDose'], '0.03')
+    const vUnit = getFieldValue(v, ['volume_unit', 'volumeUnit'], 'mL')
     const appRoute = getFieldValue(
       v,
       ['application_route', 'administration_route', 'applicationRoute', 'route'],
-      'água',
+      'ocular',
     )
     const resp = getFieldValue(v, ['responsible'], '')
     const invId = getFieldValue(v, ['inventory_item_id', 'inventoryItemId'], '')
     const bNum = getFieldValue(v, ['batch_number', 'manufacturer_batch', 'batchNumber'], '')
     const exp = getFieldValue(v, ['expiration_date', 'expirationDate'], '')
-    const qUsed = getFieldValue(
-      v,
-      ['quantity_used', 'consumed_quantity', 'quantityUsed', 'consumedQuantity'],
-      '',
-    )
-    const uCost = getFieldValue(v, ['unit_cost', 'unitCost'], '')
-    const tCost = getFieldValue(v, ['total_cost', 'totalCost', 'custo'], '')
     const obs = getFieldValue(v, ['notes', 'observations'], '')
     const vStat = getFieldValue(v, ['vial_status', 'vialStatus'], 'opened')
-    const discQty = getFieldValue(v, ['discarded_quantity', 'discardedQuantity'], '')
-    const wCost = getFieldValue(v, ['waste_cost', 'wasteCost'], '')
+    const vDest = getFieldValue(v, ['vial_destiny', 'vialDestiny'], 'discarded')
 
     setPerformedDate(new Date().toISOString().split('T')[0])
     setAnimalCount(aCount !== '' ? String(aCount) : '')
-    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
-    setDoseUnit(dUnit || 'mL')
-    setApplicationRoute(appRoute || 'água')
+    setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '1')
+    setVolumePerDose(vPerDose !== '' ? String(vPerDose) : '0.03')
+    setVolumeUnit(vUnit || 'mL')
+    setApplicationRoute(appRoute || 'ocular')
     setResponsible(resp)
     setInventoryItemId(invId)
     setBatchNumber(bNum)
     setExpirationDate(exp)
     setVialStatus((vStat as VialStatus) || 'opened')
-    setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
-    setWasteCost(wCost !== '' ? String(wCost) : '')
+    setVialDestiny((vDest as VialDestiny) || 'discarded')
     setDeductStock(true)
     setNotes(obs)
 
-    // Cálculo da quantidade em unidade de consumo
-    const countNum = Number(aCount) || 0
-    const doseNum = Number(dPerAnimal) || 0
-    const calculatedQty =
-      qUsed !== ''
-        ? Number(qUsed)
-        : countNum > 0 && doseNum > 0
-          ? Number((countNum * doseNum).toFixed(3))
-          : 0
-    setQuantityUsed(calculatedQty > 0 ? String(calculatedQty) : '')
-
-    // Custo unitário por unidade de consumo a partir do estoque
     const itm = inventory.find((i) => i.id === invId)
-    const cost = uCost !== '' ? Number(uCost) : itm?.averageCost || 0
-    if (cost > 0) {
-      setUnitCost(String(cost))
-      if (calculatedQty > 0) {
-        setTotalCost(String(Number((calculatedQty * cost).toFixed(2))))
-      } else {
-        setTotalCost(tCost !== '' ? String(tCost) : '')
+    if (itm) {
+      if (itm.content_per_package) setVialCapacity(String(itm.content_per_package))
+      if (itm.averageCost && itm.content_per_package) {
+        setVialCost(String(Number((itm.averageCost * itm.content_per_package).toFixed(2))))
       }
-    } else {
-      setUnitCost(uCost !== '' ? String(uCost) : '')
-      setTotalCost(tCost !== '' ? String(tCost) : '')
+      if (!itm.can_keep_opened) {
+        setVialDestiny('discarded')
+      }
     }
   }, [open, vaccination, inventory])
 
   const selectedItem = inventory.find((i) => i.id === inventoryItemId)
   const lot = lots.find((l) => l.id === vaccination?.lot_id)
-
-  const handleRecalcQty = (count: number, dose: number, itemOverride?: any) => {
-    if (count > 0 && dose > 0) {
-      const calc = Number((count * dose).toFixed(3))
-      setQuantityUsed(String(calc))
-      const itm = itemOverride || selectedItem
-      if (itm && itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        setTotalCost(String(Number((calc * itm.averageCost).toFixed(2))))
-      }
-    }
-  }
+  const canKeepOpenedProduct = Boolean(selectedItem?.can_keep_opened)
 
   const handleInventorySelect = (id: string) => {
     setInventoryItemId(id)
     const itm = inventory.find((i) => i.id === id)
     if (itm) {
-      if (itm.unit) setDoseUnit(itm.unit)
       if (itm.manufacturer_batch && !batchNumber) setBatchNumber(itm.manufacturer_batch)
       if (itm.expiration_date && !expirationDate) setExpirationDate(itm.expiration_date)
-      if (itm.averageCost) {
-        setUnitCost(String(itm.averageCost))
-        const qty = Number(quantityUsed) || Number(animalCount) * Number(dosePerAnimal) || 0
-        if (qty > 0) {
-          setTotalCost(String(Number((qty * itm.averageCost).toFixed(2))))
-        }
+      if (itm.content_per_package) setVialCapacity(String(itm.content_per_package))
+      if (itm.averageCost && itm.content_per_package) {
+        setVialCost(String(Number((itm.averageCost * itm.content_per_package).toFixed(2))))
+      }
+      if (!itm.can_keep_opened) {
+        setVialDestiny('discarded')
       }
     }
   }
+
+  // Cálculos de Doses e Volume
+  const birdsCount = Math.max(0, Number(animalCount) || 0)
+  const dosesPerBird = Math.max(0, Number(dosePerAnimal) || 1)
+  const volPerDoseNum = Math.max(0, Number(volumePerDose) || 0)
+
+  // 1. Doses aplicadas = aves × doses por ave
+  const dosesApplied = Number((birdsCount * dosesPerBird).toFixed(2))
+  // 2. Volume total = doses aplicadas × volume por dose
+  const totalVolumeCalculated = Number((dosesApplied * volPerDoseNum).toFixed(3))
+
+  const capacityNum = Math.max(0, Number(vialCapacity) || 100)
+  const vialCostNum = Math.max(0, Number(vialCost) || 65)
+  const theoreticalUnitCost = capacityNum > 0 ? vialCostNum / capacityNum : 0
+  const dosesRemaining = Math.max(0, capacityNum - dosesApplied)
+
+  // Doses descartadas conforme destino
+  const dosesDiscarded = useMemo(() => {
+    if (vialDestiny === 'closed') return 0
+    if (vialDestiny === 'kept') return 0
+    return dosesRemaining
+  }, [vialDestiny, dosesRemaining])
+
+  // Total baixado do estoque
+  const totalDownloaded = useMemo(() => {
+    if (vialDestiny === 'closed') return 0
+    if (vialDestiny === 'kept') return dosesApplied
+    return capacityNum
+  }, [vialDestiny, dosesApplied, capacityNum])
+
+  // Custo real apropriado ao lote
+  const lotAppropriatedCost = useMemo(() => {
+    if (vialDestiny === 'closed') return 0
+    if (vialDestiny === 'kept') {
+      return Number((dosesApplied * theoreticalUnitCost).toFixed(2))
+    }
+    // Sobra descartada -> custo total do frasco apropriado
+    return vialCostNum
+  }, [vialDestiny, dosesApplied, theoreticalUnitCost, vialCostNum])
 
   const handleConfirm = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -235,35 +242,40 @@ function ApplyVaccinationDialog({
       toast({ title: 'Informe a data realizada', variant: 'destructive' })
       return
     }
+    if (birdsCount <= 0) {
+      toast({ title: 'Informe a quantidade de aves vacinadas', variant: 'destructive' })
+      return
+    }
 
     setIsSubmitting(true)
     try {
-      const qUsed = Number(quantityUsed) || Number(animalCount) * Number(dosePerAnimal) || 0
-      const uCost = Number(unitCost) || selectedItem?.averageCost || 0
-      const tCost = Number(totalCost) || Number((qUsed * uCost).toFixed(2)) || 0
-      const dQty = Number(discardedQuantity) || 0
-      const wCost = Number(wasteCost) || Number((dQty * uCost).toFixed(2)) || 0
-
       const updatedPayload: Partial<Vaccination> = {
         status: 'performed',
         performed_date: performedDate,
-        animal_count: animalCount !== '' ? Number(animalCount) : vaccination?.animal_count,
-        dose_per_animal:
-          dosePerAnimal !== '' ? Number(dosePerAnimal) : vaccination?.dose_per_animal,
-        dose_unit: doseUnit || vaccination?.dose_unit,
+        animal_count: birdsCount,
+        dose_per_animal: dosesPerBird,
+        dose_unit: 'dose',
+        volume_per_dose: volPerDoseNum,
+        volume_unit: volumeUnit,
         application_route: applicationRoute || vaccination?.application_route,
         responsible: responsible.trim() || vaccination?.responsible,
         inventory_item_id: inventoryItemId || vaccination?.inventory_item_id,
         inventory_item_name: selectedItem?.name || vaccination?.inventory_item_name,
         batch_number: batchNumber.trim() || vaccination?.batch_number,
         expiration_date: expirationDate || vaccination?.expiration_date,
-        quantity_used: qUsed > 0 ? qUsed : undefined,
-        unit_cost: uCost > 0 ? uCost : undefined,
-        total_cost: tCost > 0 ? tCost : undefined,
+        quantity_used: dosesApplied,
+        doses_applied: dosesApplied,
+        doses_discarded: dosesDiscarded,
+        total_downloaded: totalDownloaded,
+        unit_cost: theoreticalUnitCost,
+        total_cost: lotAppropriatedCost,
         stock_deducted: deductStock && Boolean(inventoryItemId),
-        vial_status: (vialStatus as VialStatus) || undefined,
-        discarded_quantity: dQty > 0 ? dQty : undefined,
-        waste_cost: wCost > 0 ? wCost : undefined,
+        vial_status:
+          (vialStatus as VialStatus) ||
+          (vialDestiny === 'closed' ? 'closed' : vialDestiny === 'kept' ? 'opened' : 'discarded'),
+        vial_destiny: vialDestiny,
+        discarded_quantity: dosesDiscarded,
+        waste_cost: Number((dosesDiscarded * theoreticalUnitCost).toFixed(2)),
         notes: notes.trim() || vaccination?.notes,
       }
 
@@ -275,8 +287,8 @@ function ApplyVaccinationDialog({
           }
         | undefined = undefined
 
-      if (deductStock && inventoryItemId && selectedItem && qUsed > 0) {
-        const newStock = Math.max(0, (selectedItem.currentStock || 0) - qUsed)
+      if (deductStock && inventoryItemId && selectedItem && totalDownloaded > 0) {
+        const newStock = Math.max(0, (selectedItem.currentStock || 0) - totalDownloaded)
         stockMovement = {
           inventoryItemId,
           movementPayload: {
@@ -286,15 +298,15 @@ function ApplyVaccinationDialog({
             inventoryItemName: selectedItem.name,
             type: 'saida',
             movementType: 'Consumo',
-            quantity: qUsed,
-            unit: selectedItem.unit || doseUnit || 'un',
+            quantity: totalDownloaded,
+            unit: selectedItem.unit || 'dose',
             balanceAfter: Number(newStock.toFixed(3)),
-            unitValue: Number(uCost.toFixed(4)),
-            totalValue: Number(tCost.toFixed(2)),
+            unitValue: Number(theoreticalUnitCost.toFixed(4)),
+            totalValue: Number(lotAppropriatedCost.toFixed(2)),
             date: performedDate,
             lotId: vaccination?.lot_id,
             lotName: lot?.name || vaccination?.lotName,
-            notes: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'}). Consumo: ${qUsed} ${selectedItem.unit || 'un'}.`,
+            notes: `Aplicação Sanitária: ${vaccination?.vaccine_name || 'Vacina'} (${lot?.name || 'Lote'}). Doses aplicadas: ${dosesApplied}, Descartadas: ${dosesDiscarded}, Total baixado: ${totalDownloaded} doses. Custo: R$ ${lotAppropriatedCost.toFixed(2)}.`,
             generateExpense: false,
           },
           updatePayload: {
@@ -387,45 +399,68 @@ function ApplyVaccinationDialog({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
                 <div>
                   <Label className="text-xs">Aves Vacinadas *</Label>
                   <Input
                     type="number"
                     value={animalCount}
-                    onChange={(e) => {
-                      setAnimalCount(e.target.value)
-                      handleRecalcQty(Number(e.target.value), Number(dosePerAnimal))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="Ex: 100"
+                    onChange={(e) => setAnimalCount(e.target.value)}
+                    className="h-10 text-xs rounded-xl font-bold"
+                    placeholder="Ex: 4"
                     required
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Dose Real / Ave *</Label>
+                  <Label className="text-xs">Doses / Ave *</Label>
                   <Input
                     type="number"
                     step="any"
                     value={dosePerAnimal}
-                    onChange={(e) => {
-                      setDosePerAnimal(e.target.value)
-                      handleRecalcQty(Number(animalCount), Number(e.target.value))
-                    }}
-                    className="h-10 text-xs rounded-xl"
-                    placeholder="0.5"
+                    onChange={(e) => setDosePerAnimal(e.target.value)}
+                    className="h-10 text-xs rounded-xl font-bold"
+                    placeholder="1"
                     required
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Unidade</Label>
+                  <Label className="text-xs">Volume / Dose</Label>
                   <Input
-                    value={doseUnit}
-                    onChange={(e) => setDoseUnit(e.target.value)}
+                    type="number"
+                    step="any"
+                    value={volumePerDose}
+                    onChange={(e) => setVolumePerDose(e.target.value)}
                     className="h-10 text-xs rounded-xl"
-                    placeholder="mL, dose"
-                    required
+                    placeholder="0.03"
                   />
+                </div>
+                <div>
+                  <Label className="text-xs">Unidade Volume</Label>
+                  <Input
+                    value={volumeUnit}
+                    onChange={(e) => setVolumeUnit(e.target.value)}
+                    className="h-10 text-xs rounded-xl"
+                    placeholder="mL"
+                  />
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-950 flex flex-wrap justify-between items-center gap-2">
+                <div>
+                  <span>Doses aplicadas: </span>
+                  <strong className="font-bold">{dosesApplied} doses</strong>
+                  <span className="text-muted-foreground text-[11px] ml-1">
+                    ({birdsCount} aves × {dosesPerBird} dose/ave)
+                  </span>
+                </div>
+                <div>
+                  <span>Volume total: </span>
+                  <strong className="font-bold">
+                    {totalVolumeCalculated} {volumeUnit}
+                  </strong>
+                  <span className="text-muted-foreground text-[11px] ml-1">
+                    ({dosesApplied} doses × {volPerDoseNum} {volumeUnit}/dose)
+                  </span>
                 </div>
               </div>
 
@@ -436,8 +471,8 @@ function ApplyVaccinationDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="água">Água de bebida</SelectItem>
                     <SelectItem value="ocular">Ocular / Nasal</SelectItem>
+                    <SelectItem value="água">Água de bebida</SelectItem>
                     <SelectItem value="oral">Oral direta</SelectItem>
                     <SelectItem value="intramuscular">Intramuscular</SelectItem>
                     <SelectItem value="subcutânea">Subcutânea</SelectItem>
@@ -448,14 +483,14 @@ function ApplyVaccinationDialog({
                 </Select>
               </div>
 
-              {/* Integração com Estoque */}
+              {/* Integração com Estoque & Frasco Multidose */}
               <div className="p-3.5 rounded-2xl bg-secondary/50 border border-border/70 space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-foreground">
-                    Item do Estoque & Consumo Efetivo
+                    Item do Estoque & Frasco Multidose
                   </span>
                   <Badge variant="outline" className="text-[10px]">
-                    Baixa na Unidade de Consumo
+                    Controle de Reconstituição
                   </Badge>
                 </div>
 
@@ -486,33 +521,22 @@ function ApplyVaccinationDialog({
                       </strong>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-muted-foreground">
-                        Custo unitário (por {selectedItem.unit}):
-                      </span>
+                      <span className="text-muted-foreground">Custo unitário teórico:</span>
                       <strong className="text-primary font-bold">
-                        R$ {(selectedItem.averageCost || 0).toFixed(4)} / {selectedItem.unit}
+                        R$ {theoreticalUnitCost.toFixed(4)} / dose
                       </strong>
                     </div>
-                    {selectedItem.content_per_package && (
-                      <div className="flex justify-between text-[10px] text-muted-foreground pt-0.5">
-                        <span>Embalagem original:</span>
-                        <span>
-                          {selectedItem.content_per_package} {selectedItem.unit}/
-                          {selectedItem.packaging_type?.toLowerCase() || 'frasco'}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
                   <div>
-                    <Label className="text-xs">Lote do Fabricante</Label>
+                    <Label className="text-xs">Lote Fabricante</Label>
                     <Input
                       placeholder="Ex: LOTE-894"
                       value={batchNumber}
                       onChange={(e) => setBatchNumber(e.target.value)}
-                      className="h-10 text-xs rounded-xl bg-white"
+                      className="h-9 text-xs rounded-xl bg-white"
                     />
                   </div>
                   <div>
@@ -521,90 +545,90 @@ function ApplyVaccinationDialog({
                       type="date"
                       value={expirationDate}
                       onChange={(e) => setExpirationDate(e.target.value)}
-                      className="h-10 text-xs rounded-xl bg-white"
+                      className="h-9 text-xs rounded-xl bg-white"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
                   <div>
-                    <Label className="text-xs">Qtd Consumida ({doseUnit || 'un'})</Label>
+                    <Label className="text-xs">Capacidade Frasco</Label>
                     <Input
                       type="number"
-                      step="any"
-                      value={quantityUsed}
-                      onChange={(e) => {
-                        setQuantityUsed(e.target.value)
-                        const q = Number(e.target.value) || 0
-                        const u = Number(unitCost) || selectedItem?.averageCost || 0
-                        setTotalCost(String(Number((q * u).toFixed(2))))
-                      }}
-                      className="h-10 text-xs rounded-xl bg-white"
-                      placeholder="0"
+                      value={vialCapacity}
+                      onChange={(e) => setVialCapacity(e.target.value)}
+                      className="h-9 text-xs rounded-xl bg-white font-bold"
+                      placeholder="100"
                     />
                   </div>
                   <div>
-                    <Label className="text-xs">Custo Unitário (R$)</Label>
-                    <Input
-                      type="number"
-                      step="0.0001"
-                      value={unitCost}
-                      onChange={(e) => {
-                        setUnitCost(e.target.value)
-                        const u = Number(e.target.value) || 0
-                        const q = Number(quantityUsed) || 0
-                        setTotalCost(String(Number((q * u).toFixed(2))))
-                      }}
-                      className="h-10 text-xs rounded-xl bg-white"
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Custo Total (R$)</Label>
+                    <Label className="text-xs">Custo do Frasco (R$)</Label>
                     <Input
                       type="number"
                       step="0.01"
-                      value={totalCost}
-                      onChange={(e) => setTotalCost(e.target.value)}
-                      className="h-10 text-xs rounded-xl bg-white font-bold text-emerald-800"
-                      placeholder="0.00"
+                      value={vialCost}
+                      onChange={(e) => setVialCost(e.target.value)}
+                      className="h-9 text-xs rounded-xl bg-white font-bold"
+                      placeholder="65.00"
                     />
                   </div>
                 </div>
 
-                {/* Status do frasco e descarte */}
-                <div className="grid grid-cols-2 gap-3 pt-1 border-t border-border/50">
+                {/* Destino do Frasco e Doses Restantes */}
+                <div className="p-3 rounded-xl bg-amber-50/80 border border-amber-200/80 space-y-2">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="font-bold text-amber-950">Destino do Frasco Aberto:</span>
+                    <Badge variant="outline" className="bg-white text-amber-800 text-[10px]">
+                      {dosesRemaining} doses restantes
+                    </Badge>
+                  </div>
+
                   <div>
-                    <Label className="text-xs">Status do Frasco / Recipiente</Label>
                     <Select
-                      value={vialStatus}
-                      onValueChange={(v) => setVialStatus(v as VialStatus)}
+                      value={vialDestiny}
+                      onValueChange={(v) => setVialDestiny(v as VialDestiny)}
                     >
-                      <SelectTrigger className="h-10 text-xs rounded-xl bg-white">
+                      <SelectTrigger className="h-9 text-xs rounded-xl bg-white">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="opened">Aberto / Em Uso</SelectItem>
-                        <SelectItem value="closed">Fechado</SelectItem>
-                        <SelectItem value="discarded">Descartado / Inutilizado</SelectItem>
+                        <SelectItem value="discarded">
+                          Descartadas / Perda Técnica (Sobra Inutilizada)
+                        </SelectItem>
+                        <SelectItem value="kept" disabled={!canKeepOpenedProduct && !!selectedItem}>
+                          Mantidas Disponíveis{' '}
+                          {!canKeepOpenedProduct && selectedItem ? '(Bloqueado no produto)' : ''}
+                        </SelectItem>
+                        <SelectItem value="closed">Permanecer Fechado</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label className="text-xs">Qtd Descartada (Sobra sem reúso)</Label>
-                    <Input
-                      type="number"
-                      step="any"
-                      value={discardedQuantity}
-                      onChange={(e) => {
-                        setDiscardedQuantity(e.target.value)
-                        const d = Number(e.target.value) || 0
-                        const u = Number(unitCost) || selectedItem?.averageCost || 0
-                        setWasteCost(String(Number((d * u).toFixed(2))))
-                      }}
-                      className="h-10 text-xs rounded-xl bg-white"
-                      placeholder="Ex: 10 doses"
-                    />
+
+                  <div className="grid grid-cols-3 gap-2 pt-1 text-[11px] text-amber-950 border-t border-amber-200">
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Doses Aplicadas:
+                      </span>
+                      <strong>{dosesApplied} doses</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Doses Descartadas:
+                      </span>
+                      <strong className="text-rose-600">{dosesDiscarded} doses</strong>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground block text-[10px]">
+                        Total Baixado:
+                      </span>
+                      <strong>{totalDownloaded} doses</strong>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-center pt-1 border-t border-amber-200 text-xs">
+                    <span className="font-semibold text-amber-950">
+                      Custo Total Apropriado ao Lote:
+                    </span>
+                    <strong className="text-emerald-700 font-bold text-sm">
+                      R$ {lotAppropriatedCost.toFixed(2)}
+                    </strong>
                   </div>
                 </div>
 
@@ -619,7 +643,8 @@ function ApplyVaccinationDialog({
                       htmlFor="applyDeductStock"
                       className="text-xs font-semibold leading-none cursor-pointer text-foreground"
                     >
-                      Dar baixa física no estoque sanitário e apropriar custo ao lote
+                      Dar baixa física no estoque ({totalDownloaded} doses) e apropriar custo de R${' '}
+                      {lotAppropriatedCost.toFixed(2)} ao lote
                     </label>
                   </div>
                 )}
@@ -681,9 +706,11 @@ function VaccinationDialog({
   const [scheduledDate, setScheduledDate] = useState('')
   const [performedDate, setPerformedDate] = useState('')
   const [animalCount, setAnimalCount] = useState('')
-  const [dosePerAnimal, setDosePerAnimal] = useState('')
-  const [doseUnit, setDoseUnit] = useState('mL')
-  const [applicationRoute, setApplicationRoute] = useState('água')
+  const [dosePerAnimal, setDosePerAnimal] = useState('1')
+  const [doseUnit, setDoseUnit] = useState('dose')
+  const [volumePerDose, setVolumePerDose] = useState('0.03')
+  const [volumeUnit, setVolumeUnit] = useState('mL')
+  const [applicationRoute, setApplicationRoute] = useState('ocular')
   const [vialStatus, setVialStatus] = useState<VialStatus | ''>('')
   const [discardedQuantity, setDiscardedQuantity] = useState('')
   const [wasteCost, setWasteCost] = useState('')
@@ -719,12 +746,14 @@ function VaccinationDialog({
         ['animal_count', 'animal_quantity', 'animalCount', 'animalQuantity'],
         '',
       )
-      const dPerAnimal = getFieldValue(e, ['dose_per_animal', 'dosePerAnimal', 'dose'], '')
-      const dUnit = getFieldValue(e, ['dose_unit', 'doseUnit', 'unit'], 'mL')
+      const dPerAnimal = getFieldValue(e, ['dose_per_animal', 'dosePerAnimal', 'dose'], '1')
+      const dUnit = getFieldValue(e, ['dose_unit', 'doseUnit', 'unit'], 'dose')
+      const vPerDose = getFieldValue(e, ['volume_per_dose', 'volumePerDose'], '0.03')
+      const vUnit = getFieldValue(e, ['volume_unit', 'volumeUnit'], 'mL')
       const appRoute = getFieldValue(
         e,
         ['application_route', 'administration_route', 'applicationRoute', 'route'],
-        'água',
+        'ocular',
       )
       const resp = getFieldValue(e, ['responsible'], '')
       const invId = getFieldValue(e, ['inventory_item_id', 'inventoryItemId'], '')
@@ -751,9 +780,11 @@ function VaccinationDialog({
       setScheduledDate(sDate)
       setPerformedDate(pDate)
       setAnimalCount(aCount !== '' ? String(aCount) : '')
-      setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '')
-      setDoseUnit(dUnit || 'mL')
-      setApplicationRoute(appRoute || 'água')
+      setDosePerAnimal(dPerAnimal !== '' ? String(dPerAnimal) : '1')
+      setDoseUnit(dUnit || 'dose')
+      setVolumePerDose(vPerDose !== '' ? String(vPerDose) : '0.03')
+      setVolumeUnit(vUnit || 'mL')
+      setApplicationRoute(appRoute || 'ocular')
       setVialStatus((vStatus as VialStatus) || '')
       setDiscardedQuantity(discQty !== '' ? String(discQty) : '')
       setWasteCost(wCost !== '' ? String(wCost) : '')
@@ -775,9 +806,11 @@ function VaccinationDialog({
       setScheduledDate(new Date().toISOString().split('T')[0])
       setPerformedDate('')
       setAnimalCount('100')
-      setDosePerAnimal('0.5')
-      setDoseUnit('mL')
-      setApplicationRoute('água')
+      setDosePerAnimal('1')
+      setDoseUnit('dose')
+      setVolumePerDose('0.03')
+      setVolumeUnit('mL')
+      setApplicationRoute('ocular')
       setVialStatus('')
       setDiscardedQuantity('')
       setWasteCost('')
@@ -862,7 +895,9 @@ function VaccinationDialog({
           : performedDate || undefined,
       animal_count: animalCount !== '' ? Number(animalCount) : undefined,
       dose_per_animal: dosePerAnimal !== '' ? Number(dosePerAnimal) : undefined,
-      dose_unit: doseUnit || undefined,
+      dose_unit: doseUnit || 'dose',
+      volume_per_dose: volumePerDose !== '' ? Number(volumePerDose) : undefined,
+      volume_unit: volumeUnit || 'mL',
       application_route: applicationRoute || undefined,
       vial_status: (vialStatus as VialStatus) || undefined,
       discarded_quantity: discardedQuantity !== '' ? Number(discardedQuantity) : undefined,
@@ -995,7 +1030,7 @@ function VaccinationDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
             <div>
               <Label className="text-xs">Qtd Animais</Label>
               <Input
@@ -1005,12 +1040,12 @@ function VaccinationDialog({
                   setAnimalCount(e.target.value)
                   handleAutoCalcQty(Number(e.target.value), Number(dosePerAnimal))
                 }}
-                className="h-10 text-xs rounded-xl"
+                className="h-10 text-xs rounded-xl font-bold"
                 placeholder="100"
               />
             </div>
             <div>
-              <Label className="text-xs">Dose / Ave</Label>
+              <Label className="text-xs">Doses / Ave</Label>
               <Input
                 type="number"
                 step="any"
@@ -1019,16 +1054,27 @@ function VaccinationDialog({
                   setDosePerAnimal(e.target.value)
                   handleAutoCalcQty(Number(animalCount), Number(e.target.value))
                 }}
-                className="h-10 text-xs rounded-xl"
-                placeholder="0.5"
+                className="h-10 text-xs rounded-xl font-bold"
+                placeholder="1"
               />
             </div>
             <div>
-              <Label className="text-xs">Unidade</Label>
+              <Label className="text-xs">Volume / Dose</Label>
               <Input
-                placeholder="mL, dose"
-                value={doseUnit}
-                onChange={(e) => setDoseUnit(e.target.value)}
+                type="number"
+                step="any"
+                value={volumePerDose}
+                onChange={(e) => setVolumePerDose(e.target.value)}
+                className="h-10 text-xs rounded-xl"
+                placeholder="0.03"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Unidade Volume</Label>
+              <Input
+                placeholder="mL"
+                value={volumeUnit}
+                onChange={(e) => setVolumeUnit(e.target.value)}
                 className="h-10 text-xs rounded-xl"
               />
             </div>
@@ -2264,6 +2310,9 @@ export default function Sanidade() {
     treatments,
     healthOccurrences,
     healthProtocols,
+    vaccinationSessions,
+    addVaccinationSession,
+    deleteVaccinationSession,
     addVaccination,
     updateVaccination,
     deleteVaccination,
@@ -2303,6 +2352,9 @@ export default function Sanidade() {
   const [selectedProtocolToAssign, setSelectedProtocolToAssign] = useState<HealthProtocol | null>(
     null,
   )
+
+  // Modal Sessão de Vacinação / Frasco Aberto
+  const [sessionModalOpen, setSessionModalOpen] = useState(false)
 
   // Modal Registrar Aplicação (Programada -> Realizada)
   const [applyVacModalOpen, setApplyVacModalOpen] = useState(false)
@@ -2398,6 +2450,7 @@ export default function Sanidade() {
     const activeTreatments = (treatments || []).filter((t) => t.status === 'in_progress').length
     const occurrencesCount = (healthOccurrences || []).length
     const protocolsCount = (healthProtocols || []).length
+    const sessionsCount = (vaccinationSessions || []).length
 
     return {
       scheduledVac,
@@ -2406,8 +2459,9 @@ export default function Sanidade() {
       activeTreatments,
       occurrencesCount,
       protocolsCount,
+      sessionsCount,
     }
-  }, [vaccinations, treatments, healthOccurrences, healthProtocols])
+  }, [vaccinations, treatments, healthOccurrences, healthProtocols, vaccinationSessions])
 
   const lotName = (lotId?: string, fallback?: string) => {
     if (!lotId) return fallback || 'Geral'
@@ -2472,6 +2526,104 @@ export default function Sanidade() {
         description: err.message || 'Tente novamente',
         variant: 'destructive',
       })
+    }
+  }
+
+  // Handler para salvar Sessão de Vacinação com rateio entre lotes
+  const handleSaveVaccinationSession = async (
+    sessionData: Omit<VaccinationSession, 'id'>,
+    individualVaccinations: Array<{
+      lot_id: string
+      lotName: string
+      animal_count: number
+      dose_per_animal: number
+      volume_per_dose?: number
+      volume_unit?: string
+      doses_applied: number
+      doses_discarded: number
+      total_downloaded: number
+      cost: number
+      unit_cost: number
+      route: string
+    }>,
+    stockMovement?: {
+      inventoryItemId: string
+      movementPayload: any
+      updatePayload?: any
+    },
+  ) => {
+    try {
+      const createdSessionId = `session-${Date.now()}`
+      if (addVaccinationSession) {
+        await addVaccinationSession({
+          ...sessionData,
+          id: createdSessionId,
+        } as any)
+      }
+
+      // Cria os registros de vacinação para cada lote participante da sessão
+      for (const vac of individualVaccinations) {
+        await addVaccination({
+          organization_id: organization?.id,
+          property_id: currentProperty?.id,
+          lot_id: vac.lot_id,
+          lotName: vac.lotName,
+          vaccine_name: sessionData.vaccine_name,
+          disease_target: 'Sessão Vacinal / Frasco Multidose',
+          scheduled_date: sessionData.session_date,
+          performed_date: sessionData.session_date,
+          animal_count: vac.animal_count,
+          dose_per_animal: vac.dose_per_animal,
+          dose_unit: 'dose',
+          volume_per_dose: vac.volume_per_dose,
+          volume_unit: vac.volume_unit || 'mL',
+          application_route: vac.route,
+          responsible: sessionData.responsible,
+          inventory_item_id: sessionData.inventory_item_id,
+          inventory_item_name: sessionData.inventory_item_name,
+          batch_number: sessionData.manufacturer_batch,
+          expiration_date: sessionData.expiration_date,
+          quantity_used: vac.doses_applied,
+          doses_applied: vac.doses_applied,
+          doses_discarded: vac.doses_discarded,
+          total_downloaded: vac.total_downloaded,
+          unit_cost: vac.unit_cost,
+          total_cost: vac.cost,
+          stock_deducted: Boolean(stockMovement),
+          vial_status:
+            sessionData.vial_destiny === 'closed'
+              ? 'closed'
+              : sessionData.vial_destiny === 'kept'
+                ? 'opened'
+                : 'discarded',
+          vial_destiny: sessionData.vial_destiny,
+          discarded_quantity: vac.doses_discarded,
+          waste_cost: Number((vac.doses_discarded * vac.unit_cost).toFixed(2)),
+          session_id: createdSessionId,
+          status: 'performed',
+          notes: `Sessão Vacinal (Frasco ${sessionData.vial_capacity} doses). Destino da sobra: ${sessionData.vial_destiny === 'discarded' ? 'Descarte/Perda Técnica' : sessionData.vial_destiny === 'kept' ? 'Mantido' : 'Fechado'}. Custo rateado: R$ ${vac.cost.toFixed(2)}.`,
+        })
+      }
+
+      // Efetua a baixa agregada do estoque se houver
+      if (stockMovement && addStockMovement) {
+        await addStockMovement(stockMovement.movementPayload as any)
+        if (stockMovement.updatePayload && updateInventory) {
+          await updateInventory(stockMovement.inventoryItemId, stockMovement.updatePayload)
+        }
+      }
+
+      toast({
+        title: 'Sessão Vacinal concluída com sucesso! 💉✨',
+        description: `${individualVaccinations.length} lotes atendidos. Custo total apropriado: R$ ${sessionData.total_cost.toFixed(2)}.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Erro ao registrar sessão de vacinação',
+        description: err.message || 'Tente novamente',
+        variant: 'destructive',
+      })
+      throw err
     }
   }
 
@@ -2677,15 +2829,23 @@ export default function Sanidade() {
         {canEdit && (
           <div className="flex items-center gap-2 flex-wrap">
             {activeTab === 'vacinacao' && (
-              <Button
-                onClick={() => {
-                  setEditingVac(null)
-                  setVacModalOpen(true)
-                }}
-                className="rounded-xl h-9 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm"
-              >
-                <Plus className="w-4 h-4" /> Nova Vacinação
-              </Button>
+              <>
+                <Button
+                  onClick={() => setSessionModalOpen(true)}
+                  className="rounded-xl h-9 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white gap-1.5 shadow-sm"
+                >
+                  <Layers className="w-4 h-4" /> Nova Sessão / Frasco Aberto
+                </Button>
+                <Button
+                  onClick={() => {
+                    setEditingVac(null)
+                    setVacModalOpen(true)
+                  }}
+                  className="rounded-xl h-9 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" /> Nova Vacinação
+                </Button>
+              </>
             )}
             {activeTab === 'tratamentos' && (
               <Button
@@ -2990,20 +3150,26 @@ export default function Sanidade() {
                                         vac.status === 'performed' ? 'Realizada' : 'Programada',
                                       'Data Programada': vac.scheduled_date || '—',
                                       'Data Realizada': vac.performed_date || '—',
-                                      'Qtd Animais': vac.animal_count || '—',
-                                      'Dose / Ave': `${vac.dose_per_animal || '—'} ${vac.dose_unit || 'mL'}`,
-                                      'Via de Aplicação': vac.application_route || '—',
-                                      'Status do Frasco': vac.vial_status || '—',
-                                      'Qtd Descartada': vac.discarded_quantity || '—',
-                                      'Custo de Perda': vac.waste_cost
-                                        ? `R$ ${Number(vac.waste_cost).toFixed(2)}`
+                                      'Aves Vacinadas': vac.animal_count || '—',
+                                      'Dose por Ave': `${vac.dose_per_animal ?? 1} dose`,
+                                      'Volume por Dose': vac.volume_per_dose
+                                        ? `${vac.volume_per_dose} ${vac.volume_unit || 'mL'}`
                                         : '—',
+                                      'Via de Aplicação': vac.application_route || '—',
+                                      'Doses Aplicadas':
+                                        vac.doses_applied ?? vac.quantity_used ?? '—',
+                                      'Doses Descartadas':
+                                        vac.doses_discarded ?? vac.discarded_quantity ?? 0,
+                                      'Total Baixado do Estoque': `${vac.total_downloaded ?? Number(vac.doses_applied || 0) + Number(vac.doses_discarded || 0)} doses`,
+                                      'Destino do Frasco':
+                                        vac.vial_destiny === 'discarded'
+                                          ? 'Sobra Descartada (Perda)'
+                                          : vac.vial_destiny === 'kept'
+                                            ? 'Sobra Guardada'
+                                            : 'Fechado',
                                       Responsável: vac.responsible || '—',
                                       'Item Estoque Vinculado': vac.inventory_item_name || '—',
                                       'Lote Fabricante': vac.batch_number || '—',
-                                      'Qtd Consumida do Estoque': vac.quantity_used
-                                        ? `${vac.quantity_used} ${vac.dose_unit || 'un'}`
-                                        : '—',
                                       'Custo Total Apropriado': vac.total_cost
                                         ? `R$ ${Number(vac.total_cost).toFixed(2)}`
                                         : '—',
@@ -3064,47 +3230,90 @@ export default function Sanidade() {
                         </div>
                         <div>
                           <span className="text-[10px] text-muted-foreground block">
-                            Dose / Aplicação:
+                            Dose / Via:
                           </span>
                           <strong className="text-foreground font-semibold">
-                            {vac.dose_per_animal || '0.5'} {vac.dose_unit || 'mL'} (
-                            {vac.application_route || 'água'})
+                            {vac.dose_per_animal ?? 1} dose ({vac.application_route || 'ocular'})
                           </strong>
+                          {vac.volume_per_dose && (
+                            <span className="text-[10px] text-muted-foreground block">
+                              Vol: {vac.volume_per_dose} {vac.volume_unit || 'mL'}/dose
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {/* Detalhes de estoque e custos */}
-                      {(vac.quantity_used || vac.total_cost || vac.vial_status) && (
-                        <div className="p-2 rounded-xl bg-secondary/40 border border-border/60 text-[11px] space-y-1">
-                          {vac.quantity_used && (
+                      {/* Detalhes de vacinação realizada (Problema 4 - Interface) */}
+                      {vac.status === 'performed' ? (
+                        <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] space-y-1">
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Consumo do item:</span>
+                              <span className="text-muted-foreground">Dose por ave:</span>
                               <strong className="text-foreground">
-                                {vac.quantity_used} {vac.dose_unit || 'doses'}
+                                {vac.dose_per_animal ?? 1} dose
                               </strong>
                             </div>
-                          )}
-                          {vac.total_cost && (
                             <div className="flex justify-between">
-                              <span className="text-muted-foreground">Custo apropriado:</span>
-                              <strong className="text-emerald-700 font-bold">
+                              <span className="text-muted-foreground">Via:</span>
+                              <span className="capitalize font-medium text-foreground">
+                                {vac.application_route || 'ocular'}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Aves vacinadas:</span>
+                              <strong className="text-foreground">{vac.animal_count ?? '—'}</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Doses aplicadas:</span>
+                              <strong className="text-emerald-700">
+                                {vac.doses_applied ?? vac.quantity_used ?? '—'}
+                              </strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Doses descartadas:</span>
+                              <strong className="text-rose-600">
+                                {vac.doses_discarded ?? vac.discarded_quantity ?? 0}
+                              </strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Total baixado:</span>
+                              <strong className="text-foreground">
+                                {vac.total_downloaded ??
+                                  (vac.doses_applied || vac.quantity_used || 0) +
+                                    (vac.doses_discarded || 0)}
+                              </strong>
+                            </div>
+                          </div>
+                          {vac.total_cost !== undefined && (
+                            <div className="flex justify-between items-center border-t border-emerald-200 pt-1 mt-1 font-bold">
+                              <span className="text-emerald-950">Custo apropriado:</span>
+                              <span className="text-emerald-800 text-xs">
                                 R$ {Number(vac.total_cost).toFixed(2)}
-                              </strong>
-                            </div>
-                          )}
-                          {vac.vial_status && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Status do frasco:</span>
-                              <span className="font-medium capitalize text-foreground">
-                                {vac.vial_status === 'opened'
-                                  ? 'Aberto/Uso'
-                                  : vac.vial_status === 'closed'
-                                    ? 'Fechado'
-                                    : 'Descartado'}
                               </span>
                             </div>
                           )}
                         </div>
+                      ) : (
+                        (vac.quantity_used || vac.total_cost || vac.vial_status) && (
+                          <div className="p-2 rounded-xl bg-secondary/40 border border-border/60 text-[11px] space-y-1">
+                            {vac.quantity_used && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Previsão consumo:</span>
+                                <strong className="text-foreground">
+                                  {vac.quantity_used} {vac.dose_unit || 'doses'}
+                                </strong>
+                              </div>
+                            )}
+                            {vac.total_cost && (
+                              <div className="flex justify-between">
+                                <span className="text-muted-foreground">Custo previsto:</span>
+                                <strong className="text-emerald-700 font-bold">
+                                  R$ {Number(vac.total_cost).toFixed(2)}
+                                </strong>
+                              </div>
+                            )}
+                          </div>
+                        )
                       )}
 
                       {/* Botão de Ação Rápida para Programadas */}
@@ -3652,6 +3861,16 @@ export default function Sanidade() {
         lots={lots}
         inventory={inventory}
         onConfirm={handleApplyVacConfirm}
+      />
+
+      <VaccinationSessionDialog
+        open={sessionModalOpen}
+        onOpenChange={setSessionModalOpen}
+        lots={lots}
+        inventory={inventory}
+        orgId={organization?.id}
+        propertyId={currentProperty?.id}
+        onSaveSession={handleSaveVaccinationSession}
       />
 
       <VaccinationDialog

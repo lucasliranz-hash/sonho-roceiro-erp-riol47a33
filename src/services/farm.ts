@@ -22,6 +22,7 @@ export const FARM_TABLES = {
   alerts: 'farm_alerts',
   stockMovements: 'farm_stock_movements',
   vaccinations: 'farm_vaccinations',
+  vaccinationSessions: 'farm_vaccination_sessions',
   treatments: 'farm_treatments',
   healthOccurrences: 'farm_health_occurrences',
   healthProtocols: 'farm_health_protocols',

@@ -120,6 +120,8 @@ export interface InventoryItem {
   manufacturer_batch?: string // Lote do fabricante ativo/recente
   expiration_date?: string // Validade ativa/recente
   manufacturing_date?: string // Data de fabricação
+  can_keep_opened?: boolean // Sobra reconstituída pode permanecer utilizável
+  reconstitution_allowed?: boolean // Produto requer/permite reconstituição
 }
 
 export interface FeedConsumption {
@@ -402,6 +404,52 @@ export type VaccinationRoute =
   | 'outra'
 
 export type VialStatus = 'closed' | 'opened' | 'discarded'
+export type VialDestiny = 'closed' | 'kept' | 'discarded'
+
+export interface VaccinationSessionLotApplication {
+  lot_id?: string
+  lotName?: string
+  animal_count?: number
+  dose_per_animal?: number
+  volume_per_dose?: number
+  volume_unit?: string
+  doses_applied: number
+  total_volume?: number
+  cost: number
+  notes?: string
+}
+
+export interface VaccinationSession {
+  id: string
+  organization_id?: string
+  property_id?: string
+  activity_id?: string
+  session_date: string
+  vaccine_name: string
+  inventory_item_id?: string
+  inventory_item_name?: string
+  manufacturer_batch?: string
+  expiration_date?: string
+  vial_capacity: number
+  initial_quantity: number
+  vial_cost: number
+  unit_cost: number
+  opened_at?: string
+  responsible?: string
+  vial_destiny: VialDestiny
+  total_applied: number
+  total_discarded: number
+  total_downloaded: number
+  total_cost: number
+  applications: VaccinationSessionLotApplication[]
+  status: 'completed' | 'in_progress' | 'cancelled'
+  notes?: string
+  data?: Record<string, any>
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  created_by?: string
+}
 
 export interface Vaccination {
   id: string
@@ -415,8 +463,10 @@ export interface Vaccination {
   scheduled_date?: string
   performed_date?: string
   animal_count?: number
-  dose_per_animal?: number
-  dose_unit?: string // ex: mL, gotas, comprimido, dose
+  dose_per_animal?: number // doses por ave (ex: 1 dose)
+  dose_unit?: string // ex: dose, un
+  volume_per_dose?: number // volume por dose (ex: 0.03 mL)
+  volume_unit?: string // ex: mL, gotas
   application_route?: VaccinationRoute | string
   responsible?: string
   inventory_item_id?: string
@@ -431,8 +481,13 @@ export interface Vaccination {
   status: VaccinationStatus
   // Frascos multidose e perdas
   vial_status?: VialStatus
+  vial_destiny?: VialDestiny
+  doses_applied?: number
+  doses_discarded?: number
+  total_downloaded?: number
   discarded_quantity?: number
   waste_cost?: number
+  session_id?: string
   data?: Record<string, any>
   created_at?: string
   updated_at?: string
