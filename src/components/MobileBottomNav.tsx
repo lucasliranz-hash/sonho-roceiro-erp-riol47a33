@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom'
 import { Home, TrendingUp, PlusCircle, Bell, Menu } from 'lucide-react'
-import { useFarmStore } from '@/hooks/use-farm-store'
+import { useAlertsManager } from '@/hooks/use-alerts-manager'
 import { cn } from '@/lib/utils'
 
 interface MobileBottomNavProps {
@@ -10,8 +10,7 @@ interface MobileBottomNavProps {
 
 export function MobileBottomNav({ onNewEntry, onMore }: MobileBottomNavProps) {
   const location = useLocation()
-  const { alerts } = useFarmStore()
-  const unreadCount = alerts.filter((a) => !a.isRead).length
+  const { unreadCount } = useAlertsManager()
 
   return (
     <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-border flex items-end justify-around px-2 py-1.5 shadow-elevation">

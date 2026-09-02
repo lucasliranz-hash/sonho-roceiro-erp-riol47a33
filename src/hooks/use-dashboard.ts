@@ -5,10 +5,20 @@ import { Lot, Incubation, InventoryItem, FeedConsumption } from '@/types/farm'
 
 export interface DashboardAlert {
   id: string
-  type: 'incubacao' | 'estoque' | 'pesagem' | 'mortalidade' | 'despesa'
+  type:
+    | 'incubacao'
+    | 'estoque'
+    | 'pesagem'
+    | 'mortalidade'
+    | 'despesa'
+    | 'sanidade'
+    | 'financeiro'
+    | 'operacional'
+    | string
   severity: 'warning' | 'critical' | 'info'
   message: string
   link?: string
+  rawAlert?: any
 }
 
 export interface ActivityTimelineItem {
@@ -242,9 +252,32 @@ export function useDashboardData() {
     })
   }, [inventory])
 
-  // 9. ATENÇÃO HOJE (ALERTAS DINÂMICOS BASEADOS EM DADOS REAIS)
+  const { alerts, markAlertAsRead } = useFarmStore()
+
+  // 9. ATENÇÃO HOJE (ALERTAS NÃO LIDOS E PERSISTIDOS/CONCILIADOS)
   const attentionAlerts = useMemo(() => {
+    // 1. Mapeamento dos alertas persistidos no banco
+    const storedByDedupKey = new Map<string, any>()
+    const storedById = new Map<string, any>()
+    for (const stored of alerts) {
+      if ((stored as any).deduplication_key) {
+        storedByDedupKey.set((stored as any).deduplication_key, stored)
+      }
+      storedById.set(stored.id, stored)
+    }
+
     const list: DashboardAlert[] = []
+
+    const shouldInclude = (dedupKey: string, id: string) => {
+      const stored =
+        storedByDedupKey.get(dedupKey) || storedById.get(id) || storedById.get(dedupKey)
+      if (!stored) return true // Alerta novo não lido
+      // Se status === 'lido' ou isRead === true ou status === 'dispensado', NÃO exibe no dashboard
+      if (stored.status === 'lido' || stored.isRead === true || stored.status === 'dispensado') {
+        return false
+      }
+      return true
+    }
 
     // 0) SANIDADE (Vacinações, Tratamentos, Carência, Protocolos)
     for (const v of vaccinations) {
@@ -252,29 +285,80 @@ export function useDashboardData() {
       const targetLotName = lots.find((l) => l.id === v.lot_id)?.name || 'Geral'
       if (v.status === 'scheduled' || v.status === 'delayed') {
         if (scheduled === todayStr) {
-          list.push({
-            id: `vac-today-${v.id}`,
-            type: 'sanidade' as any,
-            severity: 'critical',
-            message: `Vacinação programada para hoje: ${v.vaccine_name} — Lote ${targetLotName}`,
-            link: '/sanidade',
-          })
+          const dedupKey = `san-vac-today:${v.id}:${scheduled}`
+          if (shouldInclude(dedupKey, `vac-today-${v.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'sanidade',
+              severity: 'critical',
+              message: `Vacinação programada para hoje: ${v.vaccine_name} — Lote ${targetLotName}`,
+              link: '/sanidade',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'sanidade',
+                severity: 'critical',
+                title: '💉 Vacinação Programada Hoje',
+                description: `Vacinação programada para hoje: ${v.vaccine_name} — Lote ${targetLotName}`,
+                origin: 'Sanidade / Vacinação',
+                related_entity_type: 'farm_vaccinations',
+                related_entity_id: v.id,
+                modulePath: '/sanidade',
+                property_id: v.property_id || currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         } else if (scheduled === tomorrowStr) {
-          list.push({
-            id: `vac-tom-${v.id}`,
-            type: 'sanidade' as any,
-            severity: 'info',
-            message: `Vacinação programada para amanhã: ${v.vaccine_name} — Lote ${targetLotName}`,
-            link: '/sanidade',
-          })
+          const dedupKey = `san-vac-tom:${v.id}:${scheduled}`
+          if (shouldInclude(dedupKey, `vac-tom-${v.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'sanidade',
+              severity: 'info',
+              message: `Vacinação programada para amanhã: ${v.vaccine_name} — Lote ${targetLotName}`,
+              link: '/sanidade',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'sanidade',
+                severity: 'info',
+                title: '💉 Vacinação Amanhã',
+                description: `Vacinação programada para amanhã: ${v.vaccine_name} — Lote ${targetLotName}`,
+                origin: 'Sanidade / Vacinação',
+                related_entity_type: 'farm_vaccinations',
+                related_entity_id: v.id,
+                modulePath: '/sanidade',
+                property_id: v.property_id || currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         } else if (scheduled && scheduled < todayStr) {
-          list.push({
-            id: `vac-del-${v.id}`,
-            type: 'sanidade' as any,
-            severity: 'critical',
-            message: `Vacinação atrasada: ${v.vaccine_name} — Lote ${targetLotName} (programada para ${scheduled})`,
-            link: '/sanidade',
-          })
+          const dedupKey = `san-vac-delayed:${v.id}:${scheduled}`
+          if (shouldInclude(dedupKey, `vac-del-${v.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'sanidade',
+              severity: 'critical',
+              message: `Vacinação atrasada: ${v.vaccine_name} — Lote ${targetLotName} (programada para ${scheduled})`,
+              link: '/sanidade',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'sanidade',
+                severity: 'critical',
+                title: '🚨 Vacinação Atrasada',
+                description: `Vacinação atrasada: ${v.vaccine_name} — Lote ${targetLotName} (programada para ${scheduled})`,
+                origin: 'Sanidade / Vacinação',
+                related_entity_type: 'farm_vaccinations',
+                related_entity_id: v.id,
+                modulePath: '/sanidade',
+                property_id: v.property_id || currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         }
       }
     }
@@ -282,13 +366,30 @@ export function useDashboardData() {
     for (const t of treatments) {
       const targetLotName = lots.find((l) => l.id === t.lot_id)?.name || 'Geral'
       if (t.status === 'in_progress') {
-        list.push({
-          id: `trt-prog-${t.id}`,
-          type: 'sanidade' as any,
-          severity: 'warning',
-          message: `Tratamento em andamento: ${t.medication_name} — Lote ${targetLotName}`,
-          link: '/sanidade',
-        })
+        const dedupKey = `san-trt-prog:${t.id}`
+        if (shouldInclude(dedupKey, `trt-prog-${t.id}`)) {
+          list.push({
+            id: dedupKey,
+            type: 'sanidade',
+            severity: 'warning',
+            message: `Tratamento em andamento: ${t.medication_name} — Lote ${targetLotName}`,
+            link: '/sanidade',
+            rawAlert: {
+              id: dedupKey,
+              deduplication_key: dedupKey,
+              type: 'sanidade',
+              severity: 'warning',
+              title: '💊 Tratamento em Andamento',
+              description: `Tratamento em andamento: ${t.medication_name} — Lote ${targetLotName}`,
+              origin: 'Sanidade / Tratamentos',
+              related_entity_type: 'farm_treatments',
+              related_entity_id: t.id,
+              modulePath: '/sanidade',
+              property_id: t.property_id || currentProperty?.id,
+              propertyName,
+            },
+          })
+        }
       }
 
       if (t.withdrawal_period_days && t.withdrawal_period_days > 0 && t.end_date) {
@@ -297,13 +398,30 @@ export function useDashboardData() {
         carDate.setDate(carDate.getDate() + t.withdrawal_period_days)
         const carStr = carDate.toISOString().split('T')[0]
         if (carStr >= todayStr) {
-          list.push({
-            id: `trt-car-${t.id}`,
-            type: 'sanidade' as any,
-            severity: 'critical',
-            message: `Período de carência ativo: ${t.medication_name} — Lote ${targetLotName} (até ${carStr})`,
-            link: '/sanidade',
-          })
+          const dedupKey = `san-trt-carencia:${t.id}:${carStr}`
+          if (shouldInclude(dedupKey, `trt-car-${t.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'sanidade',
+              severity: 'critical',
+              message: `Período de carência ativo: ${t.medication_name} — Lote ${targetLotName} (até ${carStr})`,
+              link: '/sanidade',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'sanidade',
+                severity: 'critical',
+                title: '⛔ Período de Carência Ativo',
+                description: `Período de carência ativo: ${t.medication_name} — Lote ${targetLotName} (até ${carStr})`,
+                origin: 'Sanidade / Tratamentos',
+                related_entity_type: 'farm_treatments',
+                related_entity_id: t.id,
+                modulePath: '/sanidade',
+                property_id: t.property_id || currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         }
       }
     }
@@ -313,21 +431,55 @@ export function useDashboardData() {
       for (const [idx, entry] of (pa.generated_entries || []).entries()) {
         if (entry.status === 'pending') {
           if (entry.scheduled_date === todayStr) {
-            list.push({
-              id: `prot-tod-${pa.id}-${idx}`,
-              type: 'sanidade' as any,
-              severity: 'warning',
-              message: `Protocolo com etapa pendente: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
-              link: '/sanidade',
-            })
+            const dedupKey = `san-proto-today:${pa.id}:${idx}:${entry.scheduled_date}`
+            if (shouldInclude(dedupKey, `prot-tod-${pa.id}-${idx}`)) {
+              list.push({
+                id: dedupKey,
+                type: 'sanidade',
+                severity: 'warning',
+                message: `Protocolo com etapa pendente: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
+                link: '/sanidade',
+                rawAlert: {
+                  id: dedupKey,
+                  deduplication_key: dedupKey,
+                  type: 'sanidade',
+                  severity: 'warning',
+                  title: '📋 Etapa de Protocolo Hoje',
+                  description: `Protocolo com etapa pendente: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
+                  origin: 'Sanidade / Protocolos',
+                  related_entity_type: 'farm_protocol_assignments',
+                  related_entity_id: pa.id,
+                  modulePath: '/sanidade',
+                  property_id: pa.property_id || currentProperty?.id,
+                  propertyName,
+                },
+              })
+            }
           } else if (entry.scheduled_date && entry.scheduled_date < todayStr) {
-            list.push({
-              id: `prot-del-${pa.id}-${idx}`,
-              type: 'sanidade' as any,
-              severity: 'critical',
-              message: `Etapa de protocolo atrasada: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
-              link: '/sanidade',
-            })
+            const dedupKey = `san-proto-del:${pa.id}:${idx}:${entry.scheduled_date}`
+            if (shouldInclude(dedupKey, `prot-del-${pa.id}-${idx}`)) {
+              list.push({
+                id: dedupKey,
+                type: 'sanidade',
+                severity: 'critical',
+                message: `Etapa de protocolo atrasada: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
+                link: '/sanidade',
+                rawAlert: {
+                  id: dedupKey,
+                  deduplication_key: dedupKey,
+                  type: 'sanidade',
+                  severity: 'critical',
+                  title: '🚨 Etapa de Protocolo Atrasada',
+                  description: `Etapa de protocolo atrasada: ${pa.protocolName || 'Protocolo'} — Lote ${targetLotName}`,
+                  origin: 'Sanidade / Protocolos',
+                  related_entity_type: 'farm_protocol_assignments',
+                  related_entity_id: pa.id,
+                  modulePath: '/sanidade',
+                  property_id: pa.property_id || currentProperty?.id,
+                  propertyName,
+                },
+              })
+            }
           }
         }
       }
@@ -341,31 +493,82 @@ export function useDashboardData() {
       const totalCycle = 21
 
       if (currentDay === 18 && totalCycle === 21) {
-        list.push({
-          id: `inc-lockdown-${inc.id}`,
-          type: 'incubacao',
-          severity: 'warning',
-          message: `Chocada ${inc.incubatorName || inc.code} entra em lockdown amanhã`,
-          link: '/chocadeira',
-        })
+        const dedupKey = `inc-lockdown:${inc.id}:${inc.startDate}`
+        if (shouldInclude(dedupKey, `inc-lockdown-${inc.id}`)) {
+          list.push({
+            id: dedupKey,
+            type: 'incubacao',
+            severity: 'warning',
+            message: `Chocada ${inc.incubatorName || inc.code} entra em lockdown amanhã`,
+            link: '/chocadeira',
+            rawAlert: {
+              id: dedupKey,
+              deduplication_key: dedupKey,
+              type: 'incubacao',
+              severity: 'warning',
+              title: '🥚 Chocadeira em Lockdown',
+              description: `Chocada ${inc.incubatorName || inc.code} entra em lockdown amanhã`,
+              origin: 'Chocadeira',
+              related_entity_type: 'farm_incubations',
+              related_entity_id: inc.id,
+              modulePath: '/chocadeira',
+              property_id: currentProperty?.id,
+              propertyName,
+            },
+          })
+        }
       }
 
       if (inc.expectedHatchDate === todayStr) {
-        list.push({
-          id: `inc-hatch-today-${inc.id}`,
-          type: 'incubacao',
-          severity: 'info',
-          message: `Nascimento previsto hoje: ${inc.incubatorName || inc.code}`,
-          link: '/chocadeira',
-        })
+        const dedupKey = `inc-hatch-today:${inc.id}:${inc.expectedHatchDate}`
+        if (shouldInclude(dedupKey, `inc-hatch-today-${inc.id}`)) {
+          list.push({
+            id: dedupKey,
+            type: 'incubacao',
+            severity: 'info',
+            message: `Nascimento previsto hoje: ${inc.incubatorName || inc.code}`,
+            link: '/chocadeira',
+            rawAlert: {
+              id: dedupKey,
+              deduplication_key: dedupKey,
+              type: 'incubacao',
+              severity: 'info',
+              title: '🐣 Nascimento Previsto Hoje',
+              description: `Nascimento previsto hoje: ${inc.incubatorName || inc.code}`,
+              origin: 'Chocadeira',
+              related_entity_type: 'farm_incubations',
+              related_entity_id: inc.id,
+              modulePath: '/chocadeira',
+              property_id: currentProperty?.id,
+              propertyName,
+            },
+          })
+        }
       } else if (inc.expectedHatchDate < todayStr && inc.status === 'Em andamento') {
-        list.push({
-          id: `inc-hatch-delayed-${inc.id}`,
-          type: 'incubacao',
-          severity: 'critical',
-          message: `Nascimento atrasado: ${inc.incubatorName || inc.code}`,
-          link: '/chocadeira',
-        })
+        const dedupKey = `inc-hatch-delayed:${inc.id}:${inc.expectedHatchDate}`
+        if (shouldInclude(dedupKey, `inc-hatch-delayed-${inc.id}`)) {
+          list.push({
+            id: dedupKey,
+            type: 'incubacao',
+            severity: 'critical',
+            message: `Nascimento atrasado: ${inc.incubatorName || inc.code}`,
+            link: '/chocadeira',
+            rawAlert: {
+              id: dedupKey,
+              deduplication_key: dedupKey,
+              type: 'incubacao',
+              severity: 'critical',
+              title: '🚨 Nascimento Atrasado',
+              description: `Nascimento atrasado: ${inc.incubatorName || inc.code}`,
+              origin: 'Chocadeira',
+              related_entity_type: 'farm_incubations',
+              related_entity_id: inc.id,
+              modulePath: '/chocadeira',
+              property_id: currentProperty?.id,
+              propertyName,
+            },
+          })
+        }
       }
     }
 
@@ -378,25 +581,62 @@ export function useDashboardData() {
       if (avgDaily > 0) {
         const estimatedDays = current / avgDaily
         if (estimatedDays <= 3) {
-          const daysText = estimatedDays < 1 ? 'menos de 1 dia' : `${Math.ceil(estimatedDays)} dias`
-          list.push({
-            id: `stock-deplete-${item.id}`,
-            type: 'estoque',
-            severity: 'critical',
-            message: `Ração ${item.name} deve acabar em aproximadamente ${daysText}`,
-            link: '/estoque',
-          })
+          const dedupKey = `stock-deplete:${item.id}`
+          if (shouldInclude(dedupKey, `stock-deplete-${item.id}`)) {
+            const daysText =
+              estimatedDays < 1 ? 'menos de 1 dia' : `${Math.ceil(estimatedDays)} dias`
+            list.push({
+              id: dedupKey,
+              type: 'estoque',
+              severity: 'critical',
+              message: `Ração ${item.name} deve acabar em aproximadamente ${daysText}`,
+              link: '/estoque',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'estoque',
+                severity: 'critical',
+                title: '⚠️ Ração Acabando',
+                description: `Ração ${item.name} deve acabar em aproximadamente ${daysText}`,
+                origin: 'Estoque',
+                related_entity_type: 'farm_inventory',
+                related_entity_id: item.id,
+                modulePath: '/estoque',
+                property_id: currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         }
       }
 
       if (current <= min) {
-        if (!list.some((a) => a.id === `stock-deplete-${item.id}`)) {
+        const isZero = current <= 0
+        const dedupKey = `stock-critical:${item.id}`
+        if (
+          !list.some((a) => a.id === `stock-deplete:${item.id}`) &&
+          shouldInclude(dedupKey, `stock-critical-${item.id}`)
+        ) {
           list.push({
-            id: `stock-critical-${item.id}`,
+            id: dedupKey,
             type: 'estoque',
-            severity: 'warning',
-            message: `${item.name}: estoque abaixo do mínimo (${current} ${item.unit || 'un'})`,
+            severity: isZero ? 'critical' : 'warning',
+            message: `${item.name}: estoque ${isZero ? 'zerado' : 'abaixo do mínimo'} (${current} ${item.unit || 'un'})`,
             link: '/estoque',
+            rawAlert: {
+              id: dedupKey,
+              deduplication_key: dedupKey,
+              type: 'estoque',
+              severity: isZero ? 'critical' : 'warning',
+              title: isZero ? '🚨 Estoque Zerado' : '⚠️ Estoque Baixo',
+              description: `${item.name}: estoque ${isZero ? 'zerado' : 'abaixo do mínimo'} (${current} ${item.unit || 'un'})`,
+              origin: 'Estoque',
+              related_entity_type: 'farm_inventory',
+              related_entity_id: item.id,
+              modulePath: '/estoque',
+              property_id: currentProperty?.id,
+              propertyName,
+            },
           })
         }
       }
@@ -408,21 +648,55 @@ export function useDashboardData() {
         const diffDays = Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
 
         if (diffDays < 0) {
-          list.push({
-            id: `stock-expired-${item.id}`,
-            type: 'estoque',
-            severity: 'critical',
-            message: `PRODUTO VENCIDO: ${item.name} venceu em ${item.expiration_date}`,
-            link: '/estoque',
-          })
+          const dedupKey = `stock-expired:${item.id}:${item.expiration_date}`
+          if (shouldInclude(dedupKey, `stock-expired-${item.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'estoque',
+              severity: 'critical',
+              message: `PRODUTO VENCIDO: ${item.name} venceu em ${item.expiration_date}`,
+              link: '/estoque',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'estoque',
+                severity: 'critical',
+                title: '🚨 Produto Vencido',
+                description: `PRODUTO VENCIDO: ${item.name} venceu em ${item.expiration_date}`,
+                origin: 'Estoque / Sanitário',
+                related_entity_type: 'farm_inventory',
+                related_entity_id: item.id,
+                modulePath: '/estoque',
+                property_id: currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         } else if (diffDays <= 30) {
-          list.push({
-            id: `stock-expiring-${item.id}`,
-            type: 'estoque',
-            severity: 'warning',
-            message: `Produto próximo da validade: ${item.name} vence em ${diffDays} dia(s) (${item.expiration_date})`,
-            link: '/estoque',
-          })
+          const dedupKey = `stock-expiring:${item.id}:${item.expiration_date}`
+          if (shouldInclude(dedupKey, `stock-expiring-${item.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'estoque',
+              severity: 'warning',
+              message: `Produto próximo da validade: ${item.name} vence em ${diffDays} dia(s) (${item.expiration_date})`,
+              link: '/estoque',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'estoque',
+                severity: 'warning',
+                title: '⏳ Validade Próxima',
+                description: `Produto próximo da validade: ${item.name} vence em ${diffDays} dia(s) (${item.expiration_date})`,
+                origin: 'Estoque / Sanitário',
+                related_entity_type: 'farm_inventory',
+                related_entity_id: item.id,
+                modulePath: '/estoque',
+                property_id: currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         }
       }
     }
@@ -438,13 +712,30 @@ export function useDashboardData() {
         const lotStart = new Date(lot.startDate)
         const daysSinceStart = Math.floor((Date.now() - lotStart.getTime()) / (1000 * 60 * 60 * 24))
         if (daysSinceStart > 7) {
-          list.push({
-            id: `weighing-never-${lot.id}`,
-            type: 'pesagem',
-            severity: 'warning',
-            message: `Pesagem do lote ${lot.name} está pendente (nenhuma pesagem registrada)`,
-            link: '/pesagens',
-          })
+          const dedupKey = `weighing-never:${lot.id}`
+          if (shouldInclude(dedupKey, `weighing-never-${lot.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'pesagem',
+              severity: 'warning',
+              message: `Pesagem do lote ${lot.name} está pendente (nenhuma pesagem registrada)`,
+              link: '/pesagens',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'pesagem',
+                severity: 'warning',
+                title: '⚖️ Pesagem Pendente',
+                description: `Pesagem do lote ${lot.name} está pendente (nenhuma pesagem registrada)`,
+                origin: 'Pesagens',
+                related_entity_type: 'farm_lots',
+                related_entity_id: lot.id,
+                modulePath: '/pesagens',
+                property_id: currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         }
       } else {
         const lastDate = new Date(lastWeighing.date)
@@ -452,13 +743,30 @@ export function useDashboardData() {
         if (daysSinceLast > 7) {
           const [y, m, d] = lastWeighing.date.split('-')
           const formattedDate = `${d}/${m}/${y}`
-          list.push({
-            id: `weighing-delayed-${lot.id}`,
-            type: 'pesagem',
-            severity: 'warning',
-            message: `Pesagem do lote ${lot.name} está atrasada (última: ${formattedDate})`,
-            link: '/pesagens',
-          })
+          const dedupKey = `weighing-delayed:${lot.id}:${lastWeighing.date}`
+          if (shouldInclude(dedupKey, `weighing-delayed-${lot.id}`)) {
+            list.push({
+              id: dedupKey,
+              type: 'pesagem',
+              severity: 'warning',
+              message: `Pesagem do lote ${lot.name} está atrasada (última: ${formattedDate})`,
+              link: '/pesagens',
+              rawAlert: {
+                id: dedupKey,
+                deduplication_key: dedupKey,
+                type: 'pesagem',
+                severity: 'warning',
+                title: '⚖️ Pesagem Atrasada',
+                description: `Pesagem do lote ${lot.name} está atrasada (última: ${formattedDate})`,
+                origin: 'Pesagens',
+                related_entity_type: 'farm_lots',
+                related_entity_id: lot.id,
+                modulePath: '/pesagens',
+                property_id: currentProperty?.id,
+                propertyName,
+              },
+            })
+          }
         }
       }
     }
@@ -476,13 +784,30 @@ export function useDashboardData() {
         .reduce((acc, m) => acc + (Number(m.quantity) || 0), 0)
 
       if (lotMortalityToday > 0 && avgDaily > 0 && lotMortalityToday > avgDaily * 2) {
-        list.push({
-          id: `mortality-spike-${lot.id}`,
-          type: 'mortalidade',
-          severity: 'critical',
-          message: `Mortalidade do lote ${lot.name} subiu acima da média (${lotMortalityToday} hoje vs média ${avgDaily.toFixed(1)}/dia)`,
-          link: '/mortalidade',
-        })
+        const dedupKey = `mortality-spike:${lot.id}:${todayStr}`
+        if (shouldInclude(dedupKey, `mortality-spike-${lot.id}`)) {
+          list.push({
+            id: dedupKey,
+            type: 'mortalidade',
+            severity: 'critical',
+            message: `Mortalidade do lote ${lot.name} subiu acima da média (${lotMortalityToday} hoje vs média ${avgDaily.toFixed(1)}/dia)`,
+            link: '/mortalidade',
+            rawAlert: {
+              id: dedupKey,
+              deduplication_key: dedupKey,
+              type: 'mortalidade',
+              severity: 'critical',
+              title: '🚨 Mortalidade Elevada',
+              description: `Mortalidade do lote ${lot.name} subiu acima da média (${lotMortalityToday} hoje vs média ${avgDaily.toFixed(1)}/dia)`,
+              origin: 'Mortalidade',
+              related_entity_type: 'farm_lots',
+              related_entity_id: lot.id,
+              modulePath: '/mortalidade',
+              property_id: currentProperty?.id,
+              propertyName,
+            },
+          })
+        }
       }
     }
 
@@ -491,13 +816,47 @@ export function useDashboardData() {
       (e) => (e.date === tomorrowStr || (e as any).due_date === tomorrowStr) && !e.isPaid,
     )
     for (const exp of expensesDueTomorrow) {
-      list.push({
-        id: `expense-due-${exp.id}`,
-        type: 'despesa',
-        severity: 'info',
-        message: `Conta ${exp.description} vence amanhã (R$ ${Number(exp.totalValue || 0).toFixed(2)})`,
-        link: '/financeiro',
-      })
+      const dedupKey = `expense-due:${exp.id}:${tomorrowStr}`
+      if (shouldInclude(dedupKey, `expense-due-${exp.id}`)) {
+        list.push({
+          id: dedupKey,
+          type: 'despesa',
+          severity: 'info',
+          message: `Conta ${exp.description} vence amanhã (R$ ${Number(exp.totalValue || 0).toFixed(2)})`,
+          link: '/financeiro',
+          rawAlert: {
+            id: dedupKey,
+            deduplication_key: dedupKey,
+            type: 'despesa',
+            severity: 'info',
+            title: '💵 Conta Vencendo Amanhã',
+            description: `Conta ${exp.description} vence amanhã (R$ ${Number(exp.totalValue || 0).toFixed(2)})`,
+            origin: 'Financeiro / Despesas',
+            related_entity_type: 'farm_expenses',
+            related_entity_id: exp.id,
+            modulePath: '/financeiro',
+            property_id: currentProperty?.id,
+            propertyName,
+          },
+        })
+      }
+    }
+
+    // Alertas salvos no banco não lidos e não dispensados que não são de condições dinâmicas
+    for (const a of alerts) {
+      if ((a.status === 'nao_lido' || !a.isRead) && a.status !== 'dispensado') {
+        const dedup = a.deduplication_key || a.id
+        if (!list.some((l) => l.id === dedup || l.id === a.id)) {
+          list.push({
+            id: a.id,
+            type: (a.type as any) || 'operacional',
+            severity: a.severity || 'warning',
+            message: a.description || a.title,
+            link: a.modulePath || '/estoque',
+            rawAlert: a,
+          })
+        }
+      }
     }
 
     return list
@@ -516,6 +875,9 @@ export function useDashboardData() {
     treatments,
     protocolAssignments,
     lots,
+    alerts,
+    currentProperty,
+    propertyName,
   ])
 
   // 10. ATIVIDADES RECENTES (TIMELINE CONSOLIDADA, MÁXIMO 15 ITENS)

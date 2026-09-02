@@ -4,7 +4,7 @@ import { Menu, Bell, PlusCircle, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { Badge } from '@/components/ui/badge'
-import { useFarmStore } from '@/hooks/use-farm-store'
+import { useAlertsManager } from '@/hooks/use-alerts-manager'
 import { QuickEntryModal } from '@/components/QuickEntryModal'
 import { QuickActionsSheet } from '@/components/QuickActionsSheet'
 import { MobileBottomNav } from '@/components/MobileBottomNav'
@@ -21,8 +21,8 @@ const APP_VERSION = 'v0.0.59'
 
 function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation()
-  const { alerts } = useFarmStore()
-  const unreadAlertsCount = alerts.filter((a) => !a.isRead).length
+  const { unreadCount } = useAlertsManager()
+  const unreadAlertsCount = unreadCount
   const [expanded, setExpanded] = useState<Record<string, boolean>>(
     Object.fromEntries(navGroups.map((g) => [g.label, true])),
   )
@@ -89,14 +89,14 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function Layout() {
-  const { alerts } = useFarmStore()
+  const { unreadCount } = useAlertsManager()
   const { profile, orgMember } = useAuth()
   const [quickModalOpen, setQuickModalOpen] = useState(false)
   const [quickActionsOpen, setQuickActionsOpen] = useState(false)
   const [quickActionType, setQuickActionType] = useState<string | null>(null)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
-  const unreadAlertsCount = alerts.filter((a) => !a.isRead).length
+  const unreadAlertsCount = unreadCount
 
   const handleQuickActionSelect = (action: string) => {
     setQuickActionType(action)

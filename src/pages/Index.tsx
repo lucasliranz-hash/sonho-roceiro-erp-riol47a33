@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useDashboardData } from '@/hooks/use-dashboard'
+import { useFarmStore } from '@/hooks/use-farm-store'
 import { cn } from '@/lib/utils'
 import {
   Bird,
@@ -30,6 +31,8 @@ import {
 } from 'lucide-react'
 
 export default function Dashboard() {
+  const navigate = useNavigate()
+  const { markAlertAsRead } = useFarmStore()
   const {
     propertyName,
     todayFormatted,
@@ -46,6 +49,24 @@ export default function Dashboard() {
     treatments,
     healthOccurrences,
   } = useDashboardData()
+
+  const handleAlertClick = async (alert: any) => {
+    if (alert.rawAlert) {
+      await markAlertAsRead(alert.id, alert.rawAlert)
+    } else {
+      await markAlertAsRead(alert.id, {
+        id: alert.id,
+        title: alert.message,
+        description: alert.message,
+        type: alert.type || 'operacional',
+        severity: alert.severity || 'warning',
+        modulePath: alert.link || '/estoque',
+      })
+    }
+    if (alert.link) {
+      navigate(alert.link)
+    }
+  }
 
   // Capitalize first letter of todayFormatted (e.g. "Quinta-feira, 14 de agosto de 2025")
   const formattedDateCapitalized = todayFormatted.charAt(0).toUpperCase() + todayFormatted.slice(1)
@@ -209,12 +230,16 @@ export default function Dashboard() {
                 </div>
               )
 
-              return alert.link ? (
-                <Link key={alert.id} to={alert.link} className="block">
+              return (
+                <div
+                  key={alert.id}
+                  onClick={() => handleAlertClick(alert)}
+                  className="cursor-pointer"
+                  role="button"
+                  tabIndex={0}
+                >
                   {content}
-                </Link>
-              ) : (
-                <div key={alert.id}>{content}</div>
+                </div>
               )
             })}
           </div>

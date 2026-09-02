@@ -346,14 +346,44 @@ export interface Asset {
   notes?: string
 }
 
+export type AlertStatus = 'nao_lido' | 'lido' | 'dispensado'
+
+export type AlertType =
+  | 'estoque'
+  | 'sanidade'
+  | 'incubacao'
+  | 'mortalidade'
+  | 'pesagem'
+  | 'despesa'
+  | 'financeiro'
+  | 'chocadeira'
+  | 'abate'
+  | 'operacional'
+
 export interface FarmAlert {
   id: string
+  organization_id?: string
+  property_id?: string
+  propertyName?: string
+  user_id?: string
+  type: AlertType | string
+  severity: 'info' | 'warning' | 'critical'
   title: string
   description: string
-  type: 'estoque' | 'financeiro' | 'chocadeira' | 'mortalidade' | 'pesagem' | 'abate'
-  date: string
+  origin: string
+  related_entity_type?: string
+  related_entity_id?: string
+  deduplication_key?: string
+  condition_active?: boolean
+  condition_state?: string
+  status: AlertStatus
   isRead: boolean
+  read_at?: string | null
+  dismissed_at?: string | null
   modulePath: string
+  date: string // YYYY-MM-DD or ISO
+  created_at?: string
+  updated_at?: string
 }
 
 export interface StockMovement {

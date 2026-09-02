@@ -479,10 +479,141 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const markAlertAsRead = useCallback(
-    async (id: string) => {
-      return alerts.update(id, { isRead: true })
+    async (id: string, alertData?: Partial<FarmAlert>) => {
+      const existing = alerts.items.find((a) => a.id === id || a.deduplication_key === id)
+      const now = new Date().toISOString()
+      if (existing) {
+        return alerts.update(existing.id, {
+          isRead: true,
+          status: 'lido',
+          read_at: now,
+          ...(alertData || {}),
+        })
+      }
+      // Se ainda não estava persistido no banco, criamos com status lido
+      const newRecord: FarmAlert = {
+        id: id,
+        type: alertData?.type || 'operacional',
+        severity: alertData?.severity || 'warning',
+        title: alertData?.title || 'Aviso',
+        description: alertData?.description || '',
+        origin: alertData?.origin || 'Sistema',
+        related_entity_type: alertData?.related_entity_type,
+        related_entity_id: alertData?.related_entity_id,
+        deduplication_key: alertData?.deduplication_key || id,
+        condition_active: alertData?.condition_active ?? true,
+        condition_state: alertData?.condition_state,
+        status: 'lido',
+        isRead: true,
+        read_at: now,
+        modulePath: alertData?.modulePath || '/estoque',
+        property_id: alertData?.property_id,
+        propertyName: alertData?.propertyName,
+        date: alertData?.date || now.split('T')[0],
+        created_at: now,
+      }
+      return alerts.add(newRecord)
     },
     [alerts],
+  )
+
+  const markAlertAsUnread = useCallback(
+    async (id: string, alertData?: Partial<FarmAlert>) => {
+      const existing = alerts.items.find((a) => a.id === id || a.deduplication_key === id)
+      const now = new Date().toISOString()
+      if (existing) {
+        return alerts.update(existing.id, {
+          isRead: false,
+          status: 'nao_lido',
+          read_at: null,
+          ...(alertData || {}),
+        })
+      }
+      const newRecord: FarmAlert = {
+        id: id,
+        type: alertData?.type || 'operacional',
+        severity: alertData?.severity || 'warning',
+        title: alertData?.title || 'Aviso',
+        description: alertData?.description || '',
+        origin: alertData?.origin || 'Sistema',
+        related_entity_type: alertData?.related_entity_type,
+        related_entity_id: alertData?.related_entity_id,
+        deduplication_key: alertData?.deduplication_key || id,
+        condition_active: alertData?.condition_active ?? true,
+        condition_state: alertData?.condition_state,
+        status: 'nao_lido',
+        isRead: false,
+        read_at: null,
+        modulePath: alertData?.modulePath || '/estoque',
+        property_id: alertData?.property_id,
+        propertyName: alertData?.propertyName,
+        date: alertData?.date || now.split('T')[0],
+        created_at: now,
+      }
+      return alerts.add(newRecord)
+    },
+    [alerts],
+  )
+
+  const dismissAlert = useCallback(
+    async (id: string, alertData?: Partial<FarmAlert>) => {
+      const existing = alerts.items.find((a) => a.id === id || a.deduplication_key === id)
+      const now = new Date().toISOString()
+      if (existing) {
+        return alerts.update(existing.id, {
+          status: 'dispensado',
+          dismissed_at: now,
+          ...(alertData || {}),
+        })
+      }
+      const newRecord: FarmAlert = {
+        id: id,
+        type: alertData?.type || 'operacional',
+        severity: alertData?.severity || 'warning',
+        title: alertData?.title || 'Aviso',
+        description: alertData?.description || '',
+        origin: alertData?.origin || 'Sistema',
+        related_entity_type: alertData?.related_entity_type,
+        related_entity_id: alertData?.related_entity_id,
+        deduplication_key: alertData?.deduplication_key || id,
+        condition_active: alertData?.condition_active ?? true,
+        condition_state: alertData?.condition_state,
+        status: 'dispensado',
+        isRead: true,
+        dismissed_at: now,
+        modulePath: alertData?.modulePath || '/estoque',
+        property_id: alertData?.property_id,
+        propertyName: alertData?.propertyName,
+        date: alertData?.date || now.split('T')[0],
+        created_at: now,
+      }
+      return alerts.add(newRecord)
+    },
+    [alerts],
+  )
+
+  const markAllAlertsAsRead = useCallback(
+    async (currentAlertsList?: FarmAlert[]) => {
+      const list = currentAlertsList || alerts.items
+      for (const item of list) {
+        if (item.status === 'nao_lido' || !item.isRead) {
+          await markAlertAsRead(item.id, item)
+        }
+      }
+    },
+    [alerts, markAlertAsRead],
+  )
+
+  const dismissAllAlerts = useCallback(
+    async (currentAlertsList?: FarmAlert[]) => {
+      const list = currentAlertsList || alerts.items
+      for (const item of list) {
+        if (item.status !== 'dispensado') {
+          await dismissAlert(item.id, item)
+        }
+      }
+    },
+    [alerts, dismissAlert],
   )
 
   const addAsset = useCallback(
@@ -1112,7 +1243,15 @@ function useFarmStoreImpl(orgId: string | undefined) {
     updateAsset: assets.update,
     deleteAsset: assets.remove,
     alerts: alerts.items,
+    setAlerts: alerts.setItems,
+    addAlert: alerts.add,
+    updateAlert: alerts.update,
+    deleteAlert: alerts.remove,
     markAlertAsRead,
+    markAlertAsUnread,
+    dismissAlert,
+    markAllAlertsAsRead,
+    dismissAllAlerts,
     stockMovements: stockMovements.items,
     addStockMovement,
     updateStockMovement,
