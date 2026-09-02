@@ -2355,6 +2355,8 @@ export default function Sanidade() {
 
   // Modal Sessão de Vacinação / Frasco Aberto
   const [sessionModalOpen, setSessionModalOpen] = useState(false)
+  const [selectedSessionForSummary, setSelectedSessionForSummary] =
+    useState<VaccinationSession | null>(null)
 
   // Modal Registrar Aplicação (Programada -> Realizada)
   const [applyVacModalOpen, setApplyVacModalOpen] = useState(false)
@@ -3137,6 +3139,68 @@ export default function Sanidade() {
                                   <Syringe className="w-3.5 h-3.5" /> 💉 Registrar aplicação
                                 </DropdownMenuItem>
                               )}
+                              {vac.session_id && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    const session = (vaccinationSessions || []).find(
+                                      (s) => s.id === vac.session_id,
+                                    )
+                                    if (session) {
+                                      setSelectedSessionForSummary(session)
+                                    } else {
+                                      // Fallback se a sessão não estiver carregada na lista completa
+                                      const sessionVacList = (vaccinations || []).filter(
+                                        (v) => v.session_id === vac.session_id,
+                                      )
+                                      const totalApp = sessionVacList.reduce(
+                                        (acc, curr) =>
+                                          acc +
+                                          Number(curr.doses_applied || curr.quantity_used || 0),
+                                        0,
+                                      )
+                                      const totalCost = sessionVacList.reduce(
+                                        (acc, curr) => acc + Number(curr.total_cost || 0),
+                                        0,
+                                      )
+                                      const syntheticSession: VaccinationSession = {
+                                        id: vac.session_id,
+                                        vaccine_name: vac.vaccine_name,
+                                        session_date:
+                                          vac.performed_date || vac.scheduled_date || '',
+                                        vial_capacity: 100,
+                                        initial_quantity: 100,
+                                        vial_cost: totalCost,
+                                        unit_cost: totalCost > 0 ? totalCost / 100 : 0,
+                                        vial_destiny: vac.vial_destiny || 'discarded',
+                                        total_applied: totalApp,
+                                        total_discarded: Math.max(0, 100 - totalApp),
+                                        total_downloaded: 100,
+                                        total_cost: totalCost,
+                                        status: 'completed',
+                                        responsible: vac.responsible,
+                                        inventory_item_name: vac.inventory_item_name,
+                                        manufacturer_batch: vac.batch_number,
+                                        applications: sessionVacList.map((sv) => ({
+                                          lot_id: sv.lot_id,
+                                          lotName: lotName(sv.lot_id, sv.lotName),
+                                          animal_count: sv.animal_count,
+                                          dose_per_animal: sv.dose_per_animal,
+                                          volume_per_dose: sv.volume_per_dose,
+                                          volume_unit: sv.volume_unit,
+                                          doses_applied: Number(
+                                            sv.doses_applied || sv.quantity_used || 0,
+                                          ),
+                                          cost: Number(sv.total_cost || 0),
+                                        })),
+                                      }
+                                      setSelectedSessionForSummary(syntheticSession)
+                                    }
+                                  }}
+                                  className="text-xs font-semibold text-purple-700 cursor-pointer gap-2"
+                                >
+                                  <Layers className="w-3.5 h-3.5" /> Ver Sessão / Frasco
+                                </DropdownMenuItem>
+                              )}
                               <DropdownMenuItem
                                 onClick={() =>
                                   setDetailsRecord({
@@ -3158,21 +3222,15 @@ export default function Sanidade() {
                                       'Via de Aplicação': vac.application_route || '—',
                                       'Doses Aplicadas':
                                         vac.doses_applied ?? vac.quantity_used ?? '—',
-                                      'Doses Descartadas':
-                                        vac.doses_discarded ?? vac.discarded_quantity ?? 0,
-                                      'Total Baixado do Estoque': `${vac.total_downloaded ?? Number(vac.doses_applied || 0) + Number(vac.doses_discarded || 0)} doses`,
-                                      'Destino do Frasco':
-                                        vac.vial_destiny === 'discarded'
-                                          ? 'Sobra Descartada (Perda)'
-                                          : vac.vial_destiny === 'kept'
-                                            ? 'Sobra Guardada'
-                                            : 'Fechado',
+                                      'Custo Apropriado ao Lote': vac.total_cost
+                                        ? `R$ ${Number(vac.total_cost).toFixed(2)}`
+                                        : '—',
+                                      ...(vac.session_id
+                                        ? { 'Sessão Vinculada': vac.session_id }
+                                        : {}),
                                       Responsável: vac.responsible || '—',
                                       'Item Estoque Vinculado': vac.inventory_item_name || '—',
                                       'Lote Fabricante': vac.batch_number || '—',
-                                      'Custo Total Apropriado': vac.total_cost
-                                        ? `R$ ${Number(vac.total_cost).toFixed(2)}`
-                                        : '—',
                                       'Baixa em Estoque': vac.stock_deducted
                                         ? 'Sim (Efetuada)'
                                         : 'Não',
@@ -3243,14 +3301,24 @@ export default function Sanidade() {
                         </div>
                       </div>
 
-                      {/* Detalhes de vacinação realizada (Problema 4 - Interface) */}
+                      {/* Detalhes de vacinação realizada */}
                       {vac.status === 'performed' ? (
                         <div className="p-2.5 rounded-xl bg-emerald-50/70 border border-emerald-200/80 text-[11px] space-y-1">
                           <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
                             <div className="flex justify-between">
+                              <span className="text-muted-foreground">Aves vacinadas:</span>
+                              <strong className="text-foreground">{vac.animal_count ?? '—'}</strong>
+                            </div>
+                            <div className="flex justify-between">
                               <span className="text-muted-foreground">Dose por ave:</span>
                               <strong className="text-foreground">
                                 {vac.dose_per_animal ?? 1} dose
+                              </strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Doses aplicadas:</span>
+                              <strong className="text-emerald-700 font-bold">
+                                {vac.doses_applied ?? vac.quantity_used ?? '—'}
                               </strong>
                             </div>
                             <div className="flex justify-between">
@@ -3259,29 +3327,13 @@ export default function Sanidade() {
                                 {vac.application_route || 'ocular'}
                               </span>
                             </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Aves vacinadas:</span>
-                              <strong className="text-foreground">{vac.animal_count ?? '—'}</strong>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Doses aplicadas:</span>
-                              <strong className="text-emerald-700">
-                                {vac.doses_applied ?? vac.quantity_used ?? '—'}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Doses descartadas:</span>
-                              <strong className="text-rose-600">
-                                {vac.doses_discarded ?? vac.discarded_quantity ?? 0}
-                              </strong>
-                            </div>
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">Total baixado:</span>
-                              <strong className="text-foreground">
-                                {vac.total_downloaded ??
-                                  (vac.doses_applied || vac.quantity_used || 0) +
-                                    (vac.doses_discarded || 0)}
-                              </strong>
+                            <div className="flex justify-between col-span-2">
+                              <span className="text-muted-foreground">Volume por dose:</span>
+                              <span className="font-medium text-foreground">
+                                {vac.volume_per_dose
+                                  ? `${vac.volume_per_dose} ${vac.volume_unit || 'mL'}`
+                                  : '—'}
+                              </span>
                             </div>
                           </div>
                           {vac.total_cost !== undefined && (
@@ -3290,6 +3342,73 @@ export default function Sanidade() {
                               <span className="text-emerald-800 text-xs">
                                 R$ {Number(vac.total_cost).toFixed(2)}
                               </span>
+                            </div>
+                          )}
+                          {vac.session_id && (
+                            <div className="pt-1 border-t border-emerald-200/60 flex items-center justify-between">
+                              <span className="text-[10px] text-emerald-900/70">
+                                Sessão Frasco Multidose
+                              </span>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  const session = (vaccinationSessions || []).find(
+                                    (s) => s.id === vac.session_id,
+                                  )
+                                  if (session) {
+                                    setSelectedSessionForSummary(session)
+                                  } else {
+                                    const sessionVacList = (vaccinations || []).filter(
+                                      (v) => v.session_id === vac.session_id,
+                                    )
+                                    const totalApp = sessionVacList.reduce(
+                                      (acc, curr) =>
+                                        acc + Number(curr.doses_applied || curr.quantity_used || 0),
+                                      0,
+                                    )
+                                    const totalCost = sessionVacList.reduce(
+                                      (acc, curr) => acc + Number(curr.total_cost || 0),
+                                      0,
+                                    )
+                                    const syntheticSession: VaccinationSession = {
+                                      id: vac.session_id,
+                                      vaccine_name: vac.vaccine_name,
+                                      session_date: vac.performed_date || vac.scheduled_date || '',
+                                      vial_capacity: 100,
+                                      initial_quantity: 100,
+                                      vial_cost: totalCost,
+                                      unit_cost: totalCost > 0 ? totalCost / 100 : 0,
+                                      vial_destiny: vac.vial_destiny || 'discarded',
+                                      total_applied: totalApp,
+                                      total_discarded: Math.max(0, 100 - totalApp),
+                                      total_downloaded: 100,
+                                      total_cost: totalCost,
+                                      status: 'completed',
+                                      responsible: vac.responsible,
+                                      inventory_item_name: vac.inventory_item_name,
+                                      manufacturer_batch: vac.batch_number,
+                                      applications: sessionVacList.map((sv) => ({
+                                        lot_id: sv.lot_id,
+                                        lotName: lotName(sv.lot_id, sv.lotName),
+                                        animal_count: sv.animal_count,
+                                        dose_per_animal: sv.dose_per_animal,
+                                        volume_per_dose: sv.volume_per_dose,
+                                        volume_unit: sv.volume_unit,
+                                        doses_applied: Number(
+                                          sv.doses_applied || sv.quantity_used || 0,
+                                        ),
+                                        cost: Number(sv.total_cost || 0),
+                                      })),
+                                    }
+                                    setSelectedSessionForSummary(syntheticSession)
+                                  }
+                                }}
+                                className="h-6 px-2 text-[10px] font-bold text-purple-700 hover:text-purple-900 hover:bg-purple-100/60 rounded-md gap-1"
+                              >
+                                <Layers className="w-3 h-3 text-purple-600" /> Ver sessão
+                              </Button>
                             </div>
                           )}
                         </div>
@@ -3923,6 +4042,228 @@ export default function Sanidade() {
         lots={lots}
         onAssign={handleAssignProtocolConfirm}
       />
+
+      {/* Diálogo Resumo da Sessão / Frasco Aberto */}
+      <Dialog
+        open={Boolean(selectedSessionForSummary)}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSessionForSummary(null)
+        }}
+      >
+        <DialogContent className="max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+              <Syringe className="w-5 h-5 text-emerald-600" />
+              Resumo da Sessão de Vacinação
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedSessionForSummary &&
+            (() => {
+              const session = selectedSessionForSummary
+              const sessionVacList = (vaccinations || []).filter((v) => v.session_id === session.id)
+
+              // Resolve applications: use session.applications if non-empty, otherwise derive from sessionVacList
+              const apps =
+                session.applications && session.applications.length > 0
+                  ? session.applications
+                  : sessionVacList.map((v) => ({
+                      lot_id: v.lot_id,
+                      lotName: lotName(v.lot_id, v.lotName),
+                      animal_count: v.animal_count,
+                      dose_per_animal: v.dose_per_animal ?? 1,
+                      volume_per_dose: v.volume_per_dose,
+                      volume_unit: v.volume_unit || 'mL',
+                      doses_applied: Number(v.doses_applied ?? v.quantity_used ?? 0),
+                      cost: Number(v.total_cost ?? 0),
+                      notes: v.notes,
+                    }))
+
+              const totalApplied =
+                session.total_applied ??
+                apps.reduce((acc, a) => acc + (Number(a.doses_applied) || 0), 0)
+              const vialCapacity = session.vial_capacity || 100
+              const totalDiscarded =
+                session.total_discarded ?? Math.max(0, vialCapacity - totalApplied)
+              const totalDownloaded = session.total_downloaded ?? vialCapacity
+              const totalCost = Number(
+                session.total_cost ?? apps.reduce((acc, a) => acc + (Number(a.cost) || 0), 0),
+              )
+              const totalBirds = apps.reduce((acc, a) => acc + (Number(a.animal_count) || 0), 0)
+              const totalLots = apps.length
+
+              return (
+                <div className="space-y-4 mt-2">
+                  {/* Cabeçalho da sessão */}
+                  <div className="p-3.5 rounded-2xl bg-emerald-50/70 border border-emerald-200/70 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-800">
+                          Vacina / Produto
+                        </span>
+                        <h4 className="text-sm font-bold text-emerald-950">
+                          {session.vaccine_name}
+                        </h4>
+                      </div>
+                      <Badge className="bg-emerald-600 text-white text-[10px]">
+                        {session.status === 'completed' ? 'Concluída' : 'Realizada'}
+                      </Badge>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 text-[11px] text-emerald-900 border-t border-emerald-200/50">
+                      <div>
+                        <span className="text-muted-foreground block text-[10px]">
+                          Data da Sessão:
+                        </span>
+                        <strong className="font-semibold">{session.session_date || '—'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px]">
+                          Responsável:
+                        </span>
+                        <strong className="font-semibold">{session.responsible || '—'}</strong>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground block text-[10px]">
+                          Lote Fabricante:
+                        </span>
+                        <strong className="font-semibold">
+                          {session.manufacturer_batch || '—'}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Métricas do Frasco & Estoque */}
+                  <div className="p-3.5 rounded-2xl bg-secondary/40 border border-border/70 space-y-2">
+                    <span className="text-xs font-bold text-foreground block">
+                      Balanço do Frasco & Estoque
+                    </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 text-xs">
+                      <div className="p-2.5 rounded-xl bg-white border border-border/80 space-y-0.5">
+                        <span className="text-[10px] text-muted-foreground block">Frasco</span>
+                        <strong className="text-foreground font-bold text-sm">
+                          {vialCapacity} doses
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-border/80 space-y-0.5">
+                        <span className="text-[10px] text-muted-foreground block">
+                          Doses aplicadas
+                        </span>
+                        <strong className="text-emerald-700 font-bold text-sm">
+                          {totalApplied} doses
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-border/80 space-y-0.5">
+                        <span className="text-[10px] text-muted-foreground block">
+                          Doses descartadas / perda
+                        </span>
+                        <strong className="text-rose-600 font-bold text-sm">
+                          {totalDiscarded} doses
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-border/80 space-y-0.5">
+                        <span className="text-[10px] text-muted-foreground block">
+                          Total baixado estoque
+                        </span>
+                        <strong className="text-foreground font-bold text-sm">
+                          {totalDownloaded} doses
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-border/80 space-y-0.5">
+                        <span className="text-[10px] text-muted-foreground block">
+                          Custo total consumido
+                        </span>
+                        <strong className="text-emerald-700 font-bold text-sm">
+                          R$ {totalCost.toFixed(2)}
+                        </strong>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white border border-border/80 space-y-0.5">
+                        <span className="text-[10px] text-muted-foreground block">
+                          Lotes / Aves
+                        </span>
+                        <strong className="text-foreground font-bold text-sm">
+                          {totalLots} lotes ({totalBirds} aves)
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Distribuição por lote */}
+                  <div className="p-3.5 rounded-2xl bg-white border border-border/80 space-y-2.5">
+                    <span className="text-xs font-bold text-foreground block">
+                      Distribuição & Apropriação por Lote
+                    </span>
+                    <div className="divide-y divide-border/50 text-xs">
+                      {apps.map((app, idx) => {
+                        const lName = app.lotName || lotName(app.lot_id)
+                        return (
+                          <div
+                            key={idx}
+                            className="py-2 first:pt-0 last:pb-0 flex items-center justify-between gap-2"
+                          >
+                            <div className="space-y-0.5">
+                              <span className="font-semibold text-foreground flex items-center gap-1">
+                                <Layers className="w-3 h-3 text-emerald-600" />
+                                {lName}
+                              </span>
+                              <span className="text-[11px] text-muted-foreground block">
+                                {app.animal_count ?? '—'} aves • {app.dose_per_animal ?? 1} dose/ave
+                                {app.volume_per_dose
+                                  ? ` • ${app.volume_per_dose} ${app.volume_unit || 'mL'}/dose`
+                                  : ''}
+                              </span>
+                            </div>
+                            <div className="text-right space-y-0.5">
+                              <strong className="text-emerald-700 font-bold block">
+                                {app.doses_applied} doses
+                              </strong>
+                              <span className="text-[11px] text-muted-foreground block font-medium">
+                                R$ {Number(app.cost || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {/* Totais de fechamento da sessão */}
+                    <div className="pt-2.5 border-t border-border/80 space-y-1 text-xs">
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Total aplicado:</span>
+                        <strong className="text-emerald-700 font-bold">
+                          {totalApplied} doses aplicadas
+                        </strong>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Perda técnica / descarte:</span>
+                        <strong className="text-rose-600 font-bold">{totalDiscarded} doses</strong>
+                      </div>
+                      <div className="flex justify-between text-muted-foreground">
+                        <span>Total consumido:</span>
+                        <strong className="text-foreground font-bold">
+                          {totalDownloaded} doses
+                        </strong>
+                      </div>
+                      <div className="flex justify-between items-center pt-1 border-t border-border/50 text-xs font-bold">
+                        <span className="text-foreground">Custo total:</span>
+                        <span className="text-emerald-700 text-sm font-black">
+                          R$ {totalCost.toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {session.notes && (
+                    <p className="text-[11px] text-muted-foreground bg-secondary/30 p-2.5 rounded-xl border border-border/50">
+                      <strong className="text-foreground">Obs:</strong> {session.notes}
+                    </p>
+                  )}
+                </div>
+              )
+            })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Detalhes e Exclusão */}
       <Dialog
