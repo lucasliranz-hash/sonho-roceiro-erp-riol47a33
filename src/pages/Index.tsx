@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { useDashboardData } from '@/hooks/use-dashboard'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { cn } from '@/lib/utils'
+import { computeLotLiveQuantity } from '@/lib/calculations'
 import {
   Bird,
   Layers,
@@ -32,7 +33,7 @@ import {
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { markAlertAsRead } = useFarmStore()
+  const { markAlertAsRead, mortality, slaughterings, sales } = useFarmStore()
   const {
     propertyName,
     todayFormatted,
@@ -688,7 +689,8 @@ export default function Dashboard() {
                     <div>
                       <span className="text-[10px] text-muted-foreground block">Vivas</span>
                       <span className="font-extrabold text-foreground">
-                        {lot.currentQuantity} / {lot.initialQuantity}
+                        {computeLotLiveQuantity(lot, mortality, slaughterings, sales)} /{' '}
+                        {lot.initialQuantity}
                       </span>
                     </div>
                     <div>

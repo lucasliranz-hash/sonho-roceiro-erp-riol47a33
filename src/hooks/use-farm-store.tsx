@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 import { useAuth } from '@/hooks/use-auth'
 import { useSupabaseEntity } from '@/hooks/use-supabase-entity'
 import { FARM_TABLES } from '@/services/farm'
+import { computeLotLiveQuantity } from '@/lib/calculations'
 import {
   Activity,
   Lot,
@@ -110,6 +111,37 @@ function useFarmStoreImpl(orgId: string | undefined) {
       })
     },
     [lots],
+  )
+
+  const updateLot = useCallback(
+    async (id: string, updates: Partial<Lot>) => {
+      const existing = lots.items.find((l) => l.id === id)
+      let resolvedUpdates = { ...updates }
+
+      // Se initialQuantity foi alterada mas currentQuantity não foi informada explicitamente,
+      // recalcula a currentQuantity com base no saldo de eventos reais (mortalidade, abate, vendas)
+      if (
+        updates.initialQuantity !== undefined &&
+        existing &&
+        updates.initialQuantity !== existing.initialQuantity &&
+        updates.currentQuantity === undefined
+      ) {
+        const dummyLot: Lot = {
+          ...existing,
+          ...updates,
+        }
+        const newLive = computeLotLiveQuantity(
+          dummyLot,
+          mortality.items,
+          slaughterings.items,
+          sales.items,
+        )
+        resolvedUpdates.currentQuantity = newLive
+      }
+
+      return lots.update(id, resolvedUpdates)
+    },
+    [lots, mortality, slaughterings, sales],
   )
 
   // ===== Atividades =====
@@ -305,17 +337,26 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
   const addMortality = useCallback(
     async (m: Omit<Mortality, 'id'>) => {
-      const { error } = await mortality.add({ ...m, id: `m-${Date.now()}` })
+      const newId = `m-${Date.now()}`
+      const newRecord = { ...m, id: newId }
+      const { error } = await mortality.add(newRecord)
       if (error) return { error }
       const lot = lots.items.find((l) => l.id === m.lotId)
       if (lot) {
+        const nextMortalities = [newRecord, ...mortality.items]
+        const newLive = computeLotLiveQuantity(
+          lot,
+          nextMortalities,
+          slaughterings.items,
+          sales.items,
+        )
         await lots.update(m.lotId, {
-          currentQuantity: Math.max(0, lot.currentQuantity - m.quantity),
+          currentQuantity: newLive,
         })
       }
       return { error: null }
     },
-    [mortality, lots],
+    [mortality, lots, slaughterings, sales],
   )
 
   const addEggProduction = useCallback(
@@ -327,14 +368,91 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
   const addSale = useCallback(
     async (sale: Omit<Sale, 'id' | 'totalPrice'>) => {
-      return sales.add({
+      const newSaleId = `sal-${Date.now()}`
+      const fullSaleRecord: Sale = {
         ...sale,
-        id: `sal-${Date.now()}`,
+        id: newSaleId,
         totalPrice: Number((sale.quantity * sale.unitPrice).toFixed(2)),
         source_type: sale.source_type || 'SALE',
-      })
+      }
+      const res = await sales.add(fullSaleRecord)
+      if (res.error) return res
+
+      // Se a venda for vinculada a um lote e for ave viva (não abate), recalcula o lote
+      if (sale.lotId && sale.source_type !== 'SLAUGHTER') {
+        const lot = lots.items.find((l) => l.id === sale.lotId)
+        if (lot) {
+          const nextSales = [fullSaleRecord, ...sales.items]
+          const newLive = computeLotLiveQuantity(
+            lot,
+            mortality.items,
+            slaughterings.items,
+            nextSales,
+          )
+          if (newLive !== lot.currentQuantity) {
+            await lots.update(lot.id, { currentQuantity: newLive })
+          }
+        }
+      }
+
+      return res
     },
-    [sales],
+    [sales, lots, mortality, slaughterings],
+  )
+
+  const updateSaleRecord = useCallback(
+    async (id: string, updates: Partial<Sale>) => {
+      const res = await sales.update(id, updates)
+      if (res.error) return res
+
+      const oldSale = sales.items.find((s) => s.id === id)
+      const targetLotId = updates.lotId || oldSale?.lotId
+      if (targetLotId) {
+        const lot = lots.items.find((l) => l.id === targetLotId)
+        if (lot) {
+          const nextSales = sales.items.map((s) => (s.id === id ? { ...s, ...updates } : s))
+          const newLive = computeLotLiveQuantity(
+            lot,
+            mortality.items,
+            slaughterings.items,
+            nextSales,
+          )
+          if (newLive !== lot.currentQuantity) {
+            await lots.update(lot.id, { currentQuantity: newLive })
+          }
+        }
+      }
+
+      return res
+    },
+    [sales, lots, mortality, slaughterings],
+  )
+
+  const deleteSaleRecord = useCallback(
+    async (id: string) => {
+      const oldSale = sales.items.find((s) => s.id === id)
+      const res = await sales.remove(id)
+      if (res.error) return res
+
+      if (oldSale?.lotId && oldSale.source_type !== 'SLAUGHTER') {
+        const lot = lots.items.find((l) => l.id === oldSale.lotId)
+        if (lot) {
+          const remainingSales = sales.items.filter((s) => s.id !== id)
+          const newLive = computeLotLiveQuantity(
+            lot,
+            mortality.items,
+            slaughterings.items,
+            remainingSales,
+          )
+          if (newLive !== lot.currentQuantity) {
+            await lots.update(lot.id, { currentQuantity: newLive })
+          }
+        }
+      }
+
+      return res
+    },
+    [sales, lots, mortality, slaughterings],
   )
 
   const addIncubation = useCallback(
@@ -362,10 +480,17 @@ function useFarmStoreImpl(orgId: string | undefined) {
         if (updates.healthyChicks !== undefined && updates.healthyChicks !== oldInc.healthyChicks) {
           const lot = lots.items.find((l) => l.id === resultingLotId || l.incubationId === id)
           if (lot) {
-            const oldQty = lot.initialQuantity
-            const diff = updates.healthyChicks - (oldInc.healthyChicks || 0)
-            const newCurrent = Math.max(0, lot.currentQuantity + diff)
-            // Atualiza initialQuantity do lote para o novo healthyChicks e ajusta currentQuantity
+            const updatedLot = {
+              ...lot,
+              initialQuantity: updates.healthyChicks,
+            }
+            const newCurrent = computeLotLiveQuantity(
+              updatedLot,
+              mortality.items,
+              slaughterings.items,
+              sales.items,
+            )
+            // Atualiza initialQuantity do lote para o novo healthyChicks e ajusta currentQuantity recalculada
             await lots.update(lot.id, {
               initialQuantity: updates.healthyChicks,
               currentQuantity: newCurrent,
@@ -376,7 +501,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
       return res
     },
-    [incubations, lots],
+    [incubations, lots, mortality, slaughterings, sales],
   )
 
   const deleteIncubation = useCallback(
@@ -728,11 +853,20 @@ function useFarmStoreImpl(orgId: string | undefined) {
       if (error) return { error }
       if (m) {
         const lot = lots.items.find((l) => l.id === m.lotId)
-        if (lot) await lots.update(m.lotId, { currentQuantity: lot.currentQuantity + m.quantity })
+        if (lot) {
+          const remainingMortalities = mortality.items.filter((item) => item.id !== id)
+          const newLive = computeLotLiveQuantity(
+            lot,
+            remainingMortalities,
+            slaughterings.items,
+            sales.items,
+          )
+          await lots.update(m.lotId, { currentQuantity: newLive })
+        }
       }
       return { error: null }
     },
-    [mortality, lots],
+    [mortality, lots, slaughterings, sales],
   )
 
   const updateMortalityRecord = useCallback(
@@ -743,13 +877,21 @@ function useFarmStoreImpl(orgId: string | undefined) {
       if (old && updates.quantity !== undefined && updates.quantity !== old.quantity) {
         const lot = lots.items.find((l) => l.id === old.lotId)
         if (lot) {
-          const diff = old.quantity - updates.quantity
-          await lots.update(old.lotId, { currentQuantity: Math.max(0, lot.currentQuantity + diff) })
+          const updatedMortalities = mortality.items.map((item) =>
+            item.id === id ? { ...item, ...updates } : item,
+          )
+          const newLive = computeLotLiveQuantity(
+            lot,
+            updatedMortalities,
+            slaughterings.items,
+            sales.items,
+          )
+          await lots.update(old.lotId, { currentQuantity: newLive })
         }
       }
       return { error: null }
     },
-    [mortality, lots],
+    [mortality, lots, slaughterings, sales],
   )
 
   const deleteFeedConsumption = useCallback(
@@ -1218,13 +1360,20 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const slaughterId = `sla-${Date.now()}`
       let financialSaleId: string | undefined = undefined
 
-      // 1. Baixar aves vivas do lote ativo (REGRA FUNDAMENTAL: número de aves vivas correto)
+      // 1. Baixar aves vivas do lote ativo (REGRA FUNDAMENTAL: número de aves vivas correto derivado de eventos)
       if (slaughterData.lotId) {
         const lot = lots.items.find((l) => l.id === slaughterData.lotId)
         if (lot) {
-          const newCurrentQty = Math.max(
-            0,
-            (lot.currentQuantity || 0) - slaughterData.quantityAnimals,
+          const simulatedSlaughter: Slaughtering = {
+            ...slaughterData,
+            id: slaughterId,
+          } as Slaughtering
+          const nextSlaughters = [simulatedSlaughter, ...slaughterings.items]
+          const newCurrentQty = computeLotLiveQuantity(
+            lot,
+            mortality.items,
+            nextSlaughters,
+            sales.items,
           )
           const newStatus = newCurrentQty === 0 ? ('Abatido' as const) : lot.status
           await lots.update(lot.id, {
@@ -1308,7 +1457,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const { error } = await slaughterings.add(fullRecord)
       return { error, id: slaughterId }
     },
-    [slaughterings, lots, animals, sales],
+    [slaughterings, lots, animals, sales, mortality],
   )
 
   const updateSlaughtering = useCallback(
@@ -1322,34 +1471,52 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const newQty =
         updatedData.quantityAnimals !== undefined ? updatedData.quantityAnimals : oldQty
 
-      // Se mudou lote ou quantidade, ajusta as aves vivas no(s) lote(s)
+      // Se mudou lote ou quantidade, ajusta as aves vivas no(s) lote(s) a partir do cálculo derivado
+      const updatedSlaughters = slaughterings.items.map((s) =>
+        s.id === id ? { ...s, ...updatedData } : s,
+      )
+
       if (oldLotId === newLotId) {
         if (oldLotId && oldQty !== newQty) {
           const lot = lots.items.find((l) => l.id === oldLotId)
           if (lot) {
-            const diff = oldQty - newQty // se abatia 5 e agora abate 3, diff = +2 (devolve 2 ao lote)
-            const newCurrent = Math.max(0, (lot.currentQuantity || 0) + diff)
+            const newCurrent = computeLotLiveQuantity(
+              lot,
+              mortality.items,
+              updatedSlaughters,
+              sales.items,
+            )
             const newStatus = newCurrent === 0 ? ('Abatido' as const) : 'Ativo'
             await lots.update(lot.id, { currentQuantity: newCurrent, status: newStatus })
           }
         }
       } else {
-        // Devolve ao lote antigo
+        // Recalcula lote antigo
         if (oldLotId) {
           const oldLot = lots.items.find((l) => l.id === oldLotId)
           if (oldLot) {
-            const restored = (oldLot.currentQuantity || 0) + oldQty
+            const restored = computeLotLiveQuantity(
+              oldLot,
+              mortality.items,
+              updatedSlaughters,
+              sales.items,
+            )
             await lots.update(oldLot.id, {
               currentQuantity: restored,
               status: restored > 0 && oldLot.status === 'Abatido' ? 'Ativo' : oldLot.status,
             })
           }
         }
-        // Subtrai do novo lote
+        // Recalcula novo lote
         if (newLotId) {
           const newLot = lots.items.find((l) => l.id === newLotId)
           if (newLot) {
-            const newCurrent = Math.max(0, (newLot.currentQuantity || 0) - newQty)
+            const newCurrent = computeLotLiveQuantity(
+              newLot,
+              mortality.items,
+              updatedSlaughters,
+              sales.items,
+            )
             await lots.update(newLot.id, {
               currentQuantity: newCurrent,
               status: newCurrent === 0 ? 'Abatido' : newLot.status,
@@ -1409,7 +1576,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const { error } = await slaughterings.update(id, updatedData)
       return { error }
     },
-    [slaughterings, lots, sales],
+    [slaughterings, lots, sales, mortality],
   )
 
   const deleteSlaughtering = useCallback(
@@ -1431,11 +1598,17 @@ function useFarmStoreImpl(orgId: string | undefined) {
         await sales.remove(s.id)
       }
 
-      // 2. DEVOLVER as aves ao lote ativo (REGRA CRÍTICA: nunca apagar sem devolver)
-      if (slaughter?.lotId && slaughter.quantityAnimals) {
+      // 2. DEVOLVER as aves ao lote ativo (REGRA CRÍTICA: nunca apagar sem devolver, recalcular a partir dos eventos)
+      if (slaughter?.lotId) {
         const lot = lots.items.find((l) => l.id === slaughter.lotId)
         if (lot) {
-          const restoredQty = (lot.currentQuantity || 0) + slaughter.quantityAnimals
+          const remainingSlaughters = slaughterings.items.filter((s) => s.id !== id)
+          const restoredQty = computeLotLiveQuantity(
+            lot,
+            mortality.items,
+            remainingSlaughters,
+            sales.items,
+          )
           await lots.update(lot.id, {
             currentQuantity: restoredQty,
             status: lot.status === 'Abatido' && restoredQty > 0 ? 'Ativo' : lot.status,
@@ -1458,7 +1631,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
       return { error: null }
     },
-    [slaughterings, sales, lots, animals],
+    [slaughterings, sales, lots, animals, mortality],
   )
 
   return {
@@ -1470,7 +1643,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
     lots: lots.items,
     setLots: lots.setItems,
     addLot,
-    updateLot: lots.update,
+    updateLot,
     deleteLot: lots.remove,
     structures: structures.items,
     setStructures: structures.setItems,
@@ -1533,8 +1706,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
     deleteMating: matings.remove,
     sales: sales.items,
     addSale,
-    updateSale: sales.update,
-    deleteSale: sales.remove,
+    updateSale: updateSaleRecord,
+    deleteSale: deleteSaleRecord,
     customers: customers.items,
     setCustomers: customers.setItems,
     addCustomer,

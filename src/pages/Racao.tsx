@@ -44,6 +44,7 @@ import {
   FeedAllocationItem,
   FeedAllocationMethod,
 } from '@/types/farm'
+import { computeLotLiveQuantity } from '@/lib/calculations'
 
 const RACAO_SUGGESTIONS = [
   'Ração Inicial',
@@ -69,6 +70,9 @@ export default function Racao() {
     feedPurchases,
     inventory,
     lots,
+    mortality,
+    slaughterings,
+    sales,
     activities,
     addFeedConsumption,
     updateFeedConsumption,
@@ -442,7 +446,7 @@ export default function Racao() {
               quantityKg: totalQty,
               percentage: 100,
               cost: totalCost,
-              animalCount: lot.currentQuantity || lot.initialQuantity || undefined,
+              animalCount: computeLotLiveQuantity(lot, mortality, slaughterings, sales),
             },
           ]
         }
@@ -471,7 +475,9 @@ export default function Racao() {
             quantityKg: lotKg,
             percentage: pct,
             cost: allocCost,
-            animalCount: lot ? lot.currentQuantity || lot.initialQuantity : undefined,
+            animalCount: lot
+              ? computeLotLiveQuantity(lot, mortality, slaughterings, sales)
+              : undefined,
             notes: a.notes,
           }
         })
@@ -1290,7 +1296,8 @@ export default function Racao() {
                       <SelectContent>
                         {lots.map((l) => (
                           <SelectItem key={l.id} value={l.id} className="text-xs">
-                            {l.code} • {l.name} ({l.currentQuantity} aves vivas)
+                            {l.code} • {l.name} (
+                            {computeLotLiveQuantity(l, mortality, slaughterings, sales)} aves vivas)
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -1383,7 +1390,9 @@ export default function Racao() {
                                 <SelectContent>
                                   {lots.map((l) => (
                                     <SelectItem key={l.id} value={l.id} className="text-xs">
-                                      {l.name} ({l.currentQuantity} aves)
+                                      {l.name} (
+                                      {computeLotLiveQuantity(l, mortality, slaughterings, sales)}{' '}
+                                      aves)
                                     </SelectItem>
                                   ))}
                                 </SelectContent>

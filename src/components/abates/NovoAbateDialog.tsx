@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { useFarmStore } from '@/hooks/use-farm-store'
-import { computeLotAccumulatedCostPerAnimal } from '@/lib/calculations'
+import { computeLotAccumulatedCostPerAnimal, computeLotLiveQuantity } from '@/lib/calculations'
 import { SlaughterDestination, Slaughtering } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
 
@@ -58,13 +58,16 @@ export function NovoAbateDialog({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const { mortality, slaughterings, sales } = useFarmStore()
+
   // Filtra APENAS lotes ATIVOS (com aves vivas ou que sejam o lote em edição)
   const activeLots = useMemo(() => {
     return lots.filter((l) => {
       if (editingSlaughter && l.id === editingSlaughter.lotId) return true
-      return l.status === 'Ativo' && (l.currentQuantity || 0) > 0
+      const live = computeLotLiveQuantity(l, mortality, slaughterings, sales)
+      return l.status === 'Ativo' && live > 0
     })
-  }, [lots, editingSlaughter])
+  }, [lots, editingSlaughter, mortality, slaughterings, sales])
 
   // Lote selecionado
   const selectedLot = useMemo(() => lots.find((l) => l.id === selectedLotId), [lots, selectedLotId])
@@ -210,26 +213,21 @@ export function NovoAbateDialog({
     return Number((unitCost * parsedQty).toFixed(2))
   }, [unitCost, parsedQty])
 
-  // Saldo restante no lote após o abate
-  const remainingInLot = useMemo(() => {
-    if (!selectedLot) return 0
-    const baseQty = selectedLot.currentQuantity || 0
-    if (editingSlaughter && editingSlaughter.lotId === selectedLot.id) {
-      const restored = baseQty + (editingSlaughter.quantityAnimals || 0)
-      return Math.max(0, restored - parsedQty)
-    }
-    return Math.max(0, baseQty - parsedQty)
-  }, [selectedLot, editingSlaughter, parsedQty])
-
-  // Saldo máximo permitido para o lote
+  // Saldo máximo permitido para o lote (aves vivas disponíveis)
   const maxAllowedQty = useMemo(() => {
     if (!selectedLot) return 9999
-    const baseQty = selectedLot.currentQuantity || 0
+    const baseQty = computeLotLiveQuantity(selectedLot, mortality, slaughterings, sales)
     if (editingSlaughter && editingSlaughter.lotId === selectedLot.id) {
       return baseQty + (editingSlaughter.quantityAnimals || 0)
     }
     return baseQty
-  }, [selectedLot, editingSlaughter])
+  }, [selectedLot, editingSlaughter, mortality, slaughterings, sales])
+
+  // Saldo restante no lote após o abate
+  const remainingInLot = useMemo(() => {
+    if (!selectedLot) return 0
+    return Math.max(0, maxAllowedQty - parsedQty)
+  }, [selectedLot, maxAllowedQty, parsedQty])
 
   // Resultado da venda (se venda): Valor da Venda - Custo dos Abatidos
   const saleVal = parseFloat(saleTotalValue) || 0
@@ -403,7 +401,8 @@ export function NovoAbateDialog({
                   <SelectContent>
                     {activeLots.map((l) => (
                       <SelectItem key={l.id} value={l.id} className="text-xs">
-                        {l.code} — {l.name} ({l.currentQuantity} vivas)
+                        {l.code} — {l.name} (
+                        {computeLotLiveQuantity(l, mortality, slaughterings, sales)} vivas)
                       </SelectItem>
                     ))}
                   </SelectContent>

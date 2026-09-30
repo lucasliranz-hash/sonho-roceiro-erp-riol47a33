@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { useAuth } from '@/hooks/use-auth'
 import { Lot, Incubation, InventoryItem, FeedConsumption } from '@/types/farm'
+import { computeLotLiveQuantity } from '@/lib/calculations'
 
 export interface DashboardAlert {
   id: string
@@ -121,6 +122,7 @@ export function useDashboardData() {
     energyLogs,
     activities,
     structures,
+    slaughterings,
     vaccinations,
     treatments,
     healthOccurrences,
@@ -134,14 +136,18 @@ export function useDashboardData() {
 
   // 1. LOTES ATIVOS
   const activeLots = useMemo(() => {
-    return lots.filter(
-      (l) => (l.status as string) !== 'Finalizado' && (l.status as string) !== 'Abatido',
-    )
-  }, [lots])
+    return lots.filter((l) => {
+      const live = computeLotLiveQuantity(l, mortality, slaughterings, sales)
+      return (l.status as string) !== 'Finalizado' && (l.status as string) !== 'Abatido' && live > 0
+    })
+  }, [lots, mortality, slaughterings, sales])
 
   const totalBirdsAlive = useMemo(() => {
-    return activeLots.reduce((acc, l) => acc + (Number(l.currentQuantity) || 0), 0)
-  }, [activeLots])
+    return activeLots.reduce(
+      (acc, l) => acc + computeLotLiveQuantity(l, mortality, slaughterings, sales),
+      0,
+    )
+  }, [activeLots, mortality, slaughterings, sales])
 
   // 2. INCUBAÇÕES EM ANDAMENTO
   const activeIncubations = useMemo(() => {

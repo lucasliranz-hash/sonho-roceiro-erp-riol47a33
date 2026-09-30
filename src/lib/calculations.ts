@@ -6,6 +6,8 @@ import {
   Asset,
   FeedConsumption,
   SanitaryApplication,
+  Mortality,
+  Slaughtering,
 } from '@/types/farm'
 
 export interface PriceFromMarginResult {
@@ -218,13 +220,13 @@ export function computeLotAccumulatedCostPerAnimal(
   const totalCost = opexCost + feedCost + acquisitionCost + sanitaryCost
 
   // Se o lote tiver aves vivas, divide por elas. Se não, usa a quantidade inicial como fallback seguro
-  const divisor =
-    lot.currentQuantity > 0
+  const effectiveLive =
+    lot.currentQuantity !== undefined && lot.currentQuantity > 0
       ? lot.currentQuantity
       : lot.initialQuantity > 0
         ? lot.initialQuantity
         : 1
-  const costPerBirdAlive = round2(totalCost / divisor)
+  const costPerBirdAlive = round2(totalCost / effectiveLive)
 
   return {
     totalCost: round2(totalCost),
@@ -232,9 +234,99 @@ export function computeLotAccumulatedCostPerAnimal(
     acquisitionCost: round2(acquisitionCost),
     opexCost: round2(opexCost),
     sanitaryCost: round2(sanitaryCost),
-    currentQuantity: lot.currentQuantity,
+    currentQuantity: lot.currentQuantity ?? effectiveLive,
     costPerBirdAlive,
   }
+}
+
+export interface LotAnimalMovementBreakdown {
+  initialQuantity: number
+  entries: number
+  mortality: number
+  slaughter: number
+  otherExits: number
+  liveQuantity: number
+}
+
+/**
+ * Calcula a Quantidade Viva de um lote e o detalhamento de movimentações de animais:
+ * Quantidade Viva = Quantidade Inicial + Entradas − Mortalidades − Abates − Outras Saídas Válidas
+ * Derivada EXCLUSIVAMENTE dos eventos de quantidade de animais registrados:
+ * - farm_mortality (mortalidade)
+ * - farm_slaughterings (abates, respeitando soft delete)
+ * - farm_sales (vendas de animais vivos vinculadas ao lote se houver)
+ * NUNCA usa custo, ração, estoque, peso ou financeiro.
+ */
+export function computeLotAnimalMovement(
+  lot: Lot,
+  mortalityList: Mortality[] = [],
+  slaughterList: Slaughtering[] = [],
+  salesList: Sale[] = [],
+): LotAnimalMovementBreakdown {
+  const initialQuantity = Math.max(0, Number(lot.initialQuantity) || 0)
+
+  // 1. Entradas adicionais (se houver, por padrão 0 a não ser eventos explícitos)
+  const entries = 0
+
+  // 2. Mortalidades vinculadas ao lote
+  const lotMortality = mortalityList.filter(
+    (m) =>
+      (m.lotId === lot.id || (lot.code && (m as any).lotCode === lot.code)) &&
+      !(m as any).deleted_at,
+  )
+  const totalMortality = lotMortality.reduce((acc, m) => acc + (Number(m.quantity) || 0), 0)
+
+  // 3. Abates vinculados ao lote (respeitando soft-delete)
+  const lotSlaughter = slaughterList.filter(
+    (s) =>
+      (s.lotId === lot.id || (lot.code && (s as any).lotCode === lot.code)) &&
+      !(s as any).deleted_at,
+  )
+  const totalSlaughter = lotSlaughter.reduce((acc, s) => acc + (Number(s.quantityAnimals) || 0), 0)
+
+  // 4. Outras saídas válidas (vendas de animais vivos vinculadas ao lote)
+  // Atenção: abates que geram venda têm source_type === 'SLAUGHTER' — NÃO duplicar!
+  // Apenas vendas manuais com produto de ave viva ("Frangos vivos", "Galinhas", "Reprodutores", "Matrizes", "Pintinhos")
+  const LIVE_BIRD_PRODUCTS = [
+    'frangos vivos',
+    'galinhas',
+    'reprodutores',
+    'matrizes',
+    'pintinhos',
+    'aves vivas',
+    'ave viva',
+  ]
+  const lotSales = salesList.filter((s) => {
+    if (s.lotId !== lot.id) return false
+    if (s.source_type === 'SLAUGHTER') return false // Já contabilizado em abates
+    const prod = (s.product || '').toLowerCase().trim()
+    return LIVE_BIRD_PRODUCTS.some((p) => prod.includes(p))
+  })
+  const otherExits = lotSales.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0)
+
+  const totalExits = totalMortality + totalSlaughter + otherExits
+  const liveQuantity = Math.max(0, initialQuantity + entries - totalExits)
+
+  return {
+    initialQuantity,
+    entries,
+    mortality: totalMortality,
+    slaughter: totalSlaughter,
+    otherExits,
+    liveQuantity,
+  }
+}
+
+/**
+ * Retorna a quantidade viva centralizada do lote.
+ */
+export function computeLotLiveQuantity(
+  lot: Lot,
+  mortalityList: Mortality[] = [],
+  slaughterList: Slaughtering[] = [],
+  salesList: Sale[] = [],
+): number {
+  return computeLotAnimalMovement(lot, mortalityList, slaughterList, salesList).liveQuantity
 }
 
 export interface FinancialSummary {

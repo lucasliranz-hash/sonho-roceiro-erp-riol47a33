@@ -39,7 +39,11 @@ import {
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Lot, LotType, LotStatus, SanitaryApplication } from '@/types/farm'
-import { computeLotCosts } from '@/lib/calculations'
+import {
+  computeLotCosts,
+  computeLotAnimalMovement,
+  computeLotLiveQuantity,
+} from '@/lib/calculations'
 import { toast } from '@/hooks/use-toast'
 import { logAudit } from '@/services/audit'
 
@@ -59,11 +63,12 @@ export default function Lotes() {
     addLot,
     updateLot,
     deleteLot,
+    activities,
     weighings,
     mortality,
+    slaughterings,
     expenses,
     sales,
-    activities,
     feedLogs,
     vaccinations,
     treatments,
@@ -168,6 +173,14 @@ export default function Lotes() {
       })
       return
     }
+    const newInitial = Number(editForm.initialQuantity) || 1
+    const dummyLot: Lot = {
+      ...editing,
+      ...editForm,
+      initialQuantity: newInitial,
+    }
+    const recalculatedLive = computeLotLiveQuantity(dummyLot, mortality, slaughterings, sales)
+
     const updates: Partial<Lot> = {
       name: editForm.name,
       type: editForm.type,
@@ -176,7 +189,8 @@ export default function Lotes() {
       origin: editForm.origin,
       supplier: editForm.supplier,
       breed: editForm.breed,
-      initialQuantity: Number(editForm.initialQuantity) || 1,
+      initialQuantity: newInitial,
+      currentQuantity: recalculatedLive,
       acquisitionCost: Number(editForm.acquisitionCost) || 0,
       purpose: editForm.purpose,
       status: editForm.status,
@@ -218,8 +232,17 @@ export default function Lotes() {
   })
 
   if (selectedLot) {
+    // Cálculo centralizado e auditável de movimentação de animais
+    const movementBreakdown = computeLotAnimalMovement(selectedLot, mortality, slaughterings, sales)
+    const liveQty = movementBreakdown.liveQuantity
+    const effectiveLot: Lot = {
+      ...selectedLot,
+      currentQuantity: liveQty,
+    }
+
     const lotWeighings = weighings.filter((w) => w.lotId === selectedLot.id)
     const lotMortality = mortality.filter((m) => m.lotId === selectedLot.id)
+    const lotSlaughter = slaughterings.filter((s) => s.lotId === selectedLot.id)
     const lotExpenses = expenses.filter((e) => e.lotId === selectedLot.id)
     const lotSales = sales.filter((s) => s.lotId === selectedLot.id)
     // Considera tanto consumo direto para o lote quanto rateios que contemplem este lote (sem compras)
@@ -282,7 +305,7 @@ export default function Lotes() {
 
     const totalExp = lotExpenses.reduce((acc, e) => acc + e.totalValue, 0)
     const totalRev = lotSales.reduce((acc, s) => acc + s.totalPrice, 0)
-    const lotCosts = computeLotCosts(selectedLot, expenses, sales, feedLogs, sanitaryApplications)
+    const lotCosts = computeLotCosts(effectiveLot, expenses, sales, feedLogs, sanitaryApplications)
 
     const isEnergyExpense = (e: (typeof expenses)[0]) => {
       const cat = (e.category || '').toLowerCase()
@@ -304,8 +327,7 @@ export default function Lotes() {
     const energyCost = energyExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
     const otherCost = otherExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
     const totalCompositionCost = lotCosts.totalCost
-    const costPerBirdAlive =
-      selectedLot.currentQuantity > 0 ? totalCompositionCost / selectedLot.currentQuantity : 0
+    const costPerBirdAlive = liveQty > 0 ? totalCompositionCost / liveQty : 0
 
     const toggleOrigin = (key: string) => {
       setExpandedOrigin((prev) => (prev === key ? null : key))
@@ -337,7 +359,7 @@ export default function Lotes() {
             <CardContent className="p-4">
               <span className="text-xs text-muted-foreground">Aves Vivas</span>
               <p className="text-2xl font-bold text-foreground">
-                {selectedLot.currentQuantity} / {selectedLot.initialQuantity}
+                {liveQty} / {movementBreakdown.initialQuantity}
               </p>
             </CardContent>
           </Card>
@@ -480,6 +502,93 @@ export default function Lotes() {
                     <span className="font-bold">Observações:</span> {selectedLot.notes}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Resumo: Movimentação de Animais */}
+            <Card className="rounded-2xl bg-white border-border">
+              <CardContent className="p-6 space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-border/60">
+                  <div>
+                    <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-primary" /> Movimentação de Animais
+                    </h2>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Saldo físico derivado exclusivamente de eventos registrados
+                    </p>
+                  </div>
+                  <Badge variant="outline" className="text-xs font-semibold px-2.5 py-0.5">
+                    {liveQty} aves vivas
+                  </Badge>
+                </div>
+
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-center justify-between py-1 border-b border-border/40">
+                    <span className="text-muted-foreground">Quantidade inicial</span>
+                    <span className="font-semibold text-foreground">
+                      {movementBreakdown.initialQuantity} aves
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-border/40">
+                    <span className="text-muted-foreground">Entradas adicionais</span>
+                    <span className="font-semibold text-foreground">
+                      +{movementBreakdown.entries} aves
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-border/40">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">Mortalidades</span>
+                      {movementBreakdown.mortality > 0 && (
+                        <span className="text-[10px] text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                          {lotMortality.length} registro(s)
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`font-semibold ${
+                        movementBreakdown.mortality > 0 ? 'text-rose-600' : 'text-foreground'
+                      }`}
+                    >
+                      -{movementBreakdown.mortality} aves
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-border/40">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-muted-foreground">Abates</span>
+                      {movementBreakdown.slaughter > 0 && (
+                        <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">
+                          {lotSlaughter.length} abate(s)
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`font-semibold ${
+                        movementBreakdown.slaughter > 0 ? 'text-amber-600' : 'text-foreground'
+                      }`}
+                    >
+                      -{movementBreakdown.slaughter} aves
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between py-1 border-b border-border/40">
+                    <span className="text-muted-foreground">Outras saídas (vendas vivas)</span>
+                    <span
+                      className={`font-semibold ${
+                        movementBreakdown.otherExits > 0 ? 'text-blue-600' : 'text-foreground'
+                      }`}
+                    >
+                      -{movementBreakdown.otherExits} aves
+                    </span>
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between text-sm font-bold bg-primary/5 p-3 rounded-xl border border-primary/20">
+                    <span className="text-primary">QUANTIDADE VIVA ATUAL</span>
+                    <span className="text-base text-primary font-black">{liveQty} aves</span>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -666,7 +775,7 @@ export default function Lotes() {
 
                   <div className="flex items-center justify-between py-1 text-xs">
                     <span className="text-muted-foreground">Aves vivas</span>
-                    <span className="font-bold text-foreground">{selectedLot.currentQuantity}</span>
+                    <span className="font-bold text-foreground">{liveQty}</span>
                   </div>
 
                   <div className="flex items-center justify-between py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-xs font-bold text-amber-900">
@@ -1101,7 +1210,8 @@ export default function Lotes() {
                 <div>
                   <span className="text-muted-foreground block text-[11px]">Quantidade Viva</span>
                   <span className="font-bold text-foreground">
-                    {lot.currentQuantity} / {lot.initialQuantity}
+                    {computeLotLiveQuantity(lot, mortality, slaughterings, sales)} /{' '}
+                    {lot.initialQuantity}
                   </span>
                 </div>
                 <div>
@@ -1153,7 +1263,10 @@ export default function Lotes() {
                 { label: 'Origem', value: details.origin },
                 { label: 'Fornecedor', value: details.supplier },
                 { label: 'Qtd. inicial', value: details.initialQuantity },
-                { label: 'Qtd. viva', value: details.currentQuantity },
+                {
+                  label: 'Qtd. viva',
+                  value: computeLotLiveQuantity(details, mortality, slaughterings, sales),
+                },
                 { label: 'Custo de aquisição (R$)', value: details.acquisitionCost },
                 { label: 'Finalidade', value: details.purpose },
                 { label: 'Status', value: details.status },
