@@ -178,6 +178,7 @@ export default function Lotes() {
       ...editing,
       ...editForm,
       initialQuantity: newInitial,
+      acquisitionCost: Number(editForm.acquisitionCost) || 0,
     }
     const recalculatedLive = computeLotLiveQuantity(dummyLot, mortality, slaughterings, sales)
 

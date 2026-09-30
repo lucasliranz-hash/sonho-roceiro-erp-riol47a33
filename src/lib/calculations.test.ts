@@ -9,8 +9,14 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
     name: 'Caipira pescoço pelado',
     type: 'Poedeiras',
     startDate: '2025-01-01',
+    origin: 'Interna',
+    supplier: 'Próprio',
+    breed: 'Pescoço Pelado',
     initialQuantity: 11,
     currentQuantity: 11,
+    initialAgeDays: 1,
+    acquisitionCost: 0,
+    purpose: 'Postura',
     status: 'Ativo',
   }
 
@@ -30,9 +36,10 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
       {
         id: 'm-1',
         lotId: 'l-test-1',
+        lotName: 'Caipira pescoço pelado',
         date: '2025-01-10',
         quantity: 2,
-        reason: 'Causa natural',
+        cause: 'Causa natural',
       },
     ]
 
@@ -47,21 +54,21 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
       {
         id: 'm-1',
         lotId: 'l-test-1',
+        lotName: 'Caipira pescoço pelado',
         date: '2025-01-10',
         quantity: 2,
-        reason: 'Causa natural',
+        cause: 'Causa natural',
       },
     ]
     const slaughters: Slaughtering[] = [
       {
         id: 's-1',
         lotId: 'l-test-1',
+        lotName: 'Caipira pescoço pelado',
+        species: 'Galinha',
         date: '2025-01-15',
         quantityAnimals: 3,
-        totalWeightKg: 6,
-        averageWeightKg: 2,
-        destination: 'Venda direta',
-        costPerAnimal: 10,
+        destination: 'Venda',
         totalCost: 30,
       },
     ]
@@ -78,9 +85,10 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
       {
         id: 'm-1',
         lotId: 'l-test-1',
+        lotName: 'Caipira pescoço pelado',
         date: '2025-01-10',
         quantity: 2,
-        reason: 'Causa natural',
+        cause: 'Causa natural',
       },
     ]
     // Abate excluído (soft-delete ou removido da lista)
@@ -105,9 +113,10 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
       {
         id: 'm-1',
         lotId: 'l-test-1',
+        lotName: 'Caipira pescoço pelado',
         date: '2025-01-10',
         quantity: 1,
-        reason: 'Causa natural (ajustado)',
+        cause: 'Causa natural (ajustado)',
       },
     ]
     const movement = computeLotAnimalMovement(baseLot, editedMortalities, [], [])
@@ -130,9 +139,10 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
       {
         id: 'm-1',
         lotId: 'l-test-1',
+        lotName: 'Caipira pescoço pelado',
         date: '2025-01-10',
         quantity: 2,
-        reason: 'Causa natural',
+        cause: 'Causa natural',
         deleted_at: '2025-01-11T10:00:00Z',
       },
     ] as any
