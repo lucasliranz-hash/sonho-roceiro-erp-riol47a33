@@ -10,168 +10,161 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  Plus,
-  Trash2,
-  AlertCircle,
-  HelpCircle,
-  Scale,
-  Sparkles,
-  ArrowRight,
-  Calculator,
-} from 'lucide-react'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { computeLotAccumulatedCostPerAnimal } from '@/lib/calculations'
-import {
-  SlaughterCostCategory,
-  SlaughterCostItem,
-  SlaughterDestination,
-  SlaughterSubproduct,
-  SubproductType,
-  SubproductDestination,
-} from '@/types/farm'
+import { SlaughterDestination, Slaughtering } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
 
 interface NovoAbateDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  editingSlaughter?: Slaughtering | null
+  onSuccess?: () => void
 }
 
-const COST_CATEGORIES: SlaughterCostCategory[] = [
-  'Mão de obra',
-  'Abate/frigorífico',
-  'Transporte',
-  'Taxas',
-  'Embalagem',
-  'Gelo/refrigeração',
-  'Outros custos',
-]
-
-const SUBPRODUCT_TYPES: SubproductType[] = [
-  'Miúdos',
-  'Pés',
-  'Cabeça',
-  'Pele',
-  'Ossos',
-  'Vísceras',
-  'Outros',
-]
-
-const SUBPRODUCT_DESTINATIONS: SubproductDestination[] = [
-  'Aproveitamento próprio',
-  'Venda',
-  'Descarte',
-]
-
-const SPECIES_OPTIONS = [
-  'Frango Caipira',
-  'Frango de Corte',
-  'Galinha',
-  'Galo',
-  'Pato',
-  'Peru',
-  'Codornas',
-  'Suíno',
-  'Ovino',
-  'Caprino',
-  'Outro',
-]
-
-export function NovoAbateDialog({ open, onOpenChange }: NovoAbateDialogProps) {
-  const { lots, animals, expenses, feedLogs, vaccinations, treatments, addSlaughtering } =
-    useFarmStore()
+export function NovoAbateDialog({
+  open,
+  onOpenChange,
+  editingSlaughter,
+  onSuccess,
+}: NovoAbateDialogProps) {
+  const {
+    lots,
+    animals,
+    expenses,
+    feedLogs,
+    vaccinations,
+    treatments,
+    addSlaughtering,
+    updateSlaughtering,
+  } = useFarmStore()
 
   // Form states
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
-  const [species, setSpecies] = useState('Frango Caipira')
-  const [sourceMode, setSourceMode] = useState<'lot' | 'animal'>('lot')
+  const [species, setSpecies] = useState('')
   const [selectedLotId, setSelectedLotId] = useState<string>('')
   const [selectedAnimalId, setSelectedAnimalId] = useState<string>('')
   const [quantityAnimals, setQuantityAnimals] = useState<string>('1')
-
-  // Pesos
   const [totalLiveWeightKg, setTotalLiveWeightKg] = useState<string>('')
-  const [carcassWeightKg, setCarcassWeightKg] = useState<string>('')
-
-  // Destino
   const [destination, setDestination] = useState<SlaughterDestination>('Consumo próprio')
+  const [notes, setNotes] = useState('')
 
-  // Custos do abate
-  const [costs, setCosts] = useState<SlaughterCostItem[]>([
-    {
-      id: 'cost-1',
-      description: 'Abate e evisceração',
-      category: 'Abate/frigorífico',
-      amount: 0,
-    },
-  ])
-
-  // Subprodutos (opcionais para preparo futuro)
-  const [showSubproducts, setShowSubproducts] = useState(false)
-  const [subproducts, setSubproducts] = useState<SlaughterSubproduct[]>([])
-
-  // Dados da Venda (se destination === 'Venda')
+  // Campos adicionais quando destino for "Venda"
+  const [saleQuantity, setSaleQuantity] = useState<string>('')
+  const [saleTotalValue, setSaleTotalValue] = useState<string>('')
   const [saleCustomer, setSaleCustomer] = useState('')
   const [saleDate, setSaleDate] = useState(new Date().toISOString().split('T')[0])
-  const [saleQtyKg, setSaleQtyKg] = useState('')
-  const [salePricePerKg, setSalePricePerKg] = useState('')
-  const [saleTotalPrice, setSaleTotalPrice] = useState('')
-  const [paymentMethod, setPaymentMethod] = useState('Pix')
-  const [paymentStatus, setPaymentStatus] = useState<'Pendente' | 'Pago'>('Pago')
-  const [saleNotes, setSaleNotes] = useState('')
-  const [generalNotes, setGeneralNotes] = useState('')
 
-  // Confirmation view / step
-  const [isReviewing, setIsReviewing] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Quando seleciona o primeiro lote disponível ao abrir
-  useEffect(() => {
-    if (open && !selectedLotId && lots.length > 0) {
-      const activeLot = lots.find((l) => (l.currentQuantity || 0) > 0) || lots[0]
-      setSelectedLotId(activeLot.id)
-    }
-  }, [open, lots, selectedLotId])
-
-  // Quando muda o peso da carcaça e o destino for venda, sugere a quantidade vendida em kg = carcaça
-  useEffect(() => {
-    if (carcassWeightKg && destination === 'Venda' && !saleQtyKg) {
-      setSaleQtyKg(carcassWeightKg)
-    }
-  }, [carcassWeightKg, destination, saleQtyKg])
-
-  // Autocalcular total da venda se informado Qtd e Preço por kg
-  const handleSaleQtyChange = (val: string) => {
-    setSaleQtyKg(val)
-    const q = parseFloat(val)
-    const p = parseFloat(salePricePerKg)
-    if (!isNaN(q) && !isNaN(p) && q > 0 && p > 0) {
-      setSaleTotalPrice((q * p).toFixed(2))
-    }
-  }
-
-  const handleSalePriceChange = (val: string) => {
-    setSalePricePerKg(val)
-    const p = parseFloat(val)
-    const q = parseFloat(saleQtyKg)
-    if (!isNaN(q) && !isNaN(p) && q > 0 && p > 0) {
-      setSaleTotalPrice((q * p).toFixed(2))
-    }
-  }
+  // Filtra APENAS lotes ATIVOS (com aves vivas ou que sejam o lote em edição)
+  const activeLots = useMemo(() => {
+    return lots.filter((l) => {
+      if (editingSlaughter && l.id === editingSlaughter.lotId) return true
+      return l.status === 'Ativo' && (l.currentQuantity || 0) > 0
+    })
+  }, [lots, editingSlaughter])
 
   // Lote selecionado
   const selectedLot = useMemo(() => lots.find((l) => l.id === selectedLotId), [lots, selectedLotId])
 
-  // Animal selecionado
-  const selectedAnimal = useMemo(
-    () => animals.find((a) => a.id === selectedAnimalId),
-    [animals, selectedAnimalId],
-  )
+  // Animais individualizados ativos vinculados ao lote (se houver) ou avulsos
+  const availableAnimals = useMemo(() => {
+    return animals.filter((a) => {
+      if (editingSlaughter && a.id === editingSlaughter.animalId) return true
+      return a.status === 'Ativo'
+    })
+  }, [animals, editingSlaughter])
 
-  // Cálculo de custo acumulado do Lote usando a regra de custos já existente no SR Gestão
-  const lotAccumulatedCostSummary = useMemo(() => {
+  // Popula formulário ao abrir ou alterar editingSlaughter
+  useEffect(() => {
+    if (open) {
+      if (editingSlaughter) {
+        setDate(editingSlaughter.date)
+        setSpecies(editingSlaughter.species || '')
+        setSelectedLotId(editingSlaughter.lotId || '')
+        setSelectedAnimalId(editingSlaughter.animalId || '')
+        setQuantityAnimals(String(editingSlaughter.quantityAnimals || 1))
+        setTotalLiveWeightKg(
+          editingSlaughter.totalLiveWeightKg !== undefined &&
+            editingSlaughter.totalLiveWeightKg !== null
+            ? String(editingSlaughter.totalLiveWeightKg)
+            : '',
+        )
+        setDestination(editingSlaughter.destination || 'Consumo próprio')
+        setNotes(editingSlaughter.notes || '')
+
+        const sSimple = editingSlaughter.saleSimple
+        const sData = editingSlaughter.sale
+        setSaleCustomer(sSimple?.customerName || sData?.customerName || '')
+        setSaleDate(sSimple?.saleDate || sData?.saleDate || editingSlaughter.date)
+        setSaleQuantity(
+          sSimple?.quantitySold !== undefined
+            ? String(sSimple.quantitySold)
+            : sData?.quantityKg !== undefined
+              ? String(sData.quantityKg)
+              : String(editingSlaughter.quantityAnimals || 1),
+        )
+        setSaleTotalValue(
+          sSimple?.totalValue !== undefined
+            ? String(sSimple.totalValue)
+            : sData?.totalPrice !== undefined
+              ? String(sData.totalPrice)
+              : editingSlaughter.revenue !== undefined
+                ? String(editingSlaughter.revenue)
+                : '',
+        )
+      } else {
+        // Modo criação
+        setDate(new Date().toISOString().split('T')[0])
+        const defaultLot = activeLots[0]
+        if (defaultLot) {
+          setSelectedLotId(defaultLot.id)
+          setSpecies(defaultLot.breed || defaultLot.type || 'Frango')
+        } else {
+          setSelectedLotId('')
+          setSpecies('')
+        }
+        setSelectedAnimalId('')
+        setQuantityAnimals('1')
+        setTotalLiveWeightKg('')
+        setDestination('Consumo próprio')
+        setNotes('')
+        setSaleCustomer('')
+        setSaleDate(new Date().toISOString().split('T')[0])
+        setSaleQuantity('1')
+        setSaleTotalValue('')
+      }
+    }
+  }, [open, editingSlaughter, activeLots])
+
+  // Atualiza espécie automaticamente quando seleciona o lote (se nova seleção)
+  const handleSelectLot = (lotId: string) => {
+    setSelectedLotId(lotId)
+    const lot = lots.find((l) => l.id === lotId)
+    if (lot) {
+      setSpecies(lot.breed || lot.type || 'Frango')
+    }
+  }
+
+  // Se selecionar animal individual, ajusta espécie e peso opcionalmente
+  const handleSelectAnimal = (animalId: string) => {
+    setSelectedAnimalId(animalId)
+    if (animalId) {
+      const animal = animals.find((a) => a.id === animalId)
+      if (animal) {
+        if (animal.breed) setSpecies(animal.breed)
+        if (animal.weightKg && !totalLiveWeightKg) {
+          setTotalLiveWeightKg(String(animal.weightKg))
+        }
+      }
+      setQuantityAnimals('1')
+    }
+  }
+
+  // Custo acumulado do Lote usando cálculos já existentes no SR Gestão
+  const lotCostCalculation = useMemo(() => {
     if (!selectedLot) return null
 
     const sanitaryApps = [
@@ -202,245 +195,170 @@ export function NovoAbateDialog({ open, onOpenChange }: NovoAbateDialogProps) {
     return computeLotAccumulatedCostPerAnimal(selectedLot, expenses, feedLogs, sanitaryApps)
   }, [selectedLot, expenses, feedLogs, vaccinations, treatments])
 
-  // Custo unitário de produção do animal antes do abate (R$)
-  const unitProductionCost = useMemo(() => {
-    if (sourceMode === 'lot') {
-      return lotAccumulatedCostSummary?.costPerBirdAlive || 0
-    } else {
-      // Se for animal individual, usa o custo registrado ou proporção de peso
-      return 0
+  // Custo unitário de produção por ave viva
+  const unitCost = useMemo(() => {
+    if (lotCostCalculation) {
+      return lotCostCalculation.costPerBirdAlive || 0
     }
-  }, [sourceMode, lotAccumulatedCostSummary])
-
-  const parsedQtyAnimals = Math.max(1, parseInt(quantityAnimals, 10) || 1)
-  const parsedTotalLiveWeight = parseFloat(totalLiveWeightKg) || 0
-  const parsedCarcassWeight = parseFloat(carcassWeightKg) || 0
-
-  // Peso vivo médio por animal
-  const averageLiveWeight =
-    parsedQtyAnimals > 0 && parsedTotalLiveWeight > 0 ? parsedTotalLiveWeight / parsedQtyAnimals : 0
-
-  // Rendimento de carcaça: Peso da carcaça ÷ Peso vivo × 100
-  const carcassYieldPercent =
-    parsedTotalLiveWeight > 0 && parsedCarcassWeight > 0
-      ? (parsedCarcassWeight / parsedTotalLiveWeight) * 100
-      : 0
-
-  // Custo operacional do abate = soma dos custos informados
-  const slaughterOperationalCost = useMemo(() => {
-    return costs.reduce((acc, c) => acc + (Number(c.amount) || 0), 0)
-  }, [costs])
-
-  // Custo de produção acumulado dos animais abatidos (sem duplicar custos de ração/manutenção)
-  const accumulatedProductionCost = useMemo(() => {
-    return Number((unitProductionCost * parsedQtyAnimals).toFixed(2))
-  }, [unitProductionCost, parsedQtyAnimals])
-
-  // Custo total da carne produzida = custo acumulado + custos do abate
-  const totalSlaughterCost = useMemo(() => {
-    return Number((accumulatedProductionCost + slaughterOperationalCost).toFixed(2))
-  }, [accumulatedProductionCost, slaughterOperationalCost])
-
-  // Custo por kg de carcaça = custo total ÷ peso da carcaça
-  const costPerKgCarcass = useMemo(() => {
-    return parsedCarcassWeight > 0
-      ? Number((totalSlaughterCost / parsedCarcassWeight).toFixed(2))
-      : 0
-  }, [totalSlaughterCost, parsedCarcassWeight])
-
-  // Resultados econômicos (se venda)
-  const saleRevenue = useMemo(() => {
-    if (destination !== 'Venda') return 0
-    const explicit = parseFloat(saleTotalPrice)
-    if (!isNaN(explicit) && explicit > 0) return explicit
-    const q = parseFloat(saleQtyKg)
-    const p = parseFloat(salePricePerKg)
-    if (!isNaN(q) && !isNaN(p)) return Number((q * p).toFixed(2))
     return 0
-  }, [destination, saleTotalPrice, saleQtyKg, salePricePerKg])
+  }, [lotCostCalculation])
 
-  const saleNetProfit = useMemo(() => {
+  const parsedQty = Math.max(1, parseInt(quantityAnimals, 10) || 1)
+
+  // Custo total dos animais abatidos (unitCost * quantidade)
+  const totalAnimalsCost = useMemo(() => {
+    return Number((unitCost * parsedQty).toFixed(2))
+  }, [unitCost, parsedQty])
+
+  // Saldo restante no lote após o abate
+  const remainingInLot = useMemo(() => {
+    if (!selectedLot) return 0
+    const baseQty = selectedLot.currentQuantity || 0
+    if (editingSlaughter && editingSlaughter.lotId === selectedLot.id) {
+      const restored = baseQty + (editingSlaughter.quantityAnimals || 0)
+      return Math.max(0, restored - parsedQty)
+    }
+    return Math.max(0, baseQty - parsedQty)
+  }, [selectedLot, editingSlaughter, parsedQty])
+
+  // Saldo máximo permitido para o lote
+  const maxAllowedQty = useMemo(() => {
+    if (!selectedLot) return 9999
+    const baseQty = selectedLot.currentQuantity || 0
+    if (editingSlaughter && editingSlaughter.lotId === selectedLot.id) {
+      return baseQty + (editingSlaughter.quantityAnimals || 0)
+    }
+    return baseQty
+  }, [selectedLot, editingSlaughter])
+
+  // Resultado da venda (se venda): Valor da Venda - Custo dos Abatidos
+  const saleVal = parseFloat(saleTotalValue) || 0
+  const saleResult = useMemo(() => {
     if (destination !== 'Venda') return 0
-    return Number((saleRevenue - totalSlaughterCost).toFixed(2))
-  }, [destination, saleRevenue, totalSlaughterCost])
+    return Number((saleVal - totalAnimalsCost).toFixed(2))
+  }, [destination, saleVal, totalAnimalsCost])
 
-  const saleMarginPercent = useMemo(() => {
-    if (destination !== 'Venda' || saleRevenue <= 0) return 0
-    return Number(((saleNetProfit / saleRevenue) * 100).toFixed(2))
-  }, [destination, saleNetProfit, saleRevenue])
-
-  // Funções de manipulação de custos do abate
-  const handleAddCost = () => {
-    setCosts((prev) => [
-      ...prev,
-      {
-        id: `cost-${Date.now()}`,
-        description: '',
-        category: 'Outros custos',
-        amount: 0,
-      },
-    ])
-  }
-
-  const handleUpdateCost = (id: string, field: keyof SlaughterCostItem, value: any) => {
-    setCosts((prev) => prev.map((c) => (c.id === id ? { ...c, [field]: value } : c)))
-  }
-
-  const handleRemoveCost = (id: string) => {
-    setCosts((prev) => prev.filter((c) => c.id !== id))
-  }
-
-  // Funções de manipulação de subprodutos
-  const handleAddSubproduct = () => {
-    setSubproducts((prev) => [
-      ...prev,
-      {
-        id: `sub-${Date.now()}`,
-        type: 'Miúdos',
-        destination: 'Aproveitamento próprio',
-        quantityKg: 0,
-      },
-    ])
-  }
-
-  const handleRemoveSubproduct = (id: string) => {
-    setSubproducts((prev) => prev.filter((s) => s.id !== id))
-  }
-
-  const handleUpdateSubproduct = (id: string, field: keyof SlaughterSubproduct, value: any) => {
-    setSubproducts((prev) => prev.map((s) => (s.id === id ? { ...s, [field]: value } : s)))
-  }
-
-  // Validação antes do resumo
-  const handleProceedToReview = (e: React.FormEvent) => {
+  // Submissão do formulário
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!date) {
       toast({ title: 'Atenção', description: 'Informe a data do abate.', variant: 'destructive' })
       return
     }
-    if (sourceMode === 'lot' && !selectedLotId) {
-      toast({ title: 'Atenção', description: 'Selecione o lote a abater.', variant: 'destructive' })
-      return
-    }
-    if (parsedQtyAnimals <= 0) {
+    if (!selectedLotId) {
       toast({
         title: 'Atenção',
-        description: 'Quantidade de animais deve ser maior que 0.',
+        description: 'Selecione o lote ativo de origem.',
         variant: 'destructive',
       })
       return
     }
-    if (parsedTotalLiveWeight <= 0) {
+    if (parsedQty <= 0) {
       toast({
         title: 'Atenção',
-        description: 'Informe o peso vivo total em kg.',
+        description: 'A quantidade deve ser maior que zero.',
         variant: 'destructive',
       })
       return
     }
-    if (parsedCarcassWeight <= 0) {
+    if (selectedLot && parsedQty > maxAllowedQty) {
       toast({
-        title: 'Atenção',
-        description: 'Informe o peso da carcaça total em kg.',
+        title: 'Quantidade excede o lote',
+        description: `O lote possui apenas ${maxAllowedQty} aves vivas disponíveis.`,
         variant: 'destructive',
       })
       return
-    }
-    if (destination === 'Venda') {
-      if (!saleCustomer.trim()) {
-        toast({
-          title: 'Atenção',
-          description: 'Informe o cliente/comprador.',
-          variant: 'destructive',
-        })
-        return
-      }
-      if (saleRevenue <= 0) {
-        toast({
-          title: 'Atenção',
-          description: 'Informe o valor da venda ou quantidade e preço/kg.',
-          variant: 'destructive',
-        })
-        return
-      }
     }
 
-    setIsReviewing(true)
-  }
+    if (destination === 'Venda' && saleVal <= 0) {
+      toast({
+        title: 'Valor da venda obrigatório',
+        description: 'Informe o valor total da venda para o abate comercial.',
+        variant: 'destructive',
+      })
+      return
+    }
 
-  // Salvar Abate definitivo
-  const handleConfirmSlaughter = async () => {
+    setIsSubmitting(true)
     try {
-      setIsSubmitting(true)
+      const weightParsed = parseFloat(totalLiveWeightKg)
+      const validLiveWeight = !isNaN(weightParsed) && weightParsed > 0 ? weightParsed : undefined
 
-      const payload = {
+      const selectedAnimal = animals.find((a) => a.id === selectedAnimalId)
+
+      const payload: Omit<Slaughtering, 'id'> = {
         date,
-        species,
-        lotId: sourceMode === 'lot' ? selectedLotId : undefined,
-        lotName: sourceMode === 'lot' ? selectedLot?.name : undefined,
-        animalId: sourceMode === 'animal' ? selectedAnimalId : undefined,
-        animalCode: sourceMode === 'animal' ? selectedAnimal?.code : undefined,
-        quantityAnimals: parsedQtyAnimals,
-        totalLiveWeightKg: parsedTotalLiveWeight,
-        averageLiveWeightKg: Number(averageLiveWeight.toFixed(2)),
-        carcassWeightKg: parsedCarcassWeight,
-        carcassYieldPercent: Number(carcassYieldPercent.toFixed(2)),
+        species: species || selectedLot?.breed || 'Frango',
+        lotId: selectedLotId,
+        lotName: selectedLot?.name,
+        animalId: selectedAnimalId || undefined,
+        animalCode: selectedAnimal?.code || undefined,
+        quantityAnimals: parsedQty,
+        totalLiveWeightKg: validLiveWeight,
+        averageLiveWeightKg: validLiveWeight
+          ? Number((validLiveWeight / parsedQty).toFixed(2))
+          : undefined,
         destination,
-        costs: costs.filter((c) => Number(c.amount) > 0 || c.description.trim() !== ''),
-        slaughterOperationalCost,
-        accumulatedProductionCost,
-        totalCost: totalSlaughterCost,
-        costPerCarcassKg: costPerKgCarcass,
-        revenue: destination === 'Venda' ? saleRevenue : undefined,
-        netProfit: destination === 'Venda' ? saleNetProfit : undefined,
-        marginPercent: destination === 'Venda' ? saleMarginPercent : undefined,
-        sale:
+        unitProductionCost: unitCost,
+        accumulatedProductionCost: totalAnimalsCost,
+        totalCost: totalAnimalsCost,
+        notes: notes.trim() || undefined,
+        revenue: destination === 'Venda' ? saleVal : undefined,
+        netProfit: destination === 'Venda' ? saleResult : undefined,
+        saleSimple:
           destination === 'Venda'
             ? {
-                customerName: saleCustomer.trim(),
-                saleDate,
-                quantityKg: parseFloat(saleQtyKg) || parsedCarcassWeight,
-                pricePerKg:
-                  parseFloat(salePricePerKg) ||
-                  saleRevenue / (parseFloat(saleQtyKg) || parsedCarcassWeight),
-                totalPrice: saleRevenue,
-                paymentMethod,
-                paymentStatus,
-                notes: saleNotes.trim() || undefined,
+                customerName: saleCustomer.trim() || undefined,
+                saleDate: saleDate || date,
+                quantitySold: parseFloat(saleQuantity) || parsedQty,
+                totalValue: saleVal,
+                paymentMethod: 'Pix',
+                isPaid: true,
+                notes: notes.trim() || undefined,
               }
             : undefined,
-        subproducts: subproducts.length > 0 ? subproducts : undefined,
-        notes: generalNotes.trim() || undefined,
       }
 
-      const { error } = await addSlaughtering(payload)
-
-      if (error) {
+      if (editingSlaughter) {
+        const { error } = await updateSlaughtering(editingSlaughter.id, payload)
+        if (error) {
+          toast({
+            title: 'Erro ao atualizar abate',
+            description: error.message || 'Falha ao salvar dados.',
+            variant: 'destructive',
+          })
+          return
+        }
         toast({
-          title: 'Erro ao registrar abate ❌',
-          description: error.message || 'Falha na persistência dos dados.',
-          variant: 'destructive',
+          title: 'Abate atualizado com sucesso! 🥩',
+          description: `Registro #${editingSlaughter.id} e saldos atualizados.`,
         })
-        return
+      } else {
+        const { error } = await addSlaughtering(payload)
+        if (error) {
+          toast({
+            title: 'Erro ao registrar abate',
+            description: error.message || 'Falha ao salvar dados.',
+            variant: 'destructive',
+          })
+          return
+        }
+        toast({
+          title: 'Abate registrado com sucesso! 🥩',
+          description:
+            destination === 'Venda'
+              ? `${parsedQty} ave(s) baixada(s) do lote e receita lançada no financeiro.`
+              : `${parsedQty} ave(s) baixada(s) do lote para consumo próprio.`,
+        })
       }
 
-      toast({
-        title: 'Abate registrado com sucesso! 🥩',
-        description:
-          destination === 'Venda'
-            ? 'Estoque atualizado, carcaça adicionada e venda lançada no financeiro.'
-            : 'Estoque do lote baixado e carcaça adicionada para consumo próprio.',
-      })
-
-      // Fecha e reseta
       onOpenChange(false)
-      setIsReviewing(false)
-      resetForm()
+      onSuccess?.()
     } catch (err: any) {
       toast({
         title: 'Erro inesperado',
-        description: err.message || 'Não foi possível salvar o abate.',
+        description: err.message || 'Falha ao processar operação.',
         variant: 'destructive',
       })
     } finally {
@@ -448,802 +366,269 @@ export function NovoAbateDialog({ open, onOpenChange }: NovoAbateDialogProps) {
     }
   }
 
-  const resetForm = () => {
-    setDate(new Date().toISOString().split('T')[0])
-    setSpecies('Frango Caipira')
-    setQuantityAnimals('1')
-    setTotalLiveWeightKg('')
-    setCarcassWeightKg('')
-    setDestination('Consumo próprio')
-    setCosts([
-      {
-        id: 'cost-1',
-        description: 'Abate e evisceração',
-        category: 'Abate/frigorífico',
-        amount: 0,
-      },
-    ])
-    setSubproducts([])
-    setShowSubproducts(false)
-    setSaleCustomer('')
-    setSaleQtyKg('')
-    setSalePricePerKg('')
-    setSaleTotalPrice('')
-    setSaleNotes('')
-    setGeneralNotes('')
-    setIsReviewing(false)
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl rounded-3xl max-h-[92vh] overflow-y-auto p-6">
+      <DialogContent className="max-w-lg rounded-3xl max-h-[92vh] overflow-y-auto p-6">
         <DialogHeader>
-          <DialogTitle className="text-xl font-extrabold flex items-center gap-2">
-            🥩 {isReviewing ? 'Resumo do Abate' : 'Novo Lançamento de Abate'}
+          <DialogTitle className="text-lg font-bold flex items-center gap-2">
+            🥩 {editingSlaughter ? 'Editar Abate' : 'Novo Abate'}
           </DialogTitle>
         </DialogHeader>
 
-        {isReviewing ? (
-          /* =================== RESUMO DO ABATE ANTES DE SALVAR =================== */
-          <div className="space-y-5 animate-fade-in text-xs">
-            <div className="p-4 rounded-2xl bg-secondary/50 border border-border space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-border">
-                <span className="font-bold text-sm text-foreground">
-                  Identificação do Animal / Lote
-                </span>
-                <Badge
-                  className={
-                    destination === 'Venda'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-blue-100 text-blue-800'
-                  }
-                >
-                  {destination}
-                </Badge>
-              </div>
-
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                <div>
-                  <span className="text-muted-foreground block">Origem</span>
-                  <strong className="text-foreground">
-                    {sourceMode === 'lot'
-                      ? selectedLot
-                        ? `${selectedLot.code} - ${selectedLot.name}`
-                        : 'Lote não selecionado'
-                      : selectedAnimal
-                        ? `Animal #${selectedAnimal.code}`
-                        : 'Animal avulso'}
-                  </strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Espécie</span>
-                  <strong className="text-foreground">{species}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Qtd Animais</span>
-                  <strong className="text-foreground">{parsedQtyAnimals} aves</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Data do Abate</span>
-                  <strong className="text-foreground">{date}</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Peso Vivo Total</span>
-                  <strong className="text-foreground">{parsedTotalLiveWeight} kg</strong>
-                </div>
-                <div>
-                  <span className="text-muted-foreground block">Peso Vivo Médio</span>
-                  <strong className="text-foreground">{averageLiveWeight.toFixed(2)} kg</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Rendimento e Carcaça */}
-            <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-[11px] text-amber-900/70 block">Peso Total da Carcaça</span>
-                  <span className="text-xl font-bold text-amber-950">{parsedCarcassWeight} kg</span>
-                </div>
-                <div className="text-right">
-                  <span className="text-[11px] text-amber-900/70 block">Rendimento de Carcaça</span>
-                  <span className="text-xl font-bold text-amber-900">
-                    {carcassYieldPercent.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
-              <p className="text-[10px] text-amber-800">
-                Fórmula: ({parsedCarcassWeight} kg ÷ {parsedTotalLiveWeight} kg) × 100
-              </p>
-            </div>
-
-            {/* Composição de Custos */}
-            <div className="p-4 rounded-2xl bg-white border border-border space-y-2.5">
-              <span className="font-bold text-foreground block">Custos e Formação de Preço</span>
-              <div className="space-y-1.5 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">
-                    Custo de Produção Acumulado ({parsedQtyAnimals}x R${' '}
-                    {unitProductionCost.toFixed(2)})
-                  </span>
-                  <span className="font-semibold text-foreground">
-                    R$ {accumulatedProductionCost.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Custos Operacionais do Abate</span>
-                  <span className="font-semibold text-foreground">
-                    R$ {slaughterOperationalCost.toFixed(2)}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-2 border-t border-border font-bold">
-                  <span className="text-foreground">CUSTO TOTAL DA CARNE</span>
-                  <span className="text-rose-600">R$ {totalSlaughterCost.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-muted-foreground">
-                  <span>Custo por kg de carcaça</span>
-                  <span className="font-bold text-foreground">
-                    R$ {costPerKgCarcass.toFixed(2)} / kg
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Se Venda, mostra Resultado Econômico */}
-            {destination === 'Venda' && (
-              <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200 space-y-2.5">
-                <span className="font-bold text-emerald-950 block">
-                  Resultado Econômico da Operação
-                </span>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 pt-1 text-center">
-                  <div className="p-2 rounded-xl bg-white/80 border border-emerald-100">
-                    <span className="text-[10px] text-muted-foreground block">Receita Bruta</span>
-                    <strong className="text-emerald-700 text-sm">
-                      R$ {saleRevenue.toFixed(2)}
-                    </strong>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white/80 border border-emerald-100">
-                    <span className="text-[10px] text-muted-foreground block">Custo Total</span>
-                    <strong className="text-rose-600 text-sm">
-                      R$ {totalSlaughterCost.toFixed(2)}
-                    </strong>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white/80 border border-emerald-100">
-                    <span className="text-[10px] text-muted-foreground block">
-                      Lucro / Prejuízo
-                    </span>
-                    <strong
-                      className={`text-sm ${saleNetProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
-                    >
-                      R$ {saleNetProfit.toFixed(2)}
-                    </strong>
-                  </div>
-                  <div className="p-2 rounded-xl bg-white/80 border border-emerald-100">
-                    <span className="text-[10px] text-muted-foreground block">Margem Líquida</span>
-                    <strong
-                      className={`text-sm ${saleMarginPercent >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
-                    >
-                      {saleMarginPercent.toFixed(1)}%
-                    </strong>
-                  </div>
-                </div>
-                <div className="text-[11px] text-emerald-900 pt-1">
-                  Cliente: <strong>{saleCustomer}</strong> • Pagamento:{' '}
-                  <strong>{paymentMethod}</strong> ({paymentStatus})
-                </div>
-              </div>
-            )}
-
-            {/* Aviso de ações automáticas */}
-            <div className="p-3 rounded-xl bg-secondary text-[11px] text-muted-foreground space-y-1">
-              <span className="font-semibold text-foreground flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5 text-primary" /> Transformação de estoque
-                automática:
-              </span>
-              <p>
-                1. <strong>Baixa de {parsedQtyAnimals} animal(is)</strong> no lote{' '}
-                {selectedLot?.name || 'selecionado'} (preservando histórico).
-              </p>
-              <p>
-                2. <strong>Entrada de {parsedCarcassWeight} kg de carne</strong> no estoque com
-                custo unitário de R$ {costPerKgCarcass.toFixed(2)}/kg.
-              </p>
-              {destination === 'Venda' ? (
-                <p>
-                  3. <strong>Registro da receita financeira</strong> de R$ {saleRevenue.toFixed(2)}{' '}
-                  no módulo Financeiro e baixa da carne vendida.
-                </p>
-              ) : (
-                <p>
-                  3. <strong>Consumo próprio:</strong> nenhuma receita financeira será gerada.
-                </p>
-              )}
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <Button
-                type="button"
-                variant="outline"
-                className="w-1/2 rounded-xl h-11 text-xs"
-                onClick={() => setIsReviewing(false)}
-                disabled={isSubmitting}
-              >
-                Voltar e Editar
-              </Button>
-              <Button
-                type="button"
-                className="w-1/2 rounded-xl h-11 text-xs font-bold bg-primary hover:bg-primary/90 text-white"
-                onClick={handleConfirmSlaughter}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? 'Salvando...' : 'Salvar Abate ✨'}
-              </Button>
-            </div>
-          </div>
-        ) : (
-          /* =================== FORMULÁRIO DO NOVO ABATE =================== */
-          <form onSubmit={handleProceedToReview} className="space-y-4 text-xs">
-            {/* 1. SELEÇÃO DO ANIMAL / LOTE */}
-            <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-foreground">1. Identificação do Lote / Animal</span>
-                <div className="flex gap-1">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={sourceMode === 'lot' ? 'default' : 'outline'}
-                    className="h-7 text-[11px] rounded-lg"
-                    onClick={() => setSourceMode('lot')}
-                  >
-                    Por Lote
-                  </Button>
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant={sourceMode === 'animal' ? 'default' : 'outline'}
-                    className="h-7 text-[11px] rounded-lg"
-                    onClick={() => setSourceMode('animal')}
-                  >
-                    Animal Individual
-                  </Button>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Data do Abate *</Label>
-                  <Input
-                    type="date"
-                    value={date}
-                    onChange={(e) => setDate(e.target.value)}
-                    className="h-9 text-xs rounded-xl mt-1"
-                    required
-                  />
-                </div>
-
-                <div>
-                  <Label className="text-xs">Espécie / Produto</Label>
-                  <Select value={species} onValueChange={setSpecies}>
-                    <SelectTrigger className="h-9 text-xs rounded-xl mt-1">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SPECIES_OPTIONS.map((sp) => (
-                        <SelectItem key={sp} value={sp} className="text-xs">
-                          {sp}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              {sourceMode === 'lot' ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Lote de Origem *</Label>
-                    <Select value={selectedLotId} onValueChange={setSelectedLotId}>
-                      <SelectTrigger className="h-9 text-xs rounded-xl mt-1">
-                        <SelectValue placeholder="Selecione o lote" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {lots.map((l) => (
-                          <SelectItem key={l.id} value={l.id} className="text-xs">
-                            {l.code} — {l.name} ({l.currentQuantity} aves vivas)
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div>
-                    <Label className="text-xs">Quantidade de Animais Abatidos *</Label>
-                    <Input
-                      type="number"
-                      min="1"
-                      max={selectedLot ? selectedLot.currentQuantity : undefined}
-                      value={quantityAnimals}
-                      onChange={(e) => setQuantityAnimals(e.target.value)}
-                      className="h-9 text-xs rounded-xl mt-1"
-                      required
-                    />
-                    {selectedLot && (
-                      <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                        Saldo disponível no lote: {selectedLot.currentQuantity} aves
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Identificação do Animal *</Label>
-                    <Select value={selectedAnimalId} onValueChange={setSelectedAnimalId}>
-                      <SelectTrigger className="h-9 text-xs rounded-xl mt-1">
-                        <SelectValue placeholder="Selecione o animal" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {animals
-                          .filter((a) => a.status === 'Ativo')
-                          .map((a) => (
-                            <SelectItem key={a.id} value={a.id} className="text-xs">
-                              #{a.code} — {a.breed} ({a.sex}, {a.weightKg}kg)
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Quantidade</Label>
-                    <Input
-                      type="number"
-                      value={quantityAnimals}
-                      disabled
-                      className="h-9 text-xs rounded-xl mt-1 bg-muted"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Informação do custo acumulado do lote lido do sistema */}
-              {sourceMode === 'lot' && selectedLot && (
-                <div className="p-3 rounded-xl bg-white border border-border/80 flex items-center justify-between text-xs">
-                  <div>
-                    <span className="text-muted-foreground block text-[11px]">
-                      Custo de Produção Acumulado no Lote
-                    </span>
-                    <span className="font-bold text-foreground">
-                      R$ {(unitProductionCost * parsedQtyAnimals).toFixed(2)} (R${' '}
-                      {unitProductionCost.toFixed(2)} / ave)
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="text-[10px] text-primary border-primary/20">
-                    Sem duplicar custos
-                  </Badge>
-                </div>
-              )}
-            </div>
-
-            {/* 2. PESAGEM & RENDIMENTO */}
-            <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-3">
-              <span className="font-bold text-foreground block">
-                2. Pesagem e Rendimento de Carcaça
-              </span>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Peso Vivo Total (kg) *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="Ex: 2.80"
-                    value={totalLiveWeightKg}
-                    onChange={(e) => setTotalLiveWeightKg(e.target.value)}
-                    className="h-9 text-xs rounded-xl mt-1"
-                    required
-                  />
-                  {averageLiveWeight > 0 && (
-                    <span className="text-[10px] text-muted-foreground mt-0.5 block">
-                      Média por animal: <strong>{averageLiveWeight.toFixed(2)} kg</strong>
-                    </span>
-                  )}
-                </div>
-
-                <div>
-                  <Label className="text-xs">Peso da Carcaça Total (kg) *</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="Ex: 2.10"
-                    value={carcassWeightKg}
-                    onChange={(e) => setCarcassWeightKg(e.target.value)}
-                    className="h-9 text-xs rounded-xl mt-1"
-                    required
-                  />
-                  {carcassYieldPercent > 0 && (
-                    <span className="text-[10px] font-bold text-emerald-700 mt-0.5 block">
-                      Rendimento calculado: {carcassYieldPercent.toFixed(1)}%
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* 3. DESTINO DO ABATE */}
-            <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="font-bold text-foreground">3. Destino do Abate *</span>
-                <span className="text-[10px] text-muted-foreground">Campo obrigatório</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setDestination('Consumo próprio')}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
-                    destination === 'Consumo próprio'
-                      ? 'bg-blue-50/80 border-blue-500 text-blue-900 shadow-xs'
-                      : 'bg-white border-border text-muted-foreground hover:bg-secondary'
-                  }`}
-                >
-                  <p className="font-bold text-xs">🍽️ Consumo próprio</p>
-                  <p className="text-[10px] mt-1 text-muted-foreground">
-                    Carcaça entra no estoque para alimentação interna. Não gera receita.
-                  </p>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setDestination('Venda')}
-                  className={`p-3 rounded-2xl border text-left transition-all ${
-                    destination === 'Venda'
-                      ? 'bg-emerald-50/80 border-emerald-500 text-emerald-900 shadow-xs'
-                      : 'bg-white border-border text-muted-foreground hover:bg-secondary'
-                  }`}
-                >
-                  <p className="font-bold text-xs">💰 Venda comercial</p>
-                  <p className="text-[10px] mt-1 text-muted-foreground">
-                    Comercialização direta. Calcula margem, receita e gera venda no financeiro.
-                  </p>
-                </button>
-              </div>
-            </div>
-
-            {/* 4. CUSTOS ESPECÍFICOS DO ABATE */}
-            <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-foreground">4. Custos do Abate</span>
-                  <p className="text-[10px] text-muted-foreground">
-                    Custos extras operacionais (mão de obra, gelo, transporte, taxas)
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddCost}
-                  className="h-7 text-[11px] rounded-lg gap-1 border-primary/20 text-primary"
-                >
-                  <Plus className="w-3 h-3" /> Adicionar Custo
-                </Button>
-              </div>
-
-              <div className="space-y-2">
-                {costs.map((c) => (
-                  <div
-                    key={c.id}
-                    className="p-2.5 rounded-xl bg-white border border-border flex items-center gap-2"
-                  >
-                    <div className="flex-1">
-                      <Input
-                        placeholder="Descrição (ex: Taxa do abatedouro)"
-                        value={c.description}
-                        onChange={(e) => handleUpdateCost(c.id, 'description', e.target.value)}
-                        className="h-8 text-xs rounded-lg"
-                      />
-                    </div>
-                    <div className="w-40">
-                      <Select
-                        value={c.category}
-                        onValueChange={(val) =>
-                          handleUpdateCost(c.id, 'category', val as SlaughterCostCategory)
-                        }
-                      >
-                        <SelectTrigger className="h-8 text-[11px] rounded-lg">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {COST_CATEGORIES.map((cat) => (
-                            <SelectItem key={cat} value={cat} className="text-xs">
-                              {cat}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="w-24">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        placeholder="R$ 0,00"
-                        value={c.amount || ''}
-                        onChange={(e) =>
-                          handleUpdateCost(c.id, 'amount', parseFloat(e.target.value) || 0)
-                        }
-                        className="h-8 text-xs rounded-lg font-semibold text-right"
-                      />
-                    </div>
-                    {costs.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveCost(c.id)}
-                        className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    )}
-                  </div>
-                ))}
-
-                <div className="flex justify-between items-center pt-2 px-1 text-xs">
-                  <span className="text-muted-foreground">Total dos Custos do Abate:</span>
-                  <span className="font-bold text-foreground">
-                    R$ {slaughterOperationalCost.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* 5. SE VENDA: DADOS DA VENDA */}
-            {destination === 'Venda' && (
-              <div className="p-4 rounded-2xl bg-emerald-50/50 border border-emerald-200 space-y-3 animate-fade-in">
-                <span className="font-bold text-emerald-950 block">5. Dados da Venda</span>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Cliente / Comprador *</Label>
-                    <Input
-                      placeholder="Nome do cliente ou restaurante"
-                      value={saleCustomer}
-                      onChange={(e) => setSaleCustomer(e.target.value)}
-                      className="h-9 text-xs rounded-xl mt-1 bg-white"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-xs">Data da Venda</Label>
-                    <Input
-                      type="date"
-                      value={saleDate}
-                      onChange={(e) => setSaleDate(e.target.value)}
-                      className="h-9 text-xs rounded-xl mt-1 bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Label className="text-[11px]">Qtd Vendida (kg)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="kg"
-                      value={saleQtyKg}
-                      onChange={(e) => handleSaleQtyChange(e.target.value)}
-                      className="h-9 text-xs rounded-xl mt-1 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px]">Preço / kg (R$)</Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="R$/kg"
-                      value={salePricePerKg}
-                      onChange={(e) => handleSalePriceChange(e.target.value)}
-                      className="h-9 text-xs rounded-xl mt-1 bg-white"
-                    />
-                  </div>
-                  <div>
-                    <Label className="text-[11px] font-bold text-emerald-900">
-                      Total da Venda (R$) *
-                    </Label>
-                    <Input
-                      type="number"
-                      step="0.01"
-                      placeholder="Total R$"
-                      value={saleTotalPrice}
-                      onChange={(e) => setSaleTotalPrice(e.target.value)}
-                      className="h-9 text-xs rounded-xl mt-1 bg-white font-bold text-emerald-700"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label className="text-xs">Forma de Pagamento</Label>
-                    <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                      <SelectTrigger className="h-9 text-xs rounded-xl mt-1 bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pix">Pix</SelectItem>
-                        <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                        <SelectItem value="Cartão de Crédito">Cartão de Crédito</SelectItem>
-                        <SelectItem value="Cartão de Débito">Cartão de Débito</SelectItem>
-                        <SelectItem value="Boleto">Boleto</SelectItem>
-                        <SelectItem value="A Prazo">A Prazo</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label className="text-xs">Status do Recebimento</Label>
-                    <Select
-                      value={paymentStatus}
-                      onValueChange={(val: 'Pendente' | 'Pago') => setPaymentStatus(val)}
-                    >
-                      <SelectTrigger className="h-9 text-xs rounded-xl mt-1 bg-white">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Pago">Pago / Recebido</SelectItem>
-                        <SelectItem value="Pendente">Pendente / A Receber</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 6. SUBPRODUTOS (Opcional) */}
-            <div className="p-4 rounded-2xl bg-secondary/30 border border-border space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="font-bold text-foreground">Subprodutos do Abate</span>
-                  <p className="text-[10px] text-muted-foreground">
-                    Registro opcional de miúdos, pés, cabeça, etc.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowSubproducts(!showSubproducts)}
-                  className="h-7 text-[11px] text-primary"
-                >
-                  {showSubproducts ? 'Ocultar' : 'Configurar subprodutos'}
-                </Button>
-              </div>
-
-              {showSubproducts && (
-                <div className="space-y-2 pt-2 animate-fade-in">
-                  {subproducts.map((sub) => (
-                    <div
-                      key={sub.id}
-                      className="p-2.5 rounded-xl bg-white border border-border flex items-center gap-2"
-                    >
-                      <div className="w-32">
-                        <Select
-                          value={sub.type}
-                          onValueChange={(v) =>
-                            handleUpdateSubproduct(sub.id, 'type', v as SubproductType)
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-[11px] rounded-lg">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SUBPRODUCT_TYPES.map((t) => (
-                              <SelectItem key={t} value={t} className="text-xs">
-                                {t}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="w-36">
-                        <Select
-                          value={sub.destination}
-                          onValueChange={(v) =>
-                            handleUpdateSubproduct(
-                              sub.id,
-                              'destination',
-                              v as SubproductDestination,
-                            )
-                          }
-                        >
-                          <SelectTrigger className="h-8 text-[11px] rounded-lg">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SUBPRODUCT_DESTINATIONS.map((d) => (
-                              <SelectItem key={d} value={d} className="text-xs">
-                                {d}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="w-24">
-                        <Input
-                          type="number"
-                          step="0.01"
-                          placeholder="kg"
-                          value={sub.quantityKg || ''}
-                          onChange={(e) =>
-                            handleUpdateSubproduct(
-                              sub.id,
-                              'quantityKg',
-                              parseFloat(e.target.value) || 0,
-                            )
-                          }
-                          className="h-8 text-xs rounded-lg text-right"
-                        />
-                      </div>
-
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveSubproduct(sub.id)}
-                        className="h-8 w-8 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg shrink-0"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </Button>
-                    </div>
-                  ))}
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={handleAddSubproduct}
-                    className="h-7 text-[11px] rounded-lg gap-1 border-dashed"
-                  >
-                    <Plus className="w-3 h-3" /> Adicionar subproduto
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {/* Observações */}
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs pt-1">
+          {/* Lote e Data */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label className="text-xs">Observações Gerais</Label>
-              <Textarea
-                placeholder="Detalhes sobre o frigorífico, qualidade da carcaça, condições sanitárias, etc."
-                value={generalNotes}
-                onChange={(e) => setGeneralNotes(e.target.value)}
-                className="text-xs rounded-xl mt-1 resize-none h-16"
+              <Label className="text-xs">Data do Abate *</Label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="h-9 text-xs rounded-xl mt-1"
+                required
               />
             </div>
 
-            {/* Botões do Fluxo */}
-            <div className="flex gap-2 pt-2">
+            <div>
+              <Label className="text-xs">Lote Ativo de Origem *</Label>
+              {activeLots.length === 0 ? (
+                <div className="text-[11px] text-rose-600 p-2 rounded-xl bg-rose-50 border border-rose-200 mt-1">
+                  Nenhum lote ativo com aves vivas.
+                </div>
+              ) : (
+                <Select value={selectedLotId} onValueChange={handleSelectLot}>
+                  <SelectTrigger className="h-9 text-xs rounded-xl mt-1">
+                    <SelectValue placeholder="Selecione o lote ativo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {activeLots.map((l) => (
+                      <SelectItem key={l.id} value={l.id} className="text-xs">
+                        {l.code} — {l.name} ({l.currentQuantity} vivas)
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+          </div>
+
+          {/* Espécie e Quantidade */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Espécie / Categoria</Label>
+              <Input
+                value={species}
+                onChange={(e) => setSpecies(e.target.value)}
+                placeholder="Ex: Frango Caipira"
+                className="h-9 text-xs rounded-xl mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs">Quantidade Abatida *</Label>
+              <Input
+                type="number"
+                min="1"
+                max={maxAllowedQty || undefined}
+                value={quantityAnimals}
+                onChange={(e) => setQuantityAnimals(e.target.value)}
+                className="h-9 text-xs rounded-xl mt-1 font-bold"
+                required
+              />
+              {selectedLot && (
+                <span className="text-[11px] text-muted-foreground mt-0.5 block">
+                  Vivas no lote: <strong>{maxAllowedQty}</strong> → ficará com:{' '}
+                  <strong className={remainingInLot === 0 ? 'text-amber-600' : 'text-emerald-700'}>
+                    {remainingInLot}
+                  </strong>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Identificação Individual (opcional) & Peso Vivo (opcional) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs">Identificação Individual (Opcional)</Label>
+              <Select value={selectedAnimalId} onValueChange={handleSelectAnimal}>
+                <SelectTrigger className="h-9 text-xs rounded-xl mt-1">
+                  <SelectValue placeholder="Nenhum (baixa por quantidade)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none" className="text-xs">
+                    Nenhum (apenas quantidade)
+                  </SelectItem>
+                  {availableAnimals.map((a) => (
+                    <SelectItem key={a.id} value={a.id} className="text-xs">
+                      #{a.code} — {a.breed} ({a.sex})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <Label className="text-xs">Peso Vivo Total (kg) — Opcional</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="Ex: 5.4"
+                value={totalLiveWeightKg}
+                onChange={(e) => setTotalLiveWeightKg(e.target.value)}
+                className="h-9 text-xs rounded-xl mt-1"
+              />
+            </div>
+          </div>
+
+          {/* Destino: Apenas Consumo Próprio ou Venda */}
+          <div>
+            <Label className="text-xs">Destino do Abate *</Label>
+            <div className="grid grid-cols-2 gap-2 mt-1">
               <Button
                 type="button"
-                variant="outline"
-                className="w-1/2 rounded-xl h-11 text-xs"
-                onClick={() => onOpenChange(false)}
+                variant={destination === 'Consumo próprio' ? 'default' : 'outline'}
+                className="h-10 text-xs rounded-xl font-semibold"
+                onClick={() => setDestination('Consumo próprio')}
               >
-                Cancelar
+                🍽️ Consumo próprio
               </Button>
               <Button
-                type="submit"
-                className="w-1/2 rounded-xl h-11 text-xs font-bold bg-primary hover:bg-primary/90 text-white gap-2"
+                type="button"
+                variant={destination === 'Venda' ? 'default' : 'outline'}
+                className="h-10 text-xs rounded-xl font-semibold"
+                onClick={() => setDestination('Venda')}
               >
-                <span>Revisar Resultado</span>
-                <ArrowRight className="w-4 h-4" />
+                💰 Venda
               </Button>
             </div>
-          </form>
-        )}
+          </div>
+
+          {/* Bloco de Custo dos Animais Abatidos (Custo acumulado do lote) */}
+          <div className="p-3.5 rounded-2xl bg-secondary/50 border border-border space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">Custo de Produção por Ave:</span>
+              <span className="font-semibold text-foreground">R$ {unitCost.toFixed(2)} / ave</span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-border/60">
+              <span className="font-bold text-foreground">Custo dos Animais Abatidos:</span>
+              <strong className="text-sm font-extrabold text-rose-600">
+                R$ {totalAnimalsCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </strong>
+            </div>
+            <p className="text-[10px] text-muted-foreground pt-0.5">
+              Calculado pelo custo acumulado de produção do lote ({parsedQty} x R${' '}
+              {unitCost.toFixed(2)}). Não gera nova despesa financeira de produção.
+            </p>
+          </div>
+
+          {/* Se Destino for VENDA: campos mínimos necessários */}
+          {destination === 'Venda' && (
+            <div className="p-3.5 rounded-2xl bg-emerald-50/60 border border-emerald-200 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-emerald-950">Dados da Venda Comercial</span>
+                <span className="text-[10px] text-emerald-700 font-semibold">
+                  Gera receita no Financeiro
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <Label className="text-xs">Valor Total da Venda (R$) *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Ex: 150.00"
+                    value={saleTotalValue}
+                    onChange={(e) => setSaleTotalValue(e.target.value)}
+                    className="h-9 text-xs rounded-xl mt-1 font-bold bg-white"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Data da Venda</Label>
+                  <Input
+                    type="date"
+                    value={saleDate}
+                    onChange={(e) => setSaleDate(e.target.value)}
+                    className="h-9 text-xs rounded-xl mt-1 bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div>
+                  <Label className="text-xs">Cliente / Comprador (Opcional)</Label>
+                  <Input
+                    placeholder="Ex: Restaurante do Zé"
+                    value={saleCustomer}
+                    onChange={(e) => setSaleCustomer(e.target.value)}
+                    className="h-9 text-xs rounded-xl mt-1 bg-white"
+                  />
+                </div>
+
+                <div>
+                  <Label className="text-xs">Qtd. Vendida</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={saleQuantity}
+                    onChange={(e) => setSaleQuantity(e.target.value)}
+                    className="h-9 text-xs rounded-xl mt-1 bg-white"
+                  />
+                </div>
+              </div>
+
+              {/* Resultado simples = Valor da Venda - Custo dos animais */}
+              <div className="p-2.5 rounded-xl bg-white border border-emerald-200/70 flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Resultado apurado (Venda − Custo):</span>
+                <strong
+                  className={`text-sm ${saleResult >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}
+                >
+                  R$ {saleResult.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </strong>
+              </div>
+            </div>
+          )}
+
+          {/* Observações */}
+          <div>
+            <Label className="text-xs">Observações (Opcional)</Label>
+            <Textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Anotações sobre o abate..."
+              className="text-xs rounded-xl mt-1 min-h-[60px]"
+            />
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="w-1/2 rounded-xl h-10 text-xs"
+              onClick={() => onOpenChange(false)}
+              disabled={isSubmitting}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="w-1/2 rounded-xl h-10 text-xs font-bold bg-primary hover:bg-primary/90 text-white"
+              disabled={isSubmitting || activeLots.length === 0}
+            >
+              {isSubmitting
+                ? 'Salvando...'
+                : editingSlaughter
+                  ? 'Salvar Alterações'
+                  : 'Registrar Abate'}
+            </Button>
+          </div>
+        </form>
       </DialogContent>
     </Dialog>
   )
 }
+export default NovoAbateDialog

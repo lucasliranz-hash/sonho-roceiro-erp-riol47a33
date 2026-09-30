@@ -740,6 +740,17 @@ export interface SlaughterSaleData {
   financialSaleId?: string
 }
 
+export interface SlaughterSaleSimple {
+  customerName?: string
+  saleDate?: string
+  quantitySold?: number
+  totalValue: number
+  paymentMethod?: string
+  isPaid?: boolean
+  notes?: string
+  financialSaleId?: string
+}
+
 export interface Slaughtering {
   id: string
   organization_id?: string
@@ -751,21 +762,23 @@ export interface Slaughtering {
   animalId?: string
   animalCode?: string
   quantityAnimals: number
-  totalLiveWeightKg: number
-  averageLiveWeightKg: number
-  carcassWeightKg: number
-  carcassYieldPercent: number // Rendimento de carcaça: (carcassWeight / totalLiveWeight) * 100
+  totalLiveWeightKg?: number
+  averageLiveWeightKg?: number
+  carcassWeightKg?: number
+  carcassYieldPercent?: number
   destination: SlaughterDestination
-  costs: SlaughterCostItem[]
-  slaughterOperationalCost: number // Soma dos custos de abate
-  accumulatedProductionCost: number // Custo acumulado do lote/animal antes do abate
-  totalCost: number // accumulatedProductionCost + slaughterOperationalCost
-  costPerCarcassKg: number // totalCost / carcassWeightKg
+  costs?: SlaughterCostItem[]
+  slaughterOperationalCost?: number
+  accumulatedProductionCost?: number
+  unitProductionCost?: number
+  totalCost: number
+  costPerCarcassKg?: number
   sale?: SlaughterSaleData
+  saleSimple?: SlaughterSaleSimple
   // Econômico (se venda)
   revenue?: number
-  netProfit?: number // revenue - totalCost
-  marginPercent?: number // (netProfit / revenue) * 100
+  netProfit?: number
+  marginPercent?: number
   // Integrações registradas
   inventoryCarneItemId?: string
   inventoryMovementId?: string

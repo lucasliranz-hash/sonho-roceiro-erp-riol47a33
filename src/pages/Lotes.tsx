@@ -203,11 +203,19 @@ export default function Lotes() {
     setDeleting(null)
   }
 
-  const filteredLots = lots.filter(
-    (l) =>
+  const [statusFilter, setStatusFilter] = useState<string>('Ativo')
+
+  const filteredLots = lots.filter((l) => {
+    const matchesSearch =
       l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      l.code.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      l.code.toLowerCase().includes(searchTerm.toLowerCase())
+    if (!matchesSearch) return false
+
+    if (statusFilter === 'todos') return true
+    if (statusFilter === 'Ativo') return l.status === 'Ativo'
+    if (statusFilter === 'Finalizado') return l.status === 'Finalizado' || l.status === 'Abatido'
+    return l.status === statusFilter
+  })
 
   if (selectedLot) {
     const lotWeighings = weighings.filter((w) => w.lotId === selectedLot.id)
@@ -1015,14 +1023,28 @@ export default function Lotes() {
         </Dialog>
       </div>
 
-      <div className="relative">
-        <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
-        <Input
-          placeholder="Buscar lote por nome ou código..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-9 h-10 rounded-2xl bg-white border-border text-xs"
-        />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="relative sm:col-span-2">
+          <Search className="w-4 h-4 absolute left-3 top-3 text-muted-foreground" />
+          <Input
+            placeholder="Buscar lote por nome ou código..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-9 h-10 rounded-2xl bg-white border-border text-xs"
+          />
+        </div>
+        <div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="h-10 rounded-2xl bg-white border-border text-xs">
+              <SelectValue placeholder="Status do Lote" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="Ativo">Lotes Ativos (padrão)</SelectItem>
+              <SelectItem value="todos">Todos os lotes</SelectItem>
+              <SelectItem value="Finalizado">Finalizados / Abatidos</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

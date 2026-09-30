@@ -1208,17 +1208,17 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   // ==========================================
-  // ABATES (INTEGRAÇÃO ESTOQUE, PRODUÇÃO & FINANCEIRO)
+  // ABATES SIMPLIFICADOS (MÓDULO DE ABATES DO SR GESTÃO)
+  // Regra: Registrar morte/abate + Retirar aves vivas do lote ativo + Registrar custo apurado.
+  // Consumo próprio: custo gerencial apropriado, SEM gerar nova despesa financeira ou de produção duplicada.
+  // Venda: gera receita financeira em farm_sales (source_type 'SLAUGHTER'), sem duplicar custos.
   // ==========================================
   const addSlaughtering = useCallback(
     async (slaughterData: Omit<Slaughtering, 'id'>): Promise<{ error: any; id?: string }> => {
       const slaughterId = `sla-${Date.now()}`
-      let inventoryCarneItemId = slaughterData.inventoryCarneItemId
-      let movementId: string | undefined = undefined
       let financialSaleId: string | undefined = undefined
 
-      // 1. Atualizar estoque do animal vivo (Lote ou Animal)
-      // REGRA: retirar o animal abatido do estoque/rebanho (baixa com histórico, NÃO simplesmente apagar)
+      // 1. Baixar aves vivas do lote ativo (REGRA FUNDAMENTAL: número de aves vivas correto)
       if (slaughterData.lotId) {
         const lot = lots.items.find((l) => l.id === slaughterData.lotId)
         if (lot) {
@@ -1237,165 +1237,179 @@ function useFarmStoreImpl(orgId: string | undefined) {
         const animal = animals.items.find((a) => a.id === slaughterData.animalId)
         if (animal) {
           await animals.update(animal.id, {
-            status: 'Descartado' as const, // preserva histórico como abatido/descartado
+            status: 'Descartado' as const,
             notes: `${animal.notes ? animal.notes + ' | ' : ''}Abatido em ${slaughterData.date} (Abate #${slaughterId})`,
           })
         }
       }
 
-      // 2. ENTRADA DE CARNE NO ESTOQUE
-      // REGRA: criar automaticamente uma ENTRADA de produto no estoque de carne/produto abatido,
-      // quantidade = peso da carcaça em kg, vinculada ao lançamento do abate.
-      // Custo unitário do kg da carcaça = slaughterData.costPerCarcassKg
-      const carneProductName = `Carne / Carcaça - ${slaughterData.species || 'Aves'}`
-      let targetCarneItem = inventory.items.find(
-        (i) =>
-          i.id === inventoryCarneItemId ||
-          ((i.category === 'Carne' ||
-            i.category === 'Aves Abatidas' ||
-            i.category === 'Produtos Abatidos') &&
-            i.name.toLowerCase().includes((slaughterData.species || '').toLowerCase())),
-      )
+      // 2. Se destino === 'Venda', registrar a receita no financeiro (farm_sales)
+      const saleInfo =
+        slaughterData.saleSimple ||
+        (slaughterData.sale
+          ? {
+              customerName: slaughterData.sale.customerName,
+              saleDate: slaughterData.sale.saleDate,
+              quantitySold: slaughterData.sale.quantityKg || slaughterData.quantityAnimals,
+              totalValue: slaughterData.sale.totalPrice || slaughterData.revenue || 0,
+              paymentMethod: slaughterData.sale.paymentMethod || 'Pix',
+              isPaid: slaughterData.sale.paymentStatus === 'Pago',
+              notes: slaughterData.sale.notes,
+            }
+          : undefined)
 
-      if (!targetCarneItem) {
-        targetCarneItem = inventory.items.find(
-          (i) => i.name.toLowerCase() === carneProductName.toLowerCase(),
-        )
-      }
-
-      if (!targetCarneItem) {
-        // Criar novo item no estoque se não existir
-        const newCarneId = `inv-carne-${Date.now()}`
-        await inventory.add({
-          id: newCarneId,
-          name: carneProductName,
-          category: 'Carne',
-          unit: 'KG',
-          currentStock: slaughterData.carcassWeightKg,
-          minStock: 0,
-          averageCost: slaughterData.costPerCarcassKg,
-          lastUpdated: slaughterData.date,
-          notes: `Gerado automaticamente pelo abate #${slaughterId}`,
-        })
-        inventoryCarneItemId = newCarneId
-      } else {
-        inventoryCarneItemId = targetCarneItem.id
-        // Recalcular saldo e custo médio ponderado
-        const oldStock = targetCarneItem.currentStock || 0
-        const oldAvg = targetCarneItem.averageCost || 0
-        const newStock = oldStock + slaughterData.carcassWeightKg
-        const incomingValue = slaughterData.totalCost
-        let newAvg = oldAvg
-        if (oldStock <= 0) {
-          newAvg = slaughterData.costPerCarcassKg
-        } else if (newStock > 0) {
-          newAvg = Number(((oldStock * oldAvg + incomingValue) / newStock).toFixed(4))
-        }
-        await inventory.update(targetCarneItem.id, {
-          currentStock: newStock,
-          averageCost: newAvg,
-          lastUpdated: slaughterData.date,
-        })
-      }
-
-      // Registrar movimento de estoque da ENTRADA da carne
-      movementId = `sm-sla-${Date.now()}`
-      await stockMovements.add({
-        id: movementId,
-        date: slaughterData.date,
-        inventoryItemId: inventoryCarneItemId,
-        inventoryItemName: carneProductName,
-        type: 'entrada',
-        movementType: 'Entrada por Abate',
-        quantity: slaughterData.carcassWeightKg,
-        unit: 'KG',
-        balanceAfter: (targetCarneItem?.currentStock || 0) + slaughterData.carcassWeightKg,
-        unitValue: slaughterData.costPerCarcassKg,
-        totalValue: slaughterData.totalCost,
-        lotId: slaughterData.lotId,
-        lotName: slaughterData.lotName,
-        notes: `Entrada de carcaça referente ao abate #${slaughterId} (${slaughterData.quantityAnimals} aves, rendimento ${slaughterData.carcassYieldPercent.toFixed(1)}%)`,
-      })
-
-      // 3. SE DESTINO === 'Venda', REGISTRAR VENDA / FINANCEIRO E SAÍDA DE ESTOQUE VENDIDO
-      if (slaughterData.destination === 'Venda' && slaughterData.sale) {
+      if (slaughterData.destination === 'Venda' && saleInfo && saleInfo.totalValue > 0) {
         financialSaleId = `sal-sla-${Date.now()}`
-        const saleTotalPrice =
-          slaughterData.sale.totalPrice ||
-          Number((slaughterData.sale.quantityKg * slaughterData.sale.pricePerKg).toFixed(2))
-        const isPaid = slaughterData.sale.paymentStatus === 'Pago'
-
-        // Registro da receita em Vendas (farm_sales) com source_type 'SLAUGHTER'
         await sales.add({
           id: financialSaleId,
-          date: slaughterData.sale.saleDate || slaughterData.date,
-          customerName: slaughterData.sale.customerName || 'Cliente Abate',
-          product: `Carne (${slaughterData.species})`,
+          date: saleInfo.saleDate || slaughterData.date,
+          customerName: saleInfo.customerName || 'Cliente Abate',
+          product: `Carne / Abate (${slaughterData.species})`,
           lotId: slaughterData.lotId,
           lotName: slaughterData.lotName,
-          quantity: slaughterData.sale.quantityKg,
-          weightKg: slaughterData.sale.quantityKg,
-          unitPrice: slaughterData.sale.pricePerKg,
-          totalPrice: saleTotalPrice,
-          paymentMethod: slaughterData.sale.paymentMethod || 'Pix',
-          isPaid,
+          quantity: saleInfo.quantitySold || slaughterData.quantityAnimals,
+          weightKg: slaughterData.totalLiveWeightKg,
+          unitPrice:
+            (saleInfo.quantitySold || slaughterData.quantityAnimals) > 0
+              ? Number(
+                  (
+                    saleInfo.totalValue / (saleInfo.quantitySold || slaughterData.quantityAnimals)
+                  ).toFixed(2),
+                )
+              : saleInfo.totalValue,
+          totalPrice: saleInfo.totalValue,
+          paymentMethod: saleInfo.paymentMethod || 'Pix',
+          isPaid: saleInfo.isPaid ?? true,
           source_type: 'SLAUGHTER',
           source_id: slaughterId,
-          notes: slaughterData.sale.notes || `Venda direta do abate #${slaughterId}`,
+          notes: saleInfo.notes || `Receita de venda referente ao abate #${slaughterId}`,
         })
-
-        // Se a venda baixou a carne imediatamente do estoque:
-        if (inventoryCarneItemId) {
-          const currentCarne = inventory.items.find((i) => i.id === inventoryCarneItemId)
-          const stockAfterSale = Math.max(
-            0,
-            (currentCarne ? currentCarne.currentStock : slaughterData.carcassWeightKg) -
-              slaughterData.sale.quantityKg,
-          )
-          await inventory.update(inventoryCarneItemId, {
-            currentStock: stockAfterSale,
-            lastUpdated: slaughterData.sale.saleDate || slaughterData.date,
-          })
-          // Movimento de saída por venda
-          await stockMovements.add({
-            id: `sm-sale-${Date.now()}`,
-            date: slaughterData.sale.saleDate || slaughterData.date,
-            inventoryItemId: inventoryCarneItemId,
-            inventoryItemName: carneProductName,
-            type: 'saida',
-            movementType: 'Venda de Abate',
-            quantity: slaughterData.sale.quantityKg,
-            unit: 'KG',
-            balanceAfter: stockAfterSale,
-            unitValue: slaughterData.costPerCarcassKg,
-            totalValue: Number(
-              (slaughterData.sale.quantityKg * slaughterData.costPerCarcassKg).toFixed(2),
-            ),
-            lotId: slaughterData.lotId,
-            lotName: slaughterData.lotName,
-            notes: `Saída de carcaça vendida ao cliente ${slaughterData.sale.customerName} (Abate #${slaughterId})`,
-          })
-        }
       }
 
-      // 4. Salvar registro final do Abate
+      // 3. Salvar registro final do Abate simplificado
       const fullRecord: Slaughtering = {
         ...slaughterData,
         id: slaughterId,
-        inventoryCarneItemId,
-        inventoryMovementId: movementId,
-        sale: slaughterData.sale
-          ? {
-              ...slaughterData.sale,
-              financialSaleId,
-            }
-          : undefined,
+        revenue:
+          slaughterData.destination === 'Venda'
+            ? saleInfo?.totalValue || slaughterData.revenue || 0
+            : undefined,
+        netProfit:
+          slaughterData.destination === 'Venda'
+            ? Number(
+                (
+                  (saleInfo?.totalValue || slaughterData.revenue || 0) - slaughterData.totalCost
+                ).toFixed(2),
+              )
+            : undefined,
+        saleSimple: saleInfo ? { ...saleInfo, financialSaleId } : undefined,
       }
 
       const { error } = await slaughterings.add(fullRecord)
       return { error, id: slaughterId }
     },
-    [slaughterings, lots, animals, inventory, stockMovements, sales],
+    [slaughterings, lots, animals, sales],
+  )
+
+  const updateSlaughtering = useCallback(
+    async (id: string, updatedData: Partial<Slaughtering>): Promise<{ error: any }> => {
+      const old = slaughterings.items.find((s) => s.id === id)
+      if (!old) return { error: new Error('Registro de abate não encontrado.') }
+
+      const oldLotId = old.lotId
+      const oldQty = old.quantityAnimals || 0
+      const newLotId = updatedData.lotId !== undefined ? updatedData.lotId : old.lotId
+      const newQty =
+        updatedData.quantityAnimals !== undefined ? updatedData.quantityAnimals : oldQty
+
+      // Se mudou lote ou quantidade, ajusta as aves vivas no(s) lote(s)
+      if (oldLotId === newLotId) {
+        if (oldLotId && oldQty !== newQty) {
+          const lot = lots.items.find((l) => l.id === oldLotId)
+          if (lot) {
+            const diff = oldQty - newQty // se abatia 5 e agora abate 3, diff = +2 (devolve 2 ao lote)
+            const newCurrent = Math.max(0, (lot.currentQuantity || 0) + diff)
+            const newStatus = newCurrent === 0 ? ('Abatido' as const) : 'Ativo'
+            await lots.update(lot.id, { currentQuantity: newCurrent, status: newStatus })
+          }
+        }
+      } else {
+        // Devolve ao lote antigo
+        if (oldLotId) {
+          const oldLot = lots.items.find((l) => l.id === oldLotId)
+          if (oldLot) {
+            const restored = (oldLot.currentQuantity || 0) + oldQty
+            await lots.update(oldLot.id, {
+              currentQuantity: restored,
+              status: restored > 0 && oldLot.status === 'Abatido' ? 'Ativo' : oldLot.status,
+            })
+          }
+        }
+        // Subtrai do novo lote
+        if (newLotId) {
+          const newLot = lots.items.find((l) => l.id === newLotId)
+          if (newLot) {
+            const newCurrent = Math.max(0, (newLot.currentQuantity || 0) - newQty)
+            await lots.update(newLot.id, {
+              currentQuantity: newCurrent,
+              status: newCurrent === 0 ? 'Abatido' : newLot.status,
+            })
+          }
+        }
+      }
+
+      // Atualiza venda vinculada caso exista
+      const oldSaleId = old.saleSimple?.financialSaleId || old.sale?.financialSaleId
+      const linkedSale = sales.items.find(
+        (s) =>
+          (oldSaleId && s.id === oldSaleId) ||
+          (s.source_type === 'SLAUGHTER' && s.source_id === id),
+      )
+
+      const targetDestination = updatedData.destination || old.destination
+      const targetSaleInfo = updatedData.saleSimple || old.saleSimple
+
+      if (targetDestination === 'Venda' && targetSaleInfo && targetSaleInfo.totalValue > 0) {
+        if (linkedSale) {
+          await sales.update(linkedSale.id, {
+            customerName: targetSaleInfo.customerName || 'Cliente Abate',
+            totalPrice: targetSaleInfo.totalValue,
+            date: targetSaleInfo.saleDate || updatedData.date || old.date,
+            quantity: targetSaleInfo.quantitySold || newQty,
+            lotId: newLotId,
+            lotName: updatedData.lotName || old.lotName,
+          })
+        } else {
+          const newSaleId = `sal-sla-${Date.now()}`
+          await sales.add({
+            id: newSaleId,
+            date: targetSaleInfo.saleDate || updatedData.date || old.date,
+            customerName: targetSaleInfo.customerName || 'Cliente Abate',
+            product: `Carne / Abate (${updatedData.species || old.species})`,
+            lotId: newLotId,
+            lotName: updatedData.lotName || old.lotName,
+            quantity: targetSaleInfo.quantitySold || newQty,
+            totalPrice: targetSaleInfo.totalValue,
+            unitPrice: targetSaleInfo.totalValue / (targetSaleInfo.quantitySold || newQty || 1),
+            paymentMethod: targetSaleInfo.paymentMethod || 'Pix',
+            isPaid: targetSaleInfo.isPaid ?? true,
+            source_type: 'SLAUGHTER',
+            source_id: id,
+            notes: targetSaleInfo.notes || `Receita de venda referente ao abate #${id}`,
+          })
+          if (updatedData.saleSimple) {
+            updatedData.saleSimple.financialSaleId = newSaleId
+          }
+        }
+      } else if (targetDestination === 'Consumo próprio' && linkedSale) {
+        // Se mudou para consumo próprio, remove a venda
+        await sales.remove(linkedSale.id)
+      }
+
+      const { error } = await slaughterings.update(id, updatedData)
+      return { error }
+    },
+    [slaughterings, lots, sales],
   )
 
   const deleteSlaughtering = useCallback(
@@ -1404,32 +1418,47 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const { error } = await slaughterings.remove(id)
       if (error) return { error }
 
-      // Se havia venda vinculada no financeiro, remove
-      if (slaughter?.sale?.financialSaleId) {
-        await sales.remove(slaughter.sale.financialSaleId)
-      } else {
-        const linkedSale = sales.items.find(
-          (s) => s.source_type === 'SLAUGHTER' && s.source_id === id,
-        )
-        if (linkedSale) {
-          await sales.remove(linkedSale.id)
-        }
+      // 1. Se havia venda vinculada no financeiro, remove
+      const linkedSaleId =
+        slaughter?.saleSimple?.financialSaleId || slaughter?.sale?.financialSaleId
+      if (linkedSaleId) {
+        await sales.remove(linkedSaleId)
+      }
+      const linkedSales = sales.items.filter(
+        (s) => s.source_type === 'SLAUGHTER' && s.source_id === id,
+      )
+      for (const s of linkedSales) {
+        await sales.remove(s.id)
       }
 
-      // Restaura quantidade de animais no lote caso ainda exista
+      // 2. DEVOLVER as aves ao lote ativo (REGRA CRÍTICA: nunca apagar sem devolver)
       if (slaughter?.lotId && slaughter.quantityAnimals) {
         const lot = lots.items.find((l) => l.id === slaughter.lotId)
         if (lot) {
+          const restoredQty = (lot.currentQuantity || 0) + slaughter.quantityAnimals
           await lots.update(lot.id, {
-            currentQuantity: (lot.currentQuantity || 0) + slaughter.quantityAnimals,
-            status: lot.status === 'Abatido' ? 'Ativo' : lot.status,
+            currentQuantity: restoredQty,
+            status: lot.status === 'Abatido' && restoredQty > 0 ? 'Ativo' : lot.status,
+          })
+        }
+      }
+
+      // 3. Se era animal individual, reativa o animal
+      if (slaughter?.animalId) {
+        const animal = animals.items.find((a) => a.id === slaughter.animalId)
+        if (animal) {
+          await animals.update(animal.id, {
+            status: 'Ativo',
+            notes: animal.notes
+              ?.replace(new RegExp(`\\|?\\s*Abatido em [^)]+\\(Abate #${id}\\)`, 'g'), '')
+              .trim(),
           })
         }
       }
 
       return { error: null }
     },
-    [slaughterings, sales, lots],
+    [slaughterings, sales, lots, animals],
   )
 
   return {
@@ -1570,7 +1599,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
     slaughterings: slaughterings.items,
     setSlaughterings: slaughterings.setItems,
     addSlaughtering,
-    updateSlaughtering: slaughterings.update,
+    updateSlaughtering,
     deleteSlaughtering,
     selectedPeriod,
     setSelectedPeriod,
