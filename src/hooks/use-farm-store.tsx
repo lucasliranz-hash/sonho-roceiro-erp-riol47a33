@@ -154,20 +154,42 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const addFeedConsumption = useCallback(
     async (feed: Omit<FeedConsumption, 'id' | 'totalCost'>) => {
       const totalCost = Number((feed.quantityKg * feed.costPerKg).toFixed(2))
-      const { error } = await feedLogs.add({ ...feed, id: `fc-${Date.now()}`, totalCost })
+      const recordId = `fc-${Date.now()}`
+      const { error } = await feedLogs.add({ ...feed, id: recordId, totalCost })
       if (error) return { error }
       if (feed.inventoryItemId) {
         const item = inventory.items.find((i) => i.id === feed.inventoryItemId)
         if (item) {
+          const newBalance = Math.max(0, item.currentStock - feed.quantityKg)
           await inventory.update(feed.inventoryItemId, {
-            currentStock: Math.max(0, item.currentStock - feed.quantityKg),
+            currentStock: Number(newBalance.toFixed(3)),
             lastUpdated: new Date().toISOString().split('T')[0],
           })
+
+          // Registrar movimentação de saída no histórico de estoque
+          await stockMovements.add({
+            id: `sm-${Date.now()}`,
+            date: feed.date || new Date().toISOString().split('T')[0],
+            inventoryItemId: item.id,
+            inventoryItemName: item.name,
+            type: 'saida',
+            movementType: 'Consumo',
+            quantity: feed.quantityKg,
+            unit: item.unit,
+            balanceAfter: Number(newBalance.toFixed(3)),
+            unitValue: feed.costPerKg,
+            totalValue: totalCost,
+            lotId: feed.lotId || undefined,
+            lotName: feed.lotName || undefined,
+            notes: feed.notes || undefined,
+            allocations: feed.allocations,
+            allocation_method: feed.allocation_method,
+          } as any)
         }
       }
-      return { error: null }
+      return { error: null, id: recordId }
     },
-    [feedLogs, inventory],
+    [feedLogs, inventory, stockMovements],
   )
 
   // Compra/Entrada de ração: registra compra, atualiza estoque (+=), custo médio, e opcionalmente gera despesa CAPEX/OPEX
@@ -738,14 +760,38 @@ function useFarmStoreImpl(orgId: string | undefined) {
       // Only restock if it was a consumption record (not a purchase)
       if (f && f.inventoryItemId && (f as any).recordType !== 'purchase') {
         const item = inventory.items.find((i) => i.id === f.inventoryItemId)
-        if (item)
+        if (item) {
+          const newBalance = Number(
+            ((item.currentStock || 0) + Number(f.quantityKg || 0)).toFixed(3),
+          )
           await inventory.update(f.inventoryItemId, {
-            currentStock: item.currentStock + f.quantityKg,
+            currentStock: newBalance,
+            lastUpdated: new Date().toISOString().split('T')[0],
           })
+          // Registrar movimentação de estorno no estoque para auditoria
+          await stockMovements.add({
+            id: `sm-${Date.now()}`,
+            date: new Date().toISOString().split('T')[0],
+            inventoryItemId: item.id,
+            inventoryItemName: item.name,
+            type: 'entrada',
+            movementType: 'Devolução',
+            quantity: f.quantityKg,
+            unit: item.unit,
+            balanceAfter: newBalance,
+            unitValue: f.costPerKg || item.averageCost || 0,
+            totalValue: Number(
+              ((f.quantityKg || 0) * (f.costPerKg || item.averageCost || 0)).toFixed(2),
+            ),
+            lotId: f.lotId || undefined,
+            lotName: f.lotName || undefined,
+            notes: `Estorno de exclusão de consumo (${id})`,
+          } as any)
+        }
       }
       return { error: null }
     },
-    [feedLogs, inventory],
+    [feedLogs, inventory, stockMovements],
   )
 
   const updateFeedRecord = useCallback(
@@ -762,8 +808,10 @@ function useFarmStoreImpl(orgId: string | undefined) {
         const item = inventory.items.find((i) => i.id === old.inventoryItemId)
         if (item) {
           const diff = old.quantityKg - updates.quantityKg
+          const newBalance = Math.max(0, (item.currentStock || 0) + diff)
           await inventory.update(old.inventoryItemId, {
-            currentStock: Math.max(0, item.currentStock + diff),
+            currentStock: Number(newBalance.toFixed(3)),
+            lastUpdated: new Date().toISOString().split('T')[0],
           })
         }
       }

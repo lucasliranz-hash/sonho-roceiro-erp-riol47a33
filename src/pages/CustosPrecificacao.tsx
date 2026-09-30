@@ -525,15 +525,41 @@ export default function CustosPrecificacao() {
       selectedLotId ? lotId === selectedLotId : !!lotId && lotIds.includes(lotId)
 
     // --- Sub-bloco A: CUSTOS DIRETOS ---
-    // Ração: feedLogs (não compras) no período e do lote/atividade
-    const racaoLogs = feedLogs.filter(
-      (f) =>
-        (f as any).recordType !== 'purchase' &&
-        inPeriod(f.date) &&
-        (selectedLotId
-          ? f.lotId === selectedLotId
-          : lotIds.includes(f.lotId || '') || f.activityId === selectedActivityId),
-    )
+    // Ração: feedLogs (não compras) no período e do lote/atividade (incluindo rateios)
+    const racaoLogs = feedLogs
+      .filter((f) => (f as any).recordType !== 'purchase' && inPeriod(f.date))
+      .map((f) => {
+        if (f.allocations && Array.isArray(f.allocations) && f.allocations.length > 0) {
+          if (selectedLotId) {
+            const match = f.allocations.find((a) => a.lotId === selectedLotId)
+            if (match) {
+              return {
+                ...f,
+                quantityKg: match.quantityKg,
+                totalCost: match.cost,
+              }
+            }
+            return null
+          }
+          // Sem selectedLotId, soma os lotes da atividade
+          const matches = f.allocations.filter((a) => lotIds.includes(a.lotId))
+          if (matches.length > 0) {
+            const sumKg = matches.reduce((acc, m) => acc + m.quantityKg, 0)
+            const sumCost = matches.reduce((acc, m) => acc + m.cost, 0)
+            return {
+              ...f,
+              quantityKg: sumKg,
+              totalCost: sumCost,
+            }
+          }
+          return null
+        }
+        if (selectedLotId) {
+          return f.lotId === selectedLotId ? f : null
+        }
+        return lotIds.includes(f.lotId || '') || f.activityId === selectedActivityId ? f : null
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null)
     const racaoValue = racaoLogs.reduce((a, f) => a + (f.totalCost || 0), 0)
 
     // Sanidade

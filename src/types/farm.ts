@@ -124,6 +124,19 @@ export interface InventoryItem {
   reconstitution_allowed?: boolean // Produto requer/permite reconstituição
 }
 
+export type FeedAllocationMethod = 'manual' | 'by_animals' | 'by_biomass'
+
+export interface FeedAllocationItem {
+  lotId: string
+  lotName: string
+  quantityKg: number
+  percentage?: number
+  cost: number
+  animalCount?: number
+  totalBiomassKg?: number
+  notes?: string
+}
+
 export interface FeedConsumption {
   id: string
   date: string
@@ -131,13 +144,15 @@ export interface FeedConsumption {
   lotName?: string
   activityId?: string
   activityName?: string
-  destinationType?: 'lote' | 'atividade' | 'geral'
+  destinationType?: 'lote' | 'atividade' | 'geral' | 'rateio'
   quantityKg: number
   inventoryItemId?: string
   inventoryItemName?: string
   costPerKg: number
   totalCost: number
   notes?: string
+  allocation_method?: FeedAllocationMethod
+  allocations?: FeedAllocationItem[]
 }
 
 export interface FeedPurchase {
@@ -406,6 +421,8 @@ export interface StockMovement {
   notes?: string
   generateExpense?: boolean
   user?: string
+  allocations?: FeedAllocationItem[]
+  allocation_method?: FeedAllocationMethod
   // Campos específicos de Embalagem, Lote Fabricante e Validade
   package_quantity?: number
   value_per_package?: number

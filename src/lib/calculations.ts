@@ -124,10 +124,20 @@ export function computeLotCosts(
 ): LotCostSummary {
   const lotExpenses = expenses.filter((e) => e.lotId === lot.id)
   const lotSales = sales.filter((s) => s.lotId === lot.id)
-  const lotFeedLogs = feedLogs.filter((f) => f.lotId === lot.id)
   const lotSanitary = sanitaryApplications.filter((s) => s.lot_id === lot.id)
-
-  const feedCost = lotFeedLogs.reduce((acc, f) => acc + (f.totalCost || 0), 0)
+  // Considera tanto consumo direto para o lote quanto rateios que contemplem este lote
+  // Ignora registros de compras (recordType === 'purchase')
+  const validFeedLogs = feedLogs.filter((f) => (f as any).recordType !== 'purchase')
+  const feedCost = validFeedLogs.reduce((acc, f) => {
+    if (f.allocations && Array.isArray(f.allocations) && f.allocations.length > 0) {
+      const match = f.allocations.find((a) => a.lotId === lot.id)
+      return acc + (match ? Number(match.cost || 0) : 0)
+    }
+    if (f.lotId === lot.id) {
+      return acc + Number(f.totalCost || 0)
+    }
+    return acc
+  }, 0)
   const sanitaryCost = lotSanitary.reduce((acc, s) => acc + (s.total_cost || 0), 0)
   const opexCost = lotExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
   const acquisitionCost = lot.acquisitionCost || 0
@@ -187,10 +197,21 @@ export function computeLotAccumulatedCostPerAnimal(
   sanitaryApplications: SanitaryApplication[] = [],
 ): LotAccumulatedCostResult {
   const lotExpenses = expenses.filter((e) => e.lotId === lot.id)
-  const lotFeedLogs = feedLogs.filter((f) => f.lotId === lot.id)
   const lotSanitary = sanitaryApplications.filter((s) => s.lot_id === lot.id)
 
-  const feedCost = lotFeedLogs.reduce((acc, f) => acc + (f.totalCost || 0), 0)
+  // Considera tanto consumo direto para o lote quanto rateios que contemplem este lote
+  // Ignora registros de compras (recordType === 'purchase')
+  const validFeedLogs = feedLogs.filter((f) => (f as any).recordType !== 'purchase')
+  const feedCost = validFeedLogs.reduce((acc, f) => {
+    if (f.allocations && Array.isArray(f.allocations) && f.allocations.length > 0) {
+      const match = f.allocations.find((a) => a.lotId === lot.id)
+      return acc + (match ? Number(match.cost || 0) : 0)
+    }
+    if (f.lotId === lot.id) {
+      return acc + Number(f.totalCost || 0)
+    }
+    return acc
+  }, 0)
   const sanitaryCost = lotSanitary.reduce((acc, s) => acc + (s.total_cost || 0), 0)
   const opexCost = lotExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
   const acquisitionCost = lot.acquisitionCost || 0

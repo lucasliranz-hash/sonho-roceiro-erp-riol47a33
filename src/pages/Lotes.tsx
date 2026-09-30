@@ -214,7 +214,28 @@ export default function Lotes() {
     const lotMortality = mortality.filter((m) => m.lotId === selectedLot.id)
     const lotExpenses = expenses.filter((e) => e.lotId === selectedLot.id)
     const lotSales = sales.filter((s) => s.lotId === selectedLot.id)
-    const lotFeedLogs = feedLogs.filter((f) => f.lotId === selectedLot.id)
+    // Considera tanto consumo direto para o lote quanto rateios que contemplem este lote (sem compras)
+    const validFeedLogs = feedLogs.filter((f) => (f as any).recordType !== 'purchase')
+    const lotFeedLogs = validFeedLogs
+      .map((f) => {
+        if (f.allocations && Array.isArray(f.allocations) && f.allocations.length > 0) {
+          const match = f.allocations.find((a) => a.lotId === selectedLot.id)
+          if (match) {
+            return {
+              ...f,
+              quantityKg: match.quantityKg,
+              totalCost: match.cost,
+              isAllocated: true,
+            }
+          }
+          return null
+        }
+        if (f.lotId === selectedLot.id) {
+          return f
+        }
+        return null
+      })
+      .filter((f): f is NonNullable<typeof f> => f !== null)
 
     // Build sanitary applications list for this lot
     const lotVaccinations = vaccinations.filter(
@@ -510,6 +531,7 @@ export default function Lotes() {
                               <span>
                                 {f.date} — {f.quantityKg} kg{' '}
                                 {f.inventoryItemName ? `(${f.inventoryItemName})` : ''}
+                                {(f as any).isAllocated ? ' [Rateio]' : ''}
                               </span>
                               <span className="font-medium text-foreground">
                                 R$ {(f.totalCost || 0).toFixed(2)}

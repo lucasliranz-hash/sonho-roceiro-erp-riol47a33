@@ -31,7 +31,7 @@ interface StockMovementDialogProps {
 }
 
 export function StockMovementDialog({ open, onOpenChange, type }: StockMovementDialogProps) {
-  const { inventory, addStockMovement, updateInventory } = useFarmStore()
+  const { inventory, lots, addStockMovement, updateInventory, addFeedConsumption } = useFarmStore()
 
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [inventoryItemId, setInventoryItemId] = useState('')
@@ -41,6 +41,7 @@ export function StockMovementDialog({ open, onOpenChange, type }: StockMovementD
   const [notes, setNotes] = useState('')
   const [supplier, setSupplier] = useState('')
   const [documentNumber, setDocumentNumber] = useState('')
+  const [movementLotId, setMovementLotId] = useState('')
 
   // Sanitary specialized entry fields
   const [packageQty, setPackageQty] = useState('1')
@@ -76,6 +77,7 @@ export function StockMovementDialog({ open, onOpenChange, type }: StockMovementD
     setNotes('')
     setSupplier('')
     setDocumentNumber('')
+    setMovementLotId('')
     setPackageQty('1')
     setValPerPackage('')
     setManufacturerBatch('')
@@ -177,7 +179,57 @@ export function StockMovementDialog({ open, onOpenChange, type }: StockMovementD
       manufacturer_batch: manufacturerBatch.trim() || undefined,
       manufacturing_date: manufacturingDate || undefined,
       expiration_date: expirationDate || undefined,
+      lotId: movementLotId || undefined,
+      lotName: lots.find((l) => l.id === movementLotId)?.name || undefined,
       purchase_date: purchaseDate || undefined,
+    }
+
+    // Se for saída por consumo de ração e o usuário vinculou a um lote, registrar apropriando custo no lote
+    const isFeedItem =
+      selectedItem.category?.toLowerCase().includes('ração') ||
+      selectedItem.category?.toLowerCase().includes('racao') ||
+      selectedItem.name?.toLowerCase().includes('ração') ||
+      selectedItem.name?.toLowerCase().includes('racao')
+
+    if (type === 'saida' && movementType === 'Consumo' && isFeedItem && movementLotId) {
+      const targetLot = lots.find((l) => l.id === movementLotId)
+      await addFeedConsumption({
+        date,
+        inventoryItemId: selectedItem.id,
+        inventoryItemName: selectedItem.name,
+        quantityKg: moveQty,
+        costPerKg: Number(unitCost.toFixed(4)),
+        destinationType: 'lote',
+        lotId: movementLotId,
+        lotName: targetLot?.name,
+        notes: notes.trim() || undefined,
+        allocations: targetLot
+          ? [
+              {
+                lotId: targetLot.id,
+                lotName: targetLot.name,
+                quantityKg: moveQty,
+                percentage: 100,
+                cost: Number(totalVal.toFixed(2)),
+                animalCount: targetLot.currentQuantity || targetLot.initialQuantity,
+              },
+            ]
+          : undefined,
+      })
+
+      await logAudit('INSERT', 'farm_feed_consumption', 'new', null, {
+        movement: movementPayload,
+        lotId: movementLotId,
+      })
+
+      toast({
+        title: 'Saída e Apropriação de Custo registradas! 📤',
+        description: `Estoque -${moveQty} ${selectedItem.unit}. Lote ${targetLot?.name} recebeu + R$ ${totalVal.toFixed(2)} de custo de ração.`,
+      })
+
+      resetForm()
+      onOpenChange(false)
+      return
     }
 
     const { error: moveError } = await addStockMovement(movementPayload)
@@ -436,6 +488,28 @@ export function StockMovementDialog({ open, onOpenChange, type }: StockMovementD
                   </strong>
                 </div>
               )}
+            </div>
+          )}
+
+          {type === 'saida' && movementType === 'Consumo' && (
+            <div>
+              <Label className="text-xs">Apropriar Custo ao Lote (Opcional)</Label>
+              <Select value={movementLotId} onValueChange={setMovementLotId}>
+                <SelectTrigger className="h-10 text-xs rounded-xl">
+                  <SelectValue placeholder="Selecione um lote (opcional)..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Nenhum (Consumo Geral)</SelectItem>
+                  {lots.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.code} • {l.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <span className="text-[10px] text-muted-foreground block mt-0.5">
+                Se selecionado, o custo desta saída será apropriado diretamente ao custo do lote.
+              </span>
             </div>
           )}
 
