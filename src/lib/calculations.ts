@@ -164,6 +164,58 @@ export function computeLotCosts(
   }
 }
 
+export interface LotAccumulatedCostResult {
+  totalCost: number
+  feedCost: number
+  acquisitionCost: number
+  opexCost: number
+  sanitaryCost: number
+  currentQuantity: number
+  costPerBirdAlive: number
+}
+
+/**
+ * Calcula o custo acumulado de um lote respeitando a metodologia do SR Gestão:
+ * Custos de aquisição + Ração consumida + Despesas vinculadas ao lote + Aplicações sanitárias.
+ * Retorna o custo por ave viva para que seja multiplicado pela quantidade de animais abatidos,
+ * garantindo NÃO duplicar custos de produção no momento do abate.
+ */
+export function computeLotAccumulatedCostPerAnimal(
+  lot: Lot,
+  expenses: Expense[],
+  feedLogs: FeedConsumption[] = [],
+  sanitaryApplications: SanitaryApplication[] = [],
+): LotAccumulatedCostResult {
+  const lotExpenses = expenses.filter((e) => e.lotId === lot.id)
+  const lotFeedLogs = feedLogs.filter((f) => f.lotId === lot.id)
+  const lotSanitary = sanitaryApplications.filter((s) => s.lot_id === lot.id)
+
+  const feedCost = lotFeedLogs.reduce((acc, f) => acc + (f.totalCost || 0), 0)
+  const sanitaryCost = lotSanitary.reduce((acc, s) => acc + (s.total_cost || 0), 0)
+  const opexCost = lotExpenses.reduce((acc, e) => acc + (e.totalValue || 0), 0)
+  const acquisitionCost = lot.acquisitionCost || 0
+  const totalCost = opexCost + feedCost + acquisitionCost + sanitaryCost
+
+  // Se o lote tiver aves vivas, divide por elas. Se não, usa a quantidade inicial como fallback seguro
+  const divisor =
+    lot.currentQuantity > 0
+      ? lot.currentQuantity
+      : lot.initialQuantity > 0
+        ? lot.initialQuantity
+        : 1
+  const costPerBirdAlive = round2(totalCost / divisor)
+
+  return {
+    totalCost: round2(totalCost),
+    feedCost: round2(feedCost),
+    acquisitionCost: round2(acquisitionCost),
+    opexCost: round2(opexCost),
+    sanitaryCost: round2(sanitaryCost),
+    currentQuantity: lot.currentQuantity,
+    costPerBirdAlive,
+  }
+}
+
 export interface FinancialSummary {
   operationalRevenue: number
   operationalExpenses: number

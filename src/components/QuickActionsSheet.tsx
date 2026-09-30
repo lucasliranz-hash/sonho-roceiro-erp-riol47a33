@@ -14,6 +14,13 @@ interface QuickActionsSheetProps {
 }
 
 const shortcuts = [
+  {
+    type: 'abate',
+    label: 'Abate',
+    icon: Scale,
+    color: 'bg-rose-100 text-rose-800',
+    path: '/abates',
+  },
   { type: 'racao', label: 'Ração', icon: Wheat, color: 'bg-amber-100 text-amber-800' },
   { type: 'pesagem', label: 'Pesagem', icon: Scale, color: 'bg-blue-100 text-blue-800' },
   { type: 'mortalidade', label: 'Mortalidade', icon: Skull, color: 'bg-rose-100 text-rose-800' },

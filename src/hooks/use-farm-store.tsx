@@ -32,6 +32,7 @@ import {
   HealthOccurrence,
   HealthProtocol,
   ProtocolAssignment,
+  Slaughtering,
 } from '@/types/farm'
 
 function useFarmStoreImpl(orgId: string | undefined) {
@@ -89,6 +90,11 @@ function useFarmStoreImpl(orgId: string | undefined) {
     FARM_TABLES.protocolAssignments,
     orgId,
     'protocolAssignments',
+  )
+  const slaughterings = useSupabaseEntity<Slaughtering>(
+    FARM_TABLES.slaughterings,
+    orgId,
+    'slaughterings',
   )
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodFilter>('Todos')
@@ -1153,6 +1159,231 @@ function useFarmStoreImpl(orgId: string | undefined) {
     [protocolAssignments],
   )
 
+  // ==========================================
+  // ABATES (INTEGRAÇÃO ESTOQUE, PRODUÇÃO & FINANCEIRO)
+  // ==========================================
+  const addSlaughtering = useCallback(
+    async (slaughterData: Omit<Slaughtering, 'id'>): Promise<{ error: any; id?: string }> => {
+      const slaughterId = `sla-${Date.now()}`
+      let inventoryCarneItemId = slaughterData.inventoryCarneItemId
+      let movementId: string | undefined = undefined
+      let financialSaleId: string | undefined = undefined
+
+      // 1. Atualizar estoque do animal vivo (Lote ou Animal)
+      // REGRA: retirar o animal abatido do estoque/rebanho (baixa com histórico, NÃO simplesmente apagar)
+      if (slaughterData.lotId) {
+        const lot = lots.items.find((l) => l.id === slaughterData.lotId)
+        if (lot) {
+          const newCurrentQty = Math.max(
+            0,
+            (lot.currentQuantity || 0) - slaughterData.quantityAnimals,
+          )
+          const newStatus = newCurrentQty === 0 ? ('Abatido' as const) : lot.status
+          await lots.update(lot.id, {
+            currentQuantity: newCurrentQty,
+            status: newStatus,
+          })
+        }
+      }
+      if (slaughterData.animalId) {
+        const animal = animals.items.find((a) => a.id === slaughterData.animalId)
+        if (animal) {
+          await animals.update(animal.id, {
+            status: 'Descartado' as const, // preserva histórico como abatido/descartado
+            notes: `${animal.notes ? animal.notes + ' | ' : ''}Abatido em ${slaughterData.date} (Abate #${slaughterId})`,
+          })
+        }
+      }
+
+      // 2. ENTRADA DE CARNE NO ESTOQUE
+      // REGRA: criar automaticamente uma ENTRADA de produto no estoque de carne/produto abatido,
+      // quantidade = peso da carcaça em kg, vinculada ao lançamento do abate.
+      // Custo unitário do kg da carcaça = slaughterData.costPerCarcassKg
+      const carneProductName = `Carne / Carcaça - ${slaughterData.species || 'Aves'}`
+      let targetCarneItem = inventory.items.find(
+        (i) =>
+          i.id === inventoryCarneItemId ||
+          ((i.category === 'Carne' ||
+            i.category === 'Aves Abatidas' ||
+            i.category === 'Produtos Abatidos') &&
+            i.name.toLowerCase().includes((slaughterData.species || '').toLowerCase())),
+      )
+
+      if (!targetCarneItem) {
+        targetCarneItem = inventory.items.find(
+          (i) => i.name.toLowerCase() === carneProductName.toLowerCase(),
+        )
+      }
+
+      if (!targetCarneItem) {
+        // Criar novo item no estoque se não existir
+        const newCarneId = `inv-carne-${Date.now()}`
+        await inventory.add({
+          id: newCarneId,
+          name: carneProductName,
+          category: 'Carne',
+          unit: 'KG',
+          currentStock: slaughterData.carcassWeightKg,
+          minStock: 0,
+          averageCost: slaughterData.costPerCarcassKg,
+          lastUpdated: slaughterData.date,
+          notes: `Gerado automaticamente pelo abate #${slaughterId}`,
+        })
+        inventoryCarneItemId = newCarneId
+      } else {
+        inventoryCarneItemId = targetCarneItem.id
+        // Recalcular saldo e custo médio ponderado
+        const oldStock = targetCarneItem.currentStock || 0
+        const oldAvg = targetCarneItem.averageCost || 0
+        const newStock = oldStock + slaughterData.carcassWeightKg
+        const incomingValue = slaughterData.totalCost
+        let newAvg = oldAvg
+        if (oldStock <= 0) {
+          newAvg = slaughterData.costPerCarcassKg
+        } else if (newStock > 0) {
+          newAvg = Number(((oldStock * oldAvg + incomingValue) / newStock).toFixed(4))
+        }
+        await inventory.update(targetCarneItem.id, {
+          currentStock: newStock,
+          averageCost: newAvg,
+          lastUpdated: slaughterData.date,
+        })
+      }
+
+      // Registrar movimento de estoque da ENTRADA da carne
+      movementId = `sm-sla-${Date.now()}`
+      await stockMovements.add({
+        id: movementId,
+        date: slaughterData.date,
+        inventoryItemId: inventoryCarneItemId,
+        inventoryItemName: carneProductName,
+        type: 'entrada',
+        movementType: 'Entrada por Abate',
+        quantity: slaughterData.carcassWeightKg,
+        unit: 'KG',
+        balanceAfter: (targetCarneItem?.currentStock || 0) + slaughterData.carcassWeightKg,
+        unitValue: slaughterData.costPerCarcassKg,
+        totalValue: slaughterData.totalCost,
+        lotId: slaughterData.lotId,
+        lotName: slaughterData.lotName,
+        notes: `Entrada de carcaça referente ao abate #${slaughterId} (${slaughterData.quantityAnimals} aves, rendimento ${slaughterData.carcassYieldPercent.toFixed(1)}%)`,
+      })
+
+      // 3. SE DESTINO === 'Venda', REGISTRAR VENDA / FINANCEIRO E SAÍDA DE ESTOQUE VENDIDO
+      if (slaughterData.destination === 'Venda' && slaughterData.sale) {
+        financialSaleId = `sal-sla-${Date.now()}`
+        const saleTotalPrice =
+          slaughterData.sale.totalPrice ||
+          Number((slaughterData.sale.quantityKg * slaughterData.sale.pricePerKg).toFixed(2))
+        const isPaid = slaughterData.sale.paymentStatus === 'Pago'
+
+        // Registro da receita em Vendas (farm_sales) com source_type 'SLAUGHTER'
+        await sales.add({
+          id: financialSaleId,
+          date: slaughterData.sale.saleDate || slaughterData.date,
+          customerName: slaughterData.sale.customerName || 'Cliente Abate',
+          product: `Carne (${slaughterData.species})`,
+          lotId: slaughterData.lotId,
+          lotName: slaughterData.lotName,
+          quantity: slaughterData.sale.quantityKg,
+          weightKg: slaughterData.sale.quantityKg,
+          unitPrice: slaughterData.sale.pricePerKg,
+          totalPrice: saleTotalPrice,
+          paymentMethod: slaughterData.sale.paymentMethod || 'Pix',
+          isPaid,
+          source_type: 'SLAUGHTER',
+          source_id: slaughterId,
+          notes: slaughterData.sale.notes || `Venda direta do abate #${slaughterId}`,
+        })
+
+        // Se a venda baixou a carne imediatamente do estoque:
+        if (inventoryCarneItemId) {
+          const currentCarne = inventory.items.find((i) => i.id === inventoryCarneItemId)
+          const stockAfterSale = Math.max(
+            0,
+            (currentCarne ? currentCarne.currentStock : slaughterData.carcassWeightKg) -
+              slaughterData.sale.quantityKg,
+          )
+          await inventory.update(inventoryCarneItemId, {
+            currentStock: stockAfterSale,
+            lastUpdated: slaughterData.sale.saleDate || slaughterData.date,
+          })
+          // Movimento de saída por venda
+          await stockMovements.add({
+            id: `sm-sale-${Date.now()}`,
+            date: slaughterData.sale.saleDate || slaughterData.date,
+            inventoryItemId: inventoryCarneItemId,
+            inventoryItemName: carneProductName,
+            type: 'saida',
+            movementType: 'Venda de Abate',
+            quantity: slaughterData.sale.quantityKg,
+            unit: 'KG',
+            balanceAfter: stockAfterSale,
+            unitValue: slaughterData.costPerCarcassKg,
+            totalValue: Number(
+              (slaughterData.sale.quantityKg * slaughterData.costPerCarcassKg).toFixed(2),
+            ),
+            lotId: slaughterData.lotId,
+            lotName: slaughterData.lotName,
+            notes: `Saída de carcaça vendida ao cliente ${slaughterData.sale.customerName} (Abate #${slaughterId})`,
+          })
+        }
+      }
+
+      // 4. Salvar registro final do Abate
+      const fullRecord: Slaughtering = {
+        ...slaughterData,
+        id: slaughterId,
+        inventoryCarneItemId,
+        inventoryMovementId: movementId,
+        sale: slaughterData.sale
+          ? {
+              ...slaughterData.sale,
+              financialSaleId,
+            }
+          : undefined,
+      }
+
+      const { error } = await slaughterings.add(fullRecord)
+      return { error, id: slaughterId }
+    },
+    [slaughterings, lots, animals, inventory, stockMovements, sales],
+  )
+
+  const deleteSlaughtering = useCallback(
+    async (id: string) => {
+      const slaughter = slaughterings.items.find((s) => s.id === id)
+      const { error } = await slaughterings.remove(id)
+      if (error) return { error }
+
+      // Se havia venda vinculada no financeiro, remove
+      if (slaughter?.sale?.financialSaleId) {
+        await sales.remove(slaughter.sale.financialSaleId)
+      } else {
+        const linkedSale = sales.items.find(
+          (s) => s.source_type === 'SLAUGHTER' && s.source_id === id,
+        )
+        if (linkedSale) {
+          await sales.remove(linkedSale.id)
+        }
+      }
+
+      // Restaura quantidade de animais no lote caso ainda exista
+      if (slaughter?.lotId && slaughter.quantityAnimals) {
+        const lot = lots.items.find((l) => l.id === slaughter.lotId)
+        if (lot) {
+          await lots.update(lot.id, {
+            currentQuantity: (lot.currentQuantity || 0) + slaughter.quantityAnimals,
+            status: lot.status === 'Abatido' ? 'Ativo' : lot.status,
+          })
+        }
+      }
+
+      return { error: null }
+    },
+    [slaughterings, sales, lots],
+  )
+
   return {
     activities: activities.items,
     setActivities: activities.setItems,
@@ -1287,6 +1518,12 @@ function useFarmStoreImpl(orgId: string | undefined) {
     addProtocolAssignment,
     updateProtocolAssignment,
     deleteProtocolAssignment,
+    // Abates exports
+    slaughterings: slaughterings.items,
+    setSlaughterings: slaughterings.setItems,
+    addSlaughtering,
+    updateSlaughtering: slaughterings.update,
+    deleteSlaughtering,
     selectedPeriod,
     setSelectedPeriod,
     selectedLotId,

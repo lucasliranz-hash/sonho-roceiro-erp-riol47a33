@@ -43,6 +43,7 @@ export const navGroups: NavGroup[] = [
     label: 'PRODUÇÃO',
     items: [
       { label: 'Lotes', path: '/lotes', icon: Layers },
+      { label: 'Abates', path: '/abates', icon: Scale },
       { label: 'Sanidade', path: '/sanidade', icon: HeartPulse },
       { label: 'Ração', path: '/racao', icon: Wheat },
       { label: 'Pesagens', path: '/pesagens', icon: Scale },

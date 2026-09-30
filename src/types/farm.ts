@@ -675,3 +675,87 @@ export interface SanitaryApplication {
   details?: string
   stock_deducted?: boolean
 }
+
+// ==========================================
+// ABATES (SLAUGHTERING) & SUBPRODUTOS
+// ==========================================
+
+export type SlaughterDestination = 'Consumo próprio' | 'Venda'
+
+export type SlaughterCostCategory =
+  | 'Mão de obra'
+  | 'Abate/frigorífico'
+  | 'Transporte'
+  | 'Taxas'
+  | 'Embalagem'
+  | 'Gelo/refrigeração'
+  | 'Outros custos'
+
+export interface SlaughterCostItem {
+  id: string
+  description: string
+  category: SlaughterCostCategory
+  amount: number
+}
+
+export type SubproductType = 'Miúdos' | 'Pés' | 'Cabeça' | 'Pele' | 'Ossos' | 'Vísceras' | 'Outros'
+
+export type SubproductDestination = 'Aproveitamento próprio' | 'Venda' | 'Descarte'
+
+export interface SlaughterSubproduct {
+  id: string
+  type: SubproductType
+  destination: SubproductDestination
+  quantityKg: number
+  notes?: string
+  estimatedValue?: number
+}
+
+export interface SlaughterSaleData {
+  customerName: string
+  saleDate: string
+  quantityKg: number
+  pricePerKg: number
+  totalPrice: number
+  paymentMethod: string
+  paymentStatus: 'Pendente' | 'Pago'
+  notes?: string
+  financialSaleId?: string
+}
+
+export interface Slaughtering {
+  id: string
+  organization_id?: string
+  property_id?: string
+  date: string
+  species: string // ex: Frango Caipira, Galinha, etc.
+  lotId?: string
+  lotName?: string
+  animalId?: string
+  animalCode?: string
+  quantityAnimals: number
+  totalLiveWeightKg: number
+  averageLiveWeightKg: number
+  carcassWeightKg: number
+  carcassYieldPercent: number // Rendimento de carcaça: (carcassWeight / totalLiveWeight) * 100
+  destination: SlaughterDestination
+  costs: SlaughterCostItem[]
+  slaughterOperationalCost: number // Soma dos custos de abate
+  accumulatedProductionCost: number // Custo acumulado do lote/animal antes do abate
+  totalCost: number // accumulatedProductionCost + slaughterOperationalCost
+  costPerCarcassKg: number // totalCost / carcassWeightKg
+  sale?: SlaughterSaleData
+  // Econômico (se venda)
+  revenue?: number
+  netProfit?: number // revenue - totalCost
+  marginPercent?: number // (netProfit / revenue) * 100
+  // Integrações registradas
+  inventoryCarneItemId?: string
+  inventoryMovementId?: string
+  subproducts?: SlaughterSubproduct[]
+  notes?: string
+  created_at?: string
+  updated_at?: string
+  deleted_at?: string | null
+  deleted_by?: string
+}

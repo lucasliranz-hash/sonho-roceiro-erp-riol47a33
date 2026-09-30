@@ -1,6 +1,7 @@
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { Card, CardContent } from '@/components/ui/card'
 import { Wheat, Scale, Skull, Egg, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 export default function Producao() {
   const { feedLogs, weighings, mortality, eggs, lots } = useFarmStore()
@@ -15,13 +16,22 @@ export default function Producao() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div>
-        <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
-          <TrendingUp className="w-6 h-6 text-primary" /> Produção Geral
-        </h1>
-        <p className="text-xs text-muted-foreground mt-1">
-          Visão consolidada da produção de todas as atividades da propriedade.
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-extrabold tracking-tight flex items-center gap-2">
+            <TrendingUp className="w-6 h-6 text-primary" /> Produção Geral
+          </h1>
+          <p className="text-xs text-muted-foreground mt-1">
+            Visão consolidada da produção de todas as atividades da propriedade.
+          </p>
+        </div>
+        <Link
+          to="/abates"
+          className="text-xs font-bold bg-primary hover:bg-primary/90 text-white px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1.5 self-start sm:self-auto"
+        >
+          <Scale className="w-3.5 h-3.5" />
+          Módulo de Abates
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

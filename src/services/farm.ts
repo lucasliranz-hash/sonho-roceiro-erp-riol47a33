@@ -27,6 +27,7 @@ export const FARM_TABLES = {
   healthOccurrences: 'farm_health_occurrences',
   healthProtocols: 'farm_health_protocols',
   protocolAssignments: 'farm_protocol_assignments',
+  slaughterings: 'farm_slaughterings',
 } as const
 
 export type FarmTableName = (typeof FARM_TABLES)[keyof typeof FARM_TABLES]

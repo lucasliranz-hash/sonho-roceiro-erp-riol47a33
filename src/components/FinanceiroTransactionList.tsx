@@ -91,6 +91,7 @@ const SOURCE_LABELS: Record<string, string> = {
   STRUCTURE: 'Estrutura',
   ASSET: 'Patrimônio',
   INVENTORY_PURCHASE: 'Estoque',
+  SLAUGHTER: 'Abate',
   OTHER: 'Outros',
 }
 const SOURCE_ROUTES: Record<string, string> = {
@@ -98,6 +99,7 @@ const SOURCE_ROUTES: Record<string, string> = {
   STRUCTURE: '/estrutura',
   ASSET: '/patrimonio',
   INVENTORY_PURCHASE: '/estoque',
+  SLAUGHTER: '/abates',
 }
 
 export function FinanceiroTransactionList() {

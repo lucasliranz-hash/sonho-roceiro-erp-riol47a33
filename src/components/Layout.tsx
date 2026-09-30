@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Outlet, Link, useLocation } from 'react-router-dom'
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom'
 import { Menu, Bell, PlusCircle, ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
@@ -89,6 +89,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export default function Layout() {
+  const navigate = useNavigate()
   const { unreadCount } = useAlertsManager()
   const { profile, orgMember } = useAuth()
   const [quickModalOpen, setQuickModalOpen] = useState(false)
@@ -99,6 +100,10 @@ export default function Layout() {
   const unreadAlertsCount = unreadCount
 
   const handleQuickActionSelect = (action: string) => {
+    if (action === 'abate') {
+      navigate('/abates')
+      return
+    }
     setQuickActionType(action)
     setTimeout(() => setQuickModalOpen(true), 150)
   }

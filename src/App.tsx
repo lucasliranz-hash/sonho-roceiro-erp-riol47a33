@@ -30,6 +30,7 @@ import Vendas from './pages/Vendas'
 import ClientesFornecedores from './pages/ClientesFornecedores'
 import Financeiro from './pages/Financeiro'
 import Producao from './pages/Producao'
+import Abates from './pages/Abates'
 import Indicadores from './pages/Indicadores'
 import CustosPrecificacao from './pages/CustosPrecificacao'
 import Atividades from './pages/Atividades'
@@ -85,6 +86,7 @@ function App() {
                     <Route path="/parceiros" element={<ClientesFornecedores />} />
                     <Route path="/financeiro" element={<Financeiro />} />
                     <Route path="/producao" element={<Producao />} />
+                    <Route path="/abates" element={<Abates />} />
                     <Route path="/indicadores" element={<Indicadores />} />
                     <Route path="/custos" element={<CustosPrecificacao />} />
                     <Route path="/atividades" element={<Atividades />} />
