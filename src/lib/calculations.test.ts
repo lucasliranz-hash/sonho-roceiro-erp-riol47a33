@@ -150,4 +150,96 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
     expect(movement.mortality).toBe(0)
     expect(movement.liveQuantity).toBe(11)
   })
+
+  it('TESTE DE ACEITAÇÃO A: Lote 5 aves vivas -> vender 1 ave viva -> lote = 4. Cancelar venda -> lote = 5', () => {
+    const lot5: Lot = {
+      ...baseLot,
+      id: 'l-teste-a',
+      initialQuantity: 5,
+      currentQuantity: 5,
+    }
+
+    // 1. Sem eventos = 5 vivas
+    expect(computeLotLiveQuantity(lot5, [], [], [])).toBe(5)
+
+    // 2. Vender 1 ave viva
+    const saleLive: Sale = {
+      id: 'sal-live-1',
+      date: '2025-02-01',
+      customerName: 'Comprador A',
+      product: 'Frangos vivos',
+      birdType: 'LIVE',
+      lotId: 'l-teste-a',
+      quantity: 1,
+      unitPrice: 35,
+      totalPrice: 35,
+      paymentMethod: 'Pix',
+      isPaid: true,
+      source_type: 'MANUAL',
+    }
+
+    const movementAfterSale = computeLotAnimalMovement(lot5, [], [], [saleLive])
+    expect(movementAfterSale.otherExits).toBe(1)
+    expect(movementAfterSale.liveQuantity).toBe(4)
+    expect(computeLotLiveQuantity(lot5, [], [], [saleLive])).toBe(4)
+
+    // 3. Cancelar a venda (removida ou soft-delete com deleted_at)
+    const saleLiveDeleted: Sale = {
+      ...saleLive,
+      deleted_at: '2025-02-02T10:00:00Z',
+    } as any
+
+    const movementAfterCancel = computeLotAnimalMovement(lot5, [], [], [saleLiveDeleted])
+    expect(movementAfterCancel.otherExits).toBe(0)
+    expect(movementAfterCancel.liveQuantity).toBe(5)
+    expect(computeLotLiveQuantity(lot5, [], [], [saleLiveDeleted])).toBe(5)
+  })
+
+  it('TESTE DE ACEITAÇÃO B: Abater 1 ave -> lote vivo = 4. Vender essa ave abatida -> lote vivo CONTINUA 4 (sem dupla baixa)', () => {
+    const lot5: Lot = {
+      ...baseLot,
+      id: 'l-teste-b',
+      initialQuantity: 5,
+      currentQuantity: 5,
+    }
+
+    // 1. Abate de 1 ave
+    const slaughter: Slaughtering = {
+      id: 'sla-teste-b',
+      lotId: 'l-teste-b',
+      species: 'Frango',
+      date: '2025-02-05',
+      quantityAnimals: 1,
+      destination: 'Consumo próprio',
+      totalCost: 18.5,
+    }
+
+    const movementAfterSlaughter = computeLotAnimalMovement(lot5, [], [slaughter], [])
+    expect(movementAfterSlaughter.slaughter).toBe(1)
+    expect(movementAfterSlaughter.liveQuantity).toBe(4)
+
+    // 2. Venda da ave abatida (seja pelo fluxo de abate ou venda avulsa de carne/frango abatido)
+    const saleSlaughtered: Sale = {
+      id: 'sal-abat-1',
+      date: '2025-02-06',
+      customerName: 'Cliente Frango Abatido',
+      product: 'Frangos abatidos',
+      birdType: 'SLAUGHTERED',
+      lotId: 'l-teste-b',
+      slaughterId: 'sla-teste-b',
+      quantity: 1,
+      unitPrice: 30,
+      totalPrice: 30,
+      paymentMethod: 'Pix',
+      isPaid: true,
+      source_type: 'MANUAL',
+    }
+
+    // A venda de ave abatida NÃO deve gerar baixa no lote de ave viva (já foi baixada no abate)
+    const movementAfterSale = computeLotAnimalMovement(lot5, [], [slaughter], [saleSlaughtered])
+    expect(movementAfterSale.slaughter).toBe(1)
+    expect(movementAfterSale.otherExits).toBe(0) // Não baixou ave viva adicionalmente
+    expect(movementAfterSale.liveQuantity).toBe(4) // Saldo continua 4!
+    expect(computeLotLiveQuantity(lot5, [], [slaughter], [saleSlaughtered])).toBe(4)
+  })
 })

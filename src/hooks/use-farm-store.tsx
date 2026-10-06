@@ -370,17 +370,113 @@ function useFarmStoreImpl(orgId: string | undefined) {
   const addSale = useCallback(
     async (sale: Omit<Sale, 'id' | 'totalPrice'>) => {
       const newSaleId = `sal-${Date.now()}`
+      const quantity = Number(sale.quantity) || 1
+      const unitPrice = Number(sale.unitPrice) || 0
+      const totalPrice = Number((quantity * unitPrice).toFixed(2))
+
+      // 1. Apropriação de custo por ave / carcaça
+      let calculatedUnitCost: number | undefined = sale.unitCost
+      let calculatedTotalCost: number | undefined = sale.totalCost
+
+      if (sale.lotId && !calculatedUnitCost) {
+        const lot = lots.items.find((l) => l.id === sale.lotId)
+        if (lot) {
+          if (sale.birdType === 'SLAUGHTERED' && sale.slaughterId) {
+            const slaughter = slaughterings.items.find((s) => s.id === sale.slaughterId)
+            if (slaughter && slaughter.unitProductionCost) {
+              calculatedUnitCost = slaughter.unitProductionCost
+            } else if (slaughter && slaughter.totalCost && slaughter.quantityAnimals > 0) {
+              calculatedUnitCost = Number(
+                (slaughter.totalCost / slaughter.quantityAnimals).toFixed(2),
+              )
+            }
+          }
+          if (!calculatedUnitCost) {
+            const costRes = computeLotAccumulatedCostPerAnimal(
+              lot,
+              expenses.items,
+              feedLogs.items,
+              [],
+            )
+            calculatedUnitCost = costRes.costPerBirdAlive
+          }
+        }
+      }
+
+      if (calculatedUnitCost !== undefined && calculatedUnitCost > 0 && !calculatedTotalCost) {
+        calculatedTotalCost = Number((quantity * calculatedUnitCost).toFixed(2))
+      }
+
+      const estimatedProfit =
+        calculatedTotalCost !== undefined
+          ? Number((totalPrice - calculatedTotalCost).toFixed(2))
+          : undefined
+      const estimatedMargin =
+        totalPrice > 0 && estimatedProfit !== undefined
+          ? Number(((estimatedProfit / totalPrice) * 100).toFixed(1))
+          : undefined
+
+      // 2. Se for ave abatida e houver item de carne/carcaça no estoque, dar baixa proporcional no estoque
+      let inventoryMovementId: string | undefined = undefined
+      if (sale.birdType === 'SLAUGHTERED') {
+        const carneItem = inventory.items.find(
+          (i) =>
+            i.category === 'Carne' ||
+            (i.name && i.name.toLowerCase().includes('carcaça')) ||
+            (i.name && i.name.toLowerCase().includes('carne')),
+        )
+        if (carneItem && (carneItem.currentStock || 0) > 0) {
+          const deductQty = Math.min(carneItem.currentStock || 0, quantity)
+          const newBalance = Math.max(
+            0,
+            Number(((carneItem.currentStock || 0) - deductQty).toFixed(3)),
+          )
+          await inventory.update(carneItem.id, {
+            currentStock: newBalance,
+            lastUpdated: new Date().toISOString().split('T')[0],
+          })
+          const smId = `sm-sal-${Date.now()}`
+          inventoryMovementId = smId
+          await stockMovements.add({
+            id: smId,
+            date: sale.date || new Date().toISOString().split('T')[0],
+            inventoryItemId: carneItem.id,
+            inventoryItemName: carneItem.name,
+            type: 'saida',
+            movementType: 'Venda de Carne Abatida',
+            quantity: deductQty,
+            unit: carneItem.unit,
+            balanceAfter: newBalance,
+            unitValue: calculatedUnitCost || carneItem.averageCost || 0,
+            totalValue: Number(
+              (deductQty * (calculatedUnitCost || carneItem.averageCost || 0)).toFixed(2),
+            ),
+            lotId: sale.lotId,
+            lotName: sale.lotName,
+            notes: `Baixa de estoque por venda #${newSaleId}`,
+          } as any)
+        }
+      }
+
       const fullSaleRecord: Sale = {
         ...sale,
         id: newSaleId,
-        totalPrice: Number((sale.quantity * sale.unitPrice).toFixed(2)),
+        quantity,
+        unitPrice,
+        totalPrice,
+        unitCost: calculatedUnitCost,
+        totalCost: calculatedTotalCost,
+        estimatedProfit,
+        estimatedMargin,
+        inventoryMovementId,
         source_type: sale.source_type || 'SALE',
       }
       const res = await sales.add(fullSaleRecord)
       if (res.error) return res
 
-      // Se a venda for vinculada a um lote e for ave viva (não abate), recalcula o lote
-      if (sale.lotId && sale.source_type !== 'SLAUGHTER') {
+      // 3. Se a venda for de AVE VIVA vinculada a um lote, recalcula o lote (baixa ave viva)
+      // REGRA CRÍTICA: se birdType === 'SLAUGHTERED', NÃO baixa ave viva!
+      if (sale.lotId && sale.source_type !== 'SLAUGHTER' && sale.birdType !== 'SLAUGHTERED') {
         const lot = lots.items.find((l) => l.id === sale.lotId)
         if (lot) {
           const nextSales = [fullSaleRecord, ...sales.items]
@@ -398,15 +494,15 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
       return res
     },
-    [sales, lots, mortality, slaughterings],
+    [sales, lots, mortality, slaughterings, expenses, feedLogs, inventory, stockMovements],
   )
 
   const updateSaleRecord = useCallback(
     async (id: string, updates: Partial<Sale>) => {
+      const oldSale = sales.items.find((s) => s.id === id)
       const res = await sales.update(id, updates)
       if (res.error) return res
 
-      const oldSale = sales.items.find((s) => s.id === id)
       const targetLotId = updates.lotId || oldSale?.lotId
       if (targetLotId) {
         const lot = lots.items.find((l) => l.id === targetLotId)
@@ -435,7 +531,30 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const res = await sales.remove(id)
       if (res.error) return res
 
-      if (oldSale?.lotId && oldSale.source_type !== 'SLAUGHTER') {
+      // 1. Se havia movimentação de estoque vinculada à venda de abatido, estorna o estoque
+      if (oldSale?.inventoryMovementId) {
+        const sm = stockMovements.items.find((m) => m.id === oldSale.inventoryMovementId)
+        if (sm && sm.inventoryItemId) {
+          const invItem = inventory.items.find((i) => i.id === sm.inventoryItemId)
+          if (invItem) {
+            const restoredStock = Number(
+              ((invItem.currentStock || 0) + (sm.quantity || 0)).toFixed(3),
+            )
+            await inventory.update(invItem.id, {
+              currentStock: restoredStock,
+              lastUpdated: new Date().toISOString().split('T')[0],
+            })
+            await stockMovements.remove(sm.id)
+          }
+        }
+      }
+
+      // 2. Se a venda era de ave viva (NÃO abatida), devolve as aves ao saldo do lote
+      if (
+        oldSale?.lotId &&
+        oldSale.source_type !== 'SLAUGHTER' &&
+        oldSale.birdType !== 'SLAUGHTERED'
+      ) {
         const lot = lots.items.find((l) => l.id === oldSale.lotId)
         if (lot) {
           const remainingSales = sales.items.filter((s) => s.id !== id)
@@ -453,7 +572,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
       return res
     },
-    [sales, lots, mortality, slaughterings],
+    [sales, lots, mortality, slaughterings, stockMovements, inventory],
   )
 
   const addIncubation = useCallback(

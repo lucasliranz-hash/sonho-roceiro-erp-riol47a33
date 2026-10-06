@@ -233,8 +233,8 @@ export function FinanceiroTransactionList() {
   const handleEdit = async (values: Record<string, string>) => {
     if (!editing) return
     if (editing.recordType === 'expense') {
-      const aplicacao = (values.aplicacao || 'propriedade') as 'propriedade' | 'atividade' | 'lote'
-      const lotId = aplicacao === 'lote' ? values.lotId || '' : ''
+      const aplicacao = (values.aplicacao as 'propriedade' | 'atividade' | 'lote') || 'propriedade'
+      const lotId = aplicacao === 'lote' ? values.lotId : undefined
       const { error } = await updateExpense(editing.id, {
         date: values.date,
         description: values.description,
@@ -267,7 +267,6 @@ export function FinanceiroTransactionList() {
       toast({ title: 'Venda atualizada! ✅' })
     }
   }
-
   const handleDelete = async () => {
     if (!deleting) return
     if (deleting.recordType === 'expense') {

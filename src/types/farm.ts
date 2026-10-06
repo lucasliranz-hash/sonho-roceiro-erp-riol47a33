@@ -375,6 +375,8 @@ export interface Mating {
   status: 'Ativo' | 'Concluído'
 }
 
+export type BirdSaleType = 'LIVE' | 'SLAUGHTERED' | 'NONE'
+
 export interface Sale {
   id: string
   date: string
@@ -382,6 +384,8 @@ export interface Sale {
   product: string
   lotId?: string
   lotName?: string
+  slaughterId?: string
+  birdType?: BirdSaleType
   quantity: number
   weightKg?: number
   unitPrice: number
@@ -391,6 +395,11 @@ export interface Sale {
   notes?: string
   source_type?: string
   source_id?: string
+  inventoryMovementId?: string
+  unitCost?: number
+  totalCost?: number
+  estimatedMargin?: number
+  estimatedProfit?: number
 }
 
 export interface Customer {

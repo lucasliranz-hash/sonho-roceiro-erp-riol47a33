@@ -961,11 +961,72 @@ export default function Lotes() {
           </TabsContent>
 
           <TabsContent value="financeiro" className="mt-4">
-            <Card className="rounded-2xl bg-white border-border p-4">
-              <h3 className="text-xs font-bold mb-2">Histórico Financeiro do Lote</h3>
-              <p className="text-xs text-muted-foreground">
-                Despesas vinculadas: {lotExpenses.length} | Vendas vinculadas: {lotSales.length}
-              </p>
+            <Card className="rounded-2xl bg-white border-border p-4 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-xs font-bold text-foreground">
+                    Histórico Financeiro do Lote
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Despesas vinculadas: {lotExpenses.length} | Vendas vinculadas: {lotSales.length}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-muted-foreground block">
+                    Receita Total de Vendas
+                  </span>
+                  <span className="text-sm font-extrabold text-emerald-700">
+                    R$ {lotSales.reduce((acc, s) => acc + (s.totalPrice || 0), 0).toFixed(2)}
+                  </span>
+                </div>
+              </div>
+
+              {lotSales.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-border/60">
+                  <h4 className="text-[11px] font-bold text-foreground">Vendas do Lote</h4>
+                  <div className="space-y-2">
+                    {lotSales.map((s) => (
+                      <div
+                        key={s.id}
+                        className="p-2.5 rounded-xl bg-secondary/30 border border-border/60 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground">{s.customerName}</span>
+                            {s.birdType === 'LIVE' && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] bg-amber-50 text-amber-800 border-amber-200"
+                              >
+                                Ave Viva (−{s.quantity})
+                              </Badge>
+                            )}
+                            {s.birdType === 'SLAUGHTERED' && (
+                              <Badge
+                                variant="outline"
+                                className="text-[9px] bg-sky-50 text-sky-800 border-sky-200"
+                              >
+                                Ave Abatida
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {s.product} • {s.quantity} un @ R$ {s.unitPrice.toFixed(2)} • {s.date}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-extrabold text-emerald-700 block">
+                            R$ {s.totalPrice.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {s.paymentMethod}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </Card>
           </TabsContent>
         </Tabs>

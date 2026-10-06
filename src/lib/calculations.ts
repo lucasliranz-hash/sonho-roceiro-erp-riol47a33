@@ -286,7 +286,7 @@ export function computeLotAnimalMovement(
 
   // 4. Outras saídas válidas (vendas de animais vivos vinculadas ao lote)
   // Atenção: abates que geram venda têm source_type === 'SLAUGHTER' — NÃO duplicar!
-  // Apenas vendas manuais com produto de ave viva ("Frangos vivos", "Galinhas", "Reprodutores", "Matrizes", "Pintinhos")
+  // E vendas de ave abatida (birdType === 'SLAUGHTERED' ou produto "Frangos abatidos") NÃO baixam ave viva!
   const LIVE_BIRD_PRODUCTS = [
     'frangos vivos',
     'galinhas',
@@ -297,9 +297,18 @@ export function computeLotAnimalMovement(
     'ave viva',
   ]
   const lotSales = salesList.filter((s) => {
+    if ((s as any).deleted_at) return false
     if (s.lotId !== lot.id) return false
     if (s.source_type === 'SLAUGHTER') return false // Já contabilizado em abates
+    // Se explicitamente marcado como ave abatida, NUNCA baixa do lote vivo
+    if (s.birdType === 'SLAUGHTERED') return false
+    // Se marcado explicitamente como ave viva, baixa do lote
+    if (s.birdType === 'LIVE') return true
+
+    // Fallback heurístico por nome de produto (apenas para compatibilidade com registros manuais anteriores)
     const prod = (s.product || '').toLowerCase().trim()
+    // Se contiver abatido/carne/carcaça, não é ave viva
+    if (prod.includes('abatid') || prod.includes('carne') || prod.includes('carcaça')) return false
     return LIVE_BIRD_PRODUCTS.some((p) => prod.includes(p))
   })
   const otherExits = lotSales.reduce((acc, s) => acc + (Number(s.quantity) || 0), 0)
