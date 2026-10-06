@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { useSupabaseEntity } from '@/hooks/use-supabase-entity'
 import { FARM_TABLES } from '@/services/farm'
 import { computeLotLiveQuantity } from '@/lib/calculations'
+import { calculateExpectedHatchDate } from '@/lib/incubation-service'
 import {
   Activity,
   Lot,
@@ -477,8 +478,8 @@ function useFarmStoreImpl(orgId: string | undefined) {
       const calculatedExpectedHatch =
         inc.expectedHatchDate ||
         (inc.startDate
-          ? new Date(new Date(inc.startDate).getTime() + 21 * 86400000).toISOString().split('T')[0]
-          : new Date(now + 21 * 86400000).toISOString().split('T')[0])
+          ? calculateExpectedHatchDate(inc.startDate, 21)
+          : calculateExpectedHatchDate(new Date(now).toISOString().split('T')[0], 21))
 
       const initialEggCount =
         inc.eggCount !== undefined

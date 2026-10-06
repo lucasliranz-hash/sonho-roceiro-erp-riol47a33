@@ -3,6 +3,7 @@ import { useFarmStore } from '@/hooks/use-farm-store'
 import { useAuth } from '@/hooks/use-auth'
 import { Lot, Incubation, InventoryItem, FeedConsumption } from '@/types/farm'
 import { computeLotLiveQuantity } from '@/lib/calculations'
+import { calculateIncubationDay } from '@/lib/incubation-service'
 
 export interface DashboardAlert {
   id: string
@@ -493,9 +494,7 @@ export function useDashboardData() {
 
     // a) INCUBAÇÕES
     for (const inc of activeIncubations) {
-      const startDate = new Date(inc.startDate)
-      const diffTime = Date.now() - startDate.getTime()
-      const currentDay = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1)
+      const currentDay = calculateIncubationDay(inc.startDate)
       const totalCycle = 21
 
       if (currentDay === 18 && totalCycle === 21) {
@@ -1155,9 +1154,7 @@ export function useDashboardData() {
   // 12. RESUMO DE INCUBAÇÕES ATIVAS
   const detailedActiveIncubations = useMemo(() => {
     return activeIncubations.map((inc) => {
-      const startDate = new Date(inc.startDate)
-      const diffTime = Date.now() - startDate.getTime()
-      const currentDay = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1)
+      const currentDay = calculateIncubationDay(inc.startDate)
       const totalCycle = 21
 
       // Candling / Fertile eggs

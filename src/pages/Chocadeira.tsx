@@ -43,7 +43,11 @@ import { toast } from '@/hooks/use-toast'
 import { Incubation, IncubationEgg } from '@/types/farm'
 import { logAudit } from '@/services/audit'
 import { getIncubationTotalCost } from '@/hooks/use-farm-store'
-import { computeIncubationStats } from '@/lib/incubation-service'
+import {
+  computeIncubationStats,
+  calculateIncubationDay,
+  calculateExpectedHatchDate,
+} from '@/lib/incubation-service'
 
 type FilterTab =
   | 'todos'
@@ -102,10 +106,7 @@ export default function Chocadeira() {
 
       if (isIncubating) {
         emIncubacao++
-        const day = Math.max(
-          1,
-          Math.floor((Date.now() - new Date(inc.startDate).getTime()) / 86400000) + 1,
-        )
+        const day = calculateIncubationDay(inc.startDate)
         // Próximas ovoscopias (por volta do dia 6-8 ou 13-15)
         if ((day >= 6 && day <= 8) || (day >= 13 && day <= 15)) {
           proxOvoscopias++
@@ -145,10 +146,7 @@ export default function Chocadeira() {
       const isFinal = inc.status === 'Finalizada' || inc.status === 'Concluído'
       const isWaiting = inc.status === 'Aguardando incubação'
 
-      const day = Math.max(
-        1,
-        Math.floor((Date.now() - new Date(inc.startDate).getTime()) / 86400000) + 1,
-      )
+      const day = calculateIncubationDay(inc.startDate)
 
       switch (activeTab) {
         case 'em_incubacao':
@@ -332,10 +330,7 @@ export default function Chocadeira() {
           {filteredIncubations.map((inc) => {
             const incCandlings = candlings.filter((c) => c.incubationId === inc.id)
             const stats = computeIncubationStats(inc, incCandlings)
-            const day = Math.max(
-              1,
-              Math.floor((Date.now() - new Date(inc.startDate).getTime()) / 86400000) + 1,
-            )
+            const day = calculateIncubationDay(inc.startDate)
 
             const isIncubating = inc.status === 'Em incubação' || inc.status === 'Em andamento'
             const isFinalized = inc.status === 'Finalizada' || inc.status === 'Concluído'
@@ -505,12 +500,7 @@ export default function Chocadeira() {
           open={!!candlingOperacional}
           onOpenChange={(v) => !v && setCandlingOperacional(null)}
           eggs={candlingOperacional.eggs || []}
-          currentDay={Math.max(
-            1,
-            Math.floor(
-              (Date.now() - new Date(candlingOperacional.startDate).getTime()) / 86400000,
-            ) + 1,
-          )}
+          currentDay={calculateIncubationDay(candlingOperacional.startDate)}
           incubationStartDate={candlingOperacional.startDate}
           onSave={async (data) => {
             const incId = candlingOperacional.id

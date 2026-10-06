@@ -29,7 +29,11 @@ import {
   Building,
 } from 'lucide-react'
 import { Incubation, IncubationEgg, IncubationStatus } from '@/types/farm'
-import { generateNextIncubationCode, generateEggsBatch } from '@/lib/incubation-service'
+import {
+  generateNextIncubationCode,
+  generateEggsBatch,
+  calculateExpectedHatchDate,
+} from '@/lib/incubation-service'
 import { toast } from '@/hooks/use-toast'
 
 interface Props {
@@ -186,17 +190,16 @@ export function NovaChocadaDialog({
 
     setSubmitting(true)
 
-    // Gerar lista de ovos individuais se marcado
+    // Gerar lista de ovos individuais se marcado: numeração reinicia dentro de CADA bloco/prefixo (1..N)
     let generatedEggs: IncubationEgg[] = []
     if (createIndividualEggs) {
-      let currentNumber = 1
       for (const b of batches) {
         const qty = Number(b.quantity) || 0
         if (qty > 0) {
           const eggsFromBatch = generateEggsBatch({
             quantity: qty,
             prefix: b.prefix || 'G',
-            startIndex: currentNumber,
+            startIndex: 1, // A sequência numérica reinicia em cada bloco (ex: P01..P05, C01..C04, GSB01..GSB03)
             origin: b.origin || origin,
             breed: b.breed || breed,
             motherCode: b.motherCode,
@@ -204,7 +207,6 @@ export function NovaChocadaDialog({
             entryDate: startDate || today,
           })
           generatedEggs = [...generatedEggs, ...eggsFromBatch]
-          currentNumber += qty
         }
       }
     }
@@ -231,9 +233,7 @@ export function NovaChocadaDialog({
       targetTemp: 37.7,
       targetHumidity: 55,
       autoTurning: true,
-      expectedHatchDate: new Date(new Date(startDate).getTime() + 21 * 86400000)
-        .toISOString()
-        .split('T')[0],
+      expectedHatchDate: calculateExpectedHatchDate(startDate, 21),
       eggs: generatedEggs,
     }
 

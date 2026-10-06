@@ -26,7 +26,7 @@ import {
   History,
 } from 'lucide-react'
 import { Incubation, IncubationEgg } from '@/types/farm'
-import { computeIncubationStats } from '@/lib/incubation-service'
+import { computeIncubationStats, calculateIncubationDay } from '@/lib/incubation-service'
 import { IncubationEditDialog } from '@/components/IncubationEditDialog'
 import { OvoscopiaOperacionalDialog } from '@/components/OvoscopiaOperacionalDialog'
 import { NascimentoOperacionalDialog } from '@/components/NascimentoOperacionalDialog'
@@ -74,10 +74,7 @@ export function IncubationDetail({ incubation, onBack }: Props) {
   const [finalizeOpen, setFinalizeOpen] = useState(false)
 
   const incCandlings = candlings.filter((c) => c.incubationId === incubation.id)
-  const currentDay = Math.max(
-    1,
-    Math.floor((Date.now() - new Date(incubation.startDate).getTime()) / 86400000) + 1,
-  )
+  const currentDay = calculateIncubationDay(incubation.startDate)
   const isFinalized = incubation.status === 'Concluído' || incubation.status === 'Finalizada'
   const isCanceled = incubation.status === 'Cancelado'
   const canOperate = !isFinalized && !isCanceled

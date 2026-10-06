@@ -65,6 +65,53 @@ export function generateEggsBatch(params: {
 }
 
 /**
+ * Calcula a data de previsão de nascimento (padrão galinhas = +21 dias) a partir da data de início real da incubação.
+ * Preserva a data em formato local YYYY-MM-DD sem problemas de fuso horário.
+ */
+export function calculateExpectedHatchDate(startDateStr: string, incubationDays = 21): string {
+  if (!startDateStr) return ''
+  const parts = startDateStr.split('T')[0].split('-').map(Number)
+  if (parts.length !== 3 || isNaN(parts[0]) || isNaN(parts[1]) || isNaN(parts[2])) {
+    const d = new Date(startDateStr)
+    d.setDate(d.getDate() + incubationDays)
+    return d.toISOString().split('T')[0]
+  }
+  const [year, month, day] = parts
+  const d = new Date(year, month - 1, day)
+  d.setDate(d.getDate() + incubationDays)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const dt = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${dt}`
+}
+
+/**
+ * Calcula o dia corrente da incubação (1 a 21+) a partir da data real de início da incubação.
+ */
+export function calculateIncubationDay(startDateStr: string, referenceDateStr?: string): number {
+  if (!startDateStr) return 1
+  const parseLocalMidnight = (str: string) => {
+    const parts = str.split('T')[0].split('-').map(Number)
+    if (parts.length === 3 && !isNaN(parts[0]) && !isNaN(parts[1]) && !isNaN(parts[2])) {
+      return new Date(parts[0], parts[1] - 1, parts[2]).getTime()
+    }
+    const d = new Date(str)
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  }
+
+  const startMs = parseLocalMidnight(startDateStr)
+  const refMs = referenceDateStr
+    ? parseLocalMidnight(referenceDateStr)
+    : (() => {
+        const now = new Date()
+        return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+      })()
+
+  const diffDays = Math.floor((refMs - startMs) / 86400000)
+  return Math.max(1, diffDays + 1)
+}
+
+/**
  * Indicadores estatísticos e zootécnicos automáticos calculados a partir da chocada e seus ovos
  */
 export interface IncubationStats {

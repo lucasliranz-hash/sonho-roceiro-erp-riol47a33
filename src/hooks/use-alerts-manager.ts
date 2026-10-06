@@ -2,6 +2,7 @@ import { useMemo, useCallback } from 'react'
 import { useFarmStore } from '@/hooks/use-farm-store'
 import { useAuth } from '@/hooks/use-auth'
 import { FarmAlert, AlertStatus, AlertType } from '@/types/farm'
+import { calculateIncubationDay } from '@/lib/incubation-service'
 
 export interface ConditionAlertSpec {
   deduplicationKey: string
@@ -258,9 +259,7 @@ export function useAlertsManager() {
 
     // INCUBAÇÕES / CHOCADEIRA
     for (const inc of activeIncubations) {
-      const startDate = new Date(inc.startDate)
-      const diffTime = Date.now() - startDate.getTime()
-      const currentDay = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1)
+      const currentDay = calculateIncubationDay(inc.startDate)
       const isIncubating = inc.status === 'Em andamento' || inc.status === 'Em incubação'
 
       if (!isIncubating) continue

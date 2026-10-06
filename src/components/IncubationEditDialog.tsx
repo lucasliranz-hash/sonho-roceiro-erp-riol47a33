@@ -16,6 +16,7 @@ import { DollarSign, Zap, Egg as EggIcon, Baby, AlertCircle } from 'lucide-react
 import { Incubation, IncubationStatus } from '@/types/farm'
 import { toast } from '@/hooks/use-toast'
 import { logAudit } from '@/services/audit'
+import { calculateExpectedHatchDate } from '@/lib/incubation-service'
 
 interface Props {
   open: boolean
@@ -229,9 +230,7 @@ export function IncubationEditDialog({ open, onOpenChange, incubation, onSave }:
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const expectedHatchDate = new Date(new Date(startDate).getTime() + 21 * 86400000)
-      .toISOString()
-      .split('T')[0]
+    const expectedHatchDate = calculateExpectedHatchDate(startDate, 21)
 
     const parsedHatched = hatchedCount !== '' ? Number(hatchedCount) : undefined
     const parsedHealthy = healthyChicks !== '' ? Number(healthyChicks) : undefined
