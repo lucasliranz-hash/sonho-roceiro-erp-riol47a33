@@ -211,7 +211,58 @@ export interface EggProduction {
   notes?: string
 }
 
-export type IncubationStatus = 'Em andamento' | 'Concluído' | 'Cancelado'
+export type IncubationStatus =
+  | 'Aguardando incubação'
+  | 'Em incubação'
+  | 'Em andamento'
+  | 'Concluído'
+  | 'Finalizada'
+  | 'Cancelado'
+
+export type EggStatus =
+  | 'Incubado'
+  | 'Desenvolvendo'
+  | 'Duvidoso'
+  | 'Claro/sem desenvolvimento'
+  | 'Embrião interrompido'
+  | 'Eclodiu'
+  | 'Não eclodiu'
+  | 'Quebrado'
+  | 'Descartado'
+
+export type CandlingResult =
+  | 'Desenvolvendo'
+  | 'Claro/sem desenvolvimento'
+  | 'Duvidoso'
+  | 'Desenvolvimento interrompido'
+
+export interface EggCandlingRecord {
+  id: string
+  date: string
+  day: number
+  result: CandlingResult
+  notes?: string
+}
+
+export interface IncubationEgg {
+  id: string // Identificador único interno (uuid/timestamp)
+  code: string // Identificação visível (ex: P01..P05, G01..G30)
+  origin?: string // Produção própria | Ovos adquiridos | Outra
+  breed?: string // Raça/genética
+  motherCode?: string // Matriz/mãe opcional
+  fatherCode?: string // Reprodutor/pai opcional
+  entryDate: string // Data de entrada
+  status: EggStatus
+  notes?: string
+  candlingHistory?: EggCandlingRecord[]
+  // Dados de nascimento
+  hatchedDate?: string
+  hatchedTime?: string
+  birthWeightGrams?: number
+  sex?: 'Macho' | 'Fêmea' | 'Desconhecido'
+  animalId?: string // Vinculado a farm_animals
+  resultingLotId?: string // Lote destino
+}
 
 export interface IncubationReading {
   id: string
@@ -237,6 +288,18 @@ export interface Incubation {
   autoTurning: boolean
   expectedHatchDate: string
   status: IncubationStatus
+  propertyId?: string
+  receivedDate?: string
+  incubatedCount?: number // Quantidade efetivamente incubada
+  eggsReceivedCount?: number // Quantidade de ovos recebidos
+  // Ovos adquiridos detalhamento
+  supplierCity?: string
+  supplierState?: string
+  freightCost?: number
+  otherAcquisitionCosts?: number
+  // Coleção de ovos individuais
+  eggs?: IncubationEgg[]
+  // Leituras e fechamento
   hatchedCount?: number
   unhatchedCount?: number
   healthyChicks?: number
@@ -257,6 +320,7 @@ export interface Incubation {
   // Fechamento e vínculo
   endDate?: string
   resultingLotId?: string
+  resultingLotIds?: string[] // suporte a múltiplos lotes criados
   activityId?: string
 }
 

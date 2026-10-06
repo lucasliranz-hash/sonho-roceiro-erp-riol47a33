@@ -282,6 +282,18 @@ export function FinalizeDialog({
   onConfirm: (data: FinalizeData) => Promise<{ error: any; lotId?: string } | void>
   onViewLot?: (lotId: string) => void
 }) {
+  const hasIndividualEggs = (incubation?.eggs || []).length > 0
+  const hatchedFromEggs = (incubation?.eggs || []).filter((e) => e.status === 'Eclodiu').length
+  const unhatchedFromEggs = (incubation?.eggs || []).filter(
+    (e) => e.status === 'Não eclodiu',
+  ).length
+  const developingFromEggs = (incubation?.eggs || []).filter(
+    (e) => e.status === 'Desenvolvendo' || e.status === 'Eclodiu',
+  ).length
+  const clearFromEggs = (incubation?.eggs || []).filter(
+    (e) => e.status === 'Claro/sem desenvolvimento',
+  ).length
+
   const [hatched, setHatched] = useState('')
   const [healthy, setHealthy] = useState('')
   const [deaths, setDeaths] = useState('')
@@ -297,17 +309,23 @@ export function FinalizeDialog({
 
   useEffect(() => {
     if (open && incubation) {
-      const hCount = incubation.hatchedCount ?? 0
-      const hHealthy = incubation.healthyChicks ?? 0
+      const hCount =
+        hasIndividualEggs && hatchedFromEggs > 0 ? hatchedFromEggs : (incubation.hatchedCount ?? 0)
+      const hHealthy =
+        hasIndividualEggs && hatchedFromEggs > 0
+          ? hatchedFromEggs
+          : (incubation.healthyChicks ?? hCount)
       const dCount = incubation.deaths ?? 0
       const unCount =
-        incubation.unhatchedCount ??
-        (incubation.eggCount > 0 && hCount > 0 ? Math.max(0, incubation.eggCount - hCount) : 0)
+        hasIndividualEggs && unhatchedFromEggs > 0
+          ? unhatchedFromEggs
+          : (incubation.unhatchedCount ??
+            (incubation.eggCount > 0 && hCount > 0 ? Math.max(0, incubation.eggCount - hCount) : 0))
 
-      setHatched(hCount > 0 ? String(hCount) : '')
-      setHealthy(hHealthy > 0 ? String(hHealthy) : hCount > 0 ? String(hCount) : '')
-      setDeaths(dCount > 0 ? String(dCount) : '')
-      setUnhatched(unCount > 0 ? String(unCount) : '')
+      setHatched(String(hCount))
+      setHealthy(String(hHealthy))
+      setDeaths(dCount > 0 ? String(dCount) : '0')
+      setUnhatched(String(unCount))
       setEndDate(incubation.endDate || new Date().toISOString().split('T')[0])
       setCreateLot(!hasAlreadyGeneratedLot)
       setLotName(`Pintinhos - ${incubation.code}`)
@@ -315,7 +333,14 @@ export function FinalizeDialog({
       setValidationError(null)
       setSubmitting(false)
     }
-  }, [open, incubation, hasAlreadyGeneratedLot])
+  }, [
+    open,
+    incubation,
+    hasAlreadyGeneratedLot,
+    hasIndividualEggs,
+    hatchedFromEggs,
+    unhatchedFromEggs,
+  ])
 
   // Custos calculados
   const eggCost = Number(incubation?.eggCost || 0)
@@ -476,21 +501,45 @@ export function FinalizeDialog({
               <DollarSign className="w-3.5 h-3.5 text-primary" /> Resumo Financeiro e Zootécnico
             </h4>
 
-            <div className="grid grid-cols-2 gap-2 text-[11px]">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px]">
               <div>
-                <span className="text-muted-foreground">Ovos colocados: </span>
+                <span className="text-muted-foreground">Ovos incubados: </span>
                 <span className="font-semibold text-foreground">{eggCount}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Desenvolveram: </span>
+                <span className="font-semibold text-emerald-700">
+                  {hasIndividualEggs ? developingFromEggs : numHatched}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Claros / Infértis: </span>
+                <span className="font-semibold text-rose-600">
+                  {hasIndividualEggs ? clearFromEggs : '—'}
+                </span>
               </div>
               <div>
                 <span className="text-muted-foreground">Nascidos: </span>
                 <span className="font-semibold text-foreground">{numHatched}</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Taxa de eclosão: </span>
+                <span className="text-muted-foreground">Não eclodidos: </span>
+                <span className="font-semibold text-foreground">{numUnhatched}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Eclosão s/ incubados: </span>
                 <span className="font-bold text-primary">{hatchRate.toFixed(1)}%</span>
               </div>
               <div>
-                <span className="text-muted-foreground">Viáveis: </span>
+                <span className="text-muted-foreground">Eclosão s/ desenvolvidos: </span>
+                <span className="font-bold text-emerald-700">
+                  {hasIndividualEggs && developingFromEggs > 0
+                    ? `${((numHatched / developingFromEggs) * 100).toFixed(1)}%`
+                    : `${hatchRate.toFixed(1)}%`}
+                </span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Pintinhos viáveis: </span>
                 <span className="font-bold text-emerald-700">{numHealthy}</span>
               </div>
             </div>

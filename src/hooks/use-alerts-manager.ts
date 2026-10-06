@@ -261,15 +261,37 @@ export function useAlertsManager() {
       const startDate = new Date(inc.startDate)
       const diffTime = Date.now() - startDate.getTime()
       const currentDay = Math.max(1, Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1)
-      const totalCycle = 21
+      const isIncubating = inc.status === 'Em andamento' || inc.status === 'Em incubação'
 
-      if (currentDay === 18 && totalCycle === 21) {
+      if (!isIncubating) continue
+
+      // Alerta de ovoscopia programada (Dia 7 e Dia 14)
+      if (currentDay === 7 || currentDay === 14) {
+        specs.push({
+          deduplicationKey: `inc-candling-scheduled:${inc.id}:d${currentDay}`,
+          type: 'incubacao',
+          severity: 'info',
+          title: `🔍 Ovoscopia Programada (Dia ${currentDay})`,
+          description: `Realize a ovoscopia da chocada ${inc.code} (${inc.breed || 'Mista'}).`,
+          origin: 'Chocadeira',
+          related_entity_type: 'farm_incubations',
+          related_entity_id: inc.id,
+          condition_state: `candling_day_${currentDay}`,
+          modulePath: '/chocadeira',
+          propertyId: propertyId,
+          propertyName,
+          date: todayStr,
+        })
+      }
+
+      // Alerta de Dia 18 - Lockdown / Preparação para Nascimento
+      if (currentDay >= 18 && currentDay < 21) {
         specs.push({
           deduplicationKey: `inc-lockdown:${inc.id}:${inc.startDate}`,
           type: 'incubacao',
           severity: 'warning',
-          title: '🥚 Chocadeira em Lockdown',
-          description: `Chocada ${inc.incubatorName || inc.code} entra em lockdown amanhã`,
+          title: '🥚 Preparação para Nascimento (Lockdown)',
+          description: `Chocada ${inc.code} no dia ${currentDay}: desligue a viragem e aumente a umidade para o nascimento.`,
           origin: 'Chocadeira',
           related_entity_type: 'farm_incubations',
           related_entity_id: inc.id,
@@ -281,13 +303,14 @@ export function useAlertsManager() {
         })
       }
 
+      // Previsão de eclosão hoje
       if (inc.expectedHatchDate === todayStr) {
         specs.push({
           deduplicationKey: `inc-hatch-today:${inc.id}:${inc.expectedHatchDate}`,
           type: 'incubacao',
           severity: 'info',
           title: '🐣 Nascimento Previsto Hoje',
-          description: `Nascimento previsto hoje: ${inc.incubatorName || inc.code}`,
+          description: `Eclosão esperada hoje para a chocada ${inc.code} (${inc.eggCount} ovos).`,
           origin: 'Chocadeira',
           related_entity_type: 'farm_incubations',
           related_entity_id: inc.id,
@@ -297,17 +320,41 @@ export function useAlertsManager() {
           propertyName,
           date: todayStr,
         })
-      } else if (inc.expectedHatchDate < todayStr && inc.status === 'Em andamento') {
+      } else if (inc.expectedHatchDate && inc.expectedHatchDate < todayStr) {
+        // Chocada atrasada
         specs.push({
           deduplicationKey: `inc-hatch-delayed:${inc.id}:${inc.expectedHatchDate}`,
           type: 'incubacao',
           severity: 'critical',
-          title: '🚨 Nascimento Atrasado',
-          description: `Nascimento atrasado: ${inc.incubatorName || inc.code}`,
+          title: '🚨 Chocada Atrasada',
+          description: `Previsão de eclosão expirou em ${inc.expectedHatchDate} para a chocada ${inc.code}. Registre o nascimento ou finalize.`,
           origin: 'Chocadeira',
           related_entity_type: 'farm_incubations',
           related_entity_id: inc.id,
           condition_state: `hatch_delayed_${inc.expectedHatchDate}`,
+          modulePath: '/chocadeira',
+          propertyId: propertyId,
+          propertyName,
+          date: todayStr,
+        })
+      }
+
+      // Alerta de chocada sem atualização (sem leituras/ovoscopias por mais de 5 dias após início)
+      if (
+        currentDay > 5 &&
+        (!inc.readings || inc.readings.length === 0) &&
+        (!inc.eggs || inc.eggs.every((e) => e.status === 'Incubado'))
+      ) {
+        specs.push({
+          deduplicationKey: `inc-stale:${inc.id}:d${currentDay}`,
+          type: 'incubacao',
+          severity: 'warning',
+          title: '⚠️ Chocada Sem Atualização',
+          description: `A chocada ${inc.code} está no dia ${currentDay} sem registros de ovoscopia ou leituras climáticas.`,
+          origin: 'Chocadeira',
+          related_entity_type: 'farm_incubations',
+          related_entity_id: inc.id,
+          condition_state: `stale_day_${currentDay}`,
           modulePath: '/chocadeira',
           propertyId: propertyId,
           propertyName,

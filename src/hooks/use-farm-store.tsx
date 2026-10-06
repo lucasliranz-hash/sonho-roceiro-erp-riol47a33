@@ -456,13 +456,66 @@ function useFarmStoreImpl(orgId: string | undefined) {
   )
 
   const addIncubation = useCallback(
-    async (inc: Omit<Incubation, 'id' | 'code' | 'status'>) => {
-      return incubations.add({
-        ...inc,
-        id: `inc-${Date.now()}`,
-        code: `I-${String(incubations.items.length + 1).padStart(4, '0')}`,
-        status: 'Em andamento',
-      })
+    async (inc: Partial<Incubation> & { propertyId?: string }) => {
+      const now = Date.now()
+      const d = inc.startDate ? new Date(inc.startDate) : new Date()
+      const yearShort = String(d.getFullYear()).slice(-2)
+      const month = String(d.getMonth() + 1).padStart(2, '0')
+      const prefix = `SR-${yearShort}${month}-`
+
+      const existingNumbers = incubations.items
+        .map((i) => i.code || '')
+        .filter((code) => code.startsWith(prefix))
+        .map((code) => {
+          const suffix = code.replace(prefix, '')
+          const num = parseInt(suffix, 10)
+          return isNaN(num) ? 0 : num
+        })
+      const nextNum = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1
+      const autoCode = inc.code || `${prefix}${String(nextNum).padStart(2, '0')}`
+
+      const calculatedExpectedHatch =
+        inc.expectedHatchDate ||
+        (inc.startDate
+          ? new Date(new Date(inc.startDate).getTime() + 21 * 86400000).toISOString().split('T')[0]
+          : new Date(now + 21 * 86400000).toISOString().split('T')[0])
+
+      const initialEggCount =
+        inc.eggCount !== undefined
+          ? inc.eggCount
+          : inc.eggs && inc.eggs.length > 0
+            ? inc.eggs.length
+            : inc.incubatedCount || 0
+
+      const newRecord: Incubation = {
+        id: inc.id || `inc-${now}`,
+        code: autoCode,
+        startDate: inc.startDate || new Date().toISOString().split('T')[0],
+        receivedDate: inc.receivedDate,
+        eggCount: initialEggCount,
+        incubatedCount: inc.incubatedCount ?? initialEggCount,
+        eggsReceivedCount: inc.eggsReceivedCount ?? initialEggCount,
+        origin: inc.origin || 'Produção própria',
+        supplier: inc.supplier || '',
+        supplierCity: inc.supplierCity,
+        supplierState: inc.supplierState,
+        freightCost: inc.freightCost,
+        otherAcquisitionCosts: inc.otherAcquisitionCosts,
+        breed: inc.breed || '',
+        eggCost: Number(inc.eggCost || 0),
+        incubatorName: inc.incubatorName || 'Chocadeira',
+        targetTemp: inc.targetTemp ?? 37.7,
+        targetHumidity: inc.targetHumidity ?? 55,
+        autoTurning: inc.autoTurning ?? true,
+        expectedHatchDate: calculatedExpectedHatch,
+        status: inc.status || 'Em incubação',
+        propertyId: inc.propertyId,
+        eggs: inc.eggs || [],
+        notes: inc.notes || '',
+        readings: inc.readings || [],
+      }
+
+      return incubations.add(newRecord)
     },
     [incubations],
   )
@@ -536,7 +589,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
         return { error: { message: 'Incubação não encontrada' } }
       }
 
-      // Se createLot solicitado mas resultingLotId já existe, avisar e não duplicar lote
+      // Idempotência: se já finalizada e já gerou lote, não duplica
       if (results.createLot && inc.resultingLotId) {
         return {
           error: { message: `Esta incubação já gerou o lote ${inc.resultingLotId}.` },
@@ -544,7 +597,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
         }
       }
 
-      // 1. Atualizar a incubação com status Concluído, endDate e resultados
+      // 1. Atualizar a incubação com status Finalizada, endDate e resultados
       const incubationUpdates: Partial<Incubation> = {
         hatchedCount: results.hatchedCount,
         unhatchedCount: results.unhatchedCount,
@@ -552,7 +605,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
         deaths: results.deaths,
         endDate: results.endDate,
         notes: results.notes ?? inc.notes,
-        status: 'Concluído' as IncubationStatus,
+        status: 'Finalizada' as IncubationStatus,
       }
 
       let generatedLotId: string | undefined = undefined
@@ -567,15 +620,15 @@ function useFarmStoreImpl(orgId: string | undefined) {
           type: 'Pintinhos',
           activityId: inc.activityId,
           startDate: results.endDate || new Date().toISOString().split('T')[0],
-          origin: 'Incubação própria',
+          origin: 'Chocadeira',
           supplier: supplierName,
-          breed: inc.breed,
+          breed: inc.breed || 'Mista',
           initialQuantity: results.healthyChicks,
           initialAgeDays: 1,
-          acquisitionCost: totalCost,
+          acquisitionCost: totalCost, // Apropriação de custo sem nova despesa financeira
           purpose: 'Recria / Produção',
           status: 'Ativo',
-          notes: `Lote gerado automaticamente da incubação ${inc.code}.`,
+          notes: `Lote gerado da chocada ${inc.code}. Origem: Chocadeira.`,
           incubationId: inc.id,
         }
 
@@ -584,16 +637,60 @@ function useFarmStoreImpl(orgId: string | undefined) {
           return { error: addLotRes.error }
         }
 
-        // Recupera o ID do lote recém-criado (retornado ou gerado)
         generatedLotId = (addLotRes as any)?.data?.[0]?.id || (addLotRes as any)?.id
-
-        // Se por ventura addLot não retornar id explicitamente no payload, podemos encontrá-lo
         if (!generatedLotId) {
-          // fallback
           generatedLotId = `l-inc-${inc.id}-${Date.now()}`
         }
 
         incubationUpdates.resultingLotId = generatedLotId
+        incubationUpdates.resultingLotIds = [generatedLotId]
+
+        // Rastreabilidade individual: se existirem ovos que eclodiram, vincular pintinho em farm_animals
+        if (inc.eggs && inc.eggs.length > 0) {
+          const hatchedEggs = inc.eggs.filter((e) => e.status === 'Eclodiu')
+          const updatedEggs = [...inc.eggs]
+
+          for (let idx = 0; idx < hatchedEggs.length; idx++) {
+            const egg = hatchedEggs[idx]
+            const animalCode = `SR-A-${inc.code}-${egg.code}`
+            const animalRecord = {
+              id: `an-chick-${Date.now()}-${idx}`,
+              code: animalCode,
+              sex:
+                egg.sex === 'Macho'
+                  ? ('Macho' as const)
+                  : egg.sex === 'Fêmea'
+                    ? ('Fêmea' as const)
+                    : ('Fêmea' as const),
+              breed: egg.breed || inc.breed || 'Caipira',
+              lineage: `${egg.motherCode || 'Matriz'} × ${egg.fatherCode || 'Reprodutor'}`,
+              birthDate:
+                egg.hatchedDate || results.endDate || new Date().toISOString().split('T')[0],
+              origin: `Chocadeira (${inc.code}) - Ovo ${egg.code}`,
+              fatherCode: egg.fatherCode,
+              motherCode: egg.motherCode,
+              weightKg: egg.birthWeightGrams ? egg.birthWeightGrams / 1000 : 0.04,
+              status: 'Ativo' as const,
+              notes: `Pintinho rastreado. Chocada: ${inc.code}, Ovo: ${egg.code}, Fornecedor/Criatório: ${egg.origin || inc.supplier || 'Próprio'}. Lote: ${generatedLotId}`,
+            }
+
+            try {
+              await animals.add(animalRecord)
+              const eggIndex = updatedEggs.findIndex((e) => e.id === egg.id)
+              if (eggIndex >= 0) {
+                updatedEggs[eggIndex] = {
+                  ...updatedEggs[eggIndex],
+                  animalId: animalRecord.id,
+                  resultingLotId: generatedLotId,
+                }
+              }
+            } catch (err) {
+              console.warn('[chocadeira] Falha ao cadastrar ave individual:', err)
+            }
+          }
+
+          incubationUpdates.eggs = updatedEggs
+        }
       }
 
       const updateRes = await incubations.update(id, incubationUpdates)
@@ -603,7 +700,104 @@ function useFarmStoreImpl(orgId: string | undefined) {
 
       return { error: null, lotId: generatedLotId }
     },
-    [incubations, addLot],
+    [incubations, addLot, animals],
+  )
+
+  const createLotsFromIncubation = useCallback(
+    async (
+      incubationId: string,
+      lotsGroups: Array<{
+        name: string
+        breed?: string
+        eggIds: string[]
+        chicksCount: number
+        allocatedCost: number
+      }>,
+    ): Promise<{ error: any; lotIds?: string[] }> => {
+      const inc = incubations.items.find((i) => i.id === incubationId)
+      if (!inc) {
+        return { error: { message: 'Incubação não encontrada' } }
+      }
+
+      const createdLotIds: string[] = []
+      const updatedEggs = inc.eggs ? [...inc.eggs] : []
+
+      for (const group of lotsGroups) {
+        const newLotData: Omit<Lot, 'id' | 'code' | 'currentQuantity'> = {
+          name: group.name.trim() || `Pintinhos - ${inc.code}`,
+          type: 'Pintinhos',
+          activityId: inc.activityId,
+          startDate: inc.endDate || new Date().toISOString().split('T')[0],
+          origin: 'Chocadeira',
+          supplier: inc.supplier || 'Incubação própria',
+          breed: group.breed || inc.breed || 'Mista',
+          initialQuantity: group.chicksCount,
+          initialAgeDays: 1,
+          acquisitionCost: group.allocatedCost,
+          purpose: 'Recria / Produção',
+          status: 'Ativo',
+          notes: `Lote derivado da chocada ${inc.code} (${group.eggIds.length} ovos rastreados).`,
+          incubationId: inc.id,
+        }
+
+        const res = await addLot(newLotData)
+        if (res.error) {
+          return { error: res.error }
+        }
+
+        const newLotId =
+          (res as any)?.data?.[0]?.id || (res as any)?.id || `l-inc-${inc.id}-${Date.now()}`
+        createdLotIds.push(newLotId)
+
+        // Vincular ovos deste grupo ao novo lote e registrar animais individuais
+        for (let idx = 0; idx < group.eggIds.length; idx++) {
+          const eggId = group.eggIds[idx]
+          const eggIdx = updatedEggs.findIndex((e) => e.id === eggId)
+          if (eggIdx >= 0) {
+            const egg = updatedEggs[eggIdx]
+            const animalRecord = {
+              id: `an-chick-${Date.now()}-${idx}`,
+              code: `SR-A-${inc.code}-${egg.code}`,
+              sex:
+                egg.sex === 'Macho'
+                  ? ('Macho' as const)
+                  : egg.sex === 'Fêmea'
+                    ? ('Fêmea' as const)
+                    : ('Fêmea' as const),
+              breed: egg.breed || group.breed || inc.breed || 'Caipira',
+              lineage: `${egg.motherCode || 'Matriz'} × ${egg.fatherCode || 'Reprodutor'}`,
+              birthDate: egg.hatchedDate || inc.endDate || new Date().toISOString().split('T')[0],
+              origin: `Chocadeira (${inc.code}) - Ovo ${egg.code}`,
+              fatherCode: egg.fatherCode,
+              motherCode: egg.motherCode,
+              weightKg: egg.birthWeightGrams ? egg.birthWeightGrams / 1000 : 0.04,
+              status: 'Ativo' as const,
+              notes: `Pintinho rastreado da chocada ${inc.code}, ovo ${egg.code}. Lote: ${newLotId}`,
+            }
+            try {
+              await animals.add(animalRecord)
+              updatedEggs[eggIdx] = {
+                ...updatedEggs[eggIdx],
+                animalId: animalRecord.id,
+                resultingLotId: newLotId,
+              }
+            } catch (err) {
+              console.warn('[chocadeira] Falha ao cadastrar ave em grupo:', err)
+            }
+          }
+        }
+      }
+
+      const mergedLotIds = Array.from(new Set([...(inc.resultingLotIds || []), ...createdLotIds]))
+      await incubations.update(incubationId, {
+        resultingLotId: mergedLotIds[0],
+        resultingLotIds: mergedLotIds,
+        eggs: updatedEggs,
+      })
+
+      return { error: null, lotIds: createdLotIds }
+    },
+    [incubations, addLot, animals],
   )
 
   const addCandling = useCallback(
@@ -1685,6 +1879,7 @@ function useFarmStoreImpl(orgId: string | undefined) {
     updateIncubation,
     deleteIncubation,
     finalizeIncubation,
+    createLotsFromIncubation,
     candlings: candlings.items,
     setCandlings: candlings.setItems,
     addCandling,
@@ -1792,6 +1987,8 @@ export function getIncubationTotalCost(inc: Partial<Incubation> | null | undefin
   if (!inc) return 0
   return (
     Number(inc.eggCost || 0) +
+    Number(inc.freightCost || 0) +
+    Number(inc.otherAcquisitionCosts || 0) +
     Number(inc.energyCost || 0) +
     Number(inc.suppliesCost || 0) +
     Number(inc.laborCost || 0) +
