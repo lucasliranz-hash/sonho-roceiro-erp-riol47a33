@@ -242,4 +242,34 @@ describe('Regra definitiva de Quantidade Viva e Movimentação de Animais', () =
     expect(movementAfterSale.liveQuantity).toBe(4) // Saldo continua 4!
     expect(computeLotLiveQuantity(lot5, [], [slaughter], [saleSlaughtered])).toBe(4)
   })
+
+  it('Venda real sal-1791298889479 (R$ 30, "Frangos abatidos"): tratada como produto abatido sem baixa no saldo de ave viva', () => {
+    const lotReal: Lot = {
+      ...baseLot,
+      id: 'l-real-test',
+      initialQuantity: 10,
+      currentQuantity: 10,
+    }
+
+    // Venda real sal-1791298889479
+    const realSale: Sale = {
+      id: 'sal-1791298889479',
+      date: '2026-10-04',
+      isPaid: true,
+      product: 'Frangos abatidos',
+      quantity: 1,
+      unitPrice: 30,
+      totalPrice: 30,
+      source_type: 'MANUAL',
+      customerName: 'Cliente Final',
+      paymentMethod: 'Pix',
+      lotId: 'l-real-test',
+    }
+
+    const movement = computeLotAnimalMovement(lotReal, [], [], [realSale])
+    // Como o produto é "Frangos abatidos", a regra de cálculo classifica como NÃO ave viva
+    expect(movement.otherExits).toBe(0)
+    expect(movement.liveQuantity).toBe(10)
+    expect(computeLotLiveQuantity(lotReal, [], [], [realSale])).toBe(10)
+  })
 })

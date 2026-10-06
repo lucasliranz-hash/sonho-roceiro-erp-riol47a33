@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, ReactNode } from 'rea
 import { useAuth } from '@/hooks/use-auth'
 import { useSupabaseEntity } from '@/hooks/use-supabase-entity'
 import { FARM_TABLES } from '@/services/farm'
-import { computeLotLiveQuantity } from '@/lib/calculations'
+import { computeLotLiveQuantity, computeLotAccumulatedCostPerAnimal } from '@/lib/calculations'
 import { calculateExpectedHatchDate } from '@/lib/incubation-service'
 import {
   Activity,

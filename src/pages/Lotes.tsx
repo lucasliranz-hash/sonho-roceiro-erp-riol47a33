@@ -245,7 +245,41 @@ export default function Lotes() {
     const lotMortality = mortality.filter((m) => m.lotId === selectedLot.id)
     const lotSlaughter = slaughterings.filter((s) => s.lotId === selectedLot.id)
     const lotExpenses = expenses.filter((e) => e.lotId === selectedLot.id)
-    const lotSales = sales.filter((s) => s.lotId === selectedLot.id)
+    // Vendas diretamente associadas ao lote OU associadas aos abates originados deste lote
+    const lotSlaughterIds = new Set(lotSlaughter.map((s) => s.id))
+    const lotSales = sales.filter((s) => {
+      if ((s as any).deleted_at) return false
+      if (s.lotId === selectedLot.id) return true
+      if (s.slaughterId && lotSlaughterIds.has(s.slaughterId)) return true
+      if (s.source_type === 'SLAUGHTER' && s.source_id && lotSlaughterIds.has(s.source_id))
+        return true
+      return false
+    })
+    // Segregação entre vendas de aves vivas e aves abatidas/outros
+    const liveSales = lotSales.filter(
+      (s) =>
+        s.birdType === 'LIVE' ||
+        (!s.birdType &&
+          s.product &&
+          [
+            'frangos vivos',
+            'galinhas',
+            'reprodutores',
+            'matrizes',
+            'pintinhos',
+            'aves vivas',
+            'ave viva',
+          ].some((p) => s.product.toLowerCase().includes(p))),
+    )
+    const slaughteredSales = lotSales.filter((s) => !liveSales.includes(s))
+
+    const liveSalesRevenue = liveSales.reduce((acc, s) => acc + (s.totalPrice || 0), 0)
+    const liveSalesQuantity = liveSales.reduce((acc, s) => acc + (s.quantity || 0), 0)
+    const slaughteredSalesRevenue = slaughteredSales.reduce(
+      (acc, s) => acc + (s.totalPrice || 0),
+      0,
+    )
+    const slaughteredSalesQuantity = slaughteredSales.reduce((acc, s) => acc + (s.quantity || 0), 0)
     // Considera tanto consumo direto para o lote quanto rateios que contemplem este lote (sem compras)
     const validFeedLogs = feedLogs.filter((f) => (f as any).recordType !== 'purchase')
     const lotFeedLogs = validFeedLogs
@@ -981,33 +1015,134 @@ export default function Lotes() {
                 </div>
               </div>
 
-              {lotSales.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-border/60">
-                  <h4 className="text-[11px] font-bold text-foreground">Vendas do Lote</h4>
+              {/* Cards segregados de Receita: Aves Vivas vs Aves Abatidas */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div className="p-3 rounded-xl bg-amber-50/50 border border-amber-200/60 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-semibold text-amber-900 uppercase tracking-wider block">
+                      Vendas de Aves Vivas
+                    </span>
+                    <p className="text-xs text-amber-700">
+                      {liveSalesQuantity} ave(s) vendida(s) • {liveSales.length} venda(s)
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-extrabold text-amber-900">
+                      R$ {liveSalesRevenue.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-sky-50/50 border border-sky-200/60 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-semibold text-sky-900 uppercase tracking-wider block">
+                      Vendas de Aves Abatidas
+                    </span>
+                    <p className="text-xs text-sky-700">
+                      {slaughteredSalesQuantity} un vendida(s) • {slaughteredSales.length} venda(s)
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-sm font-extrabold text-sky-900">
+                      R$ {slaughteredSalesRevenue.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Seção 1: Vendas de Aves Vivas */}
+              <div className="space-y-2 pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] bg-amber-50 text-amber-800 border-amber-200"
+                    >
+                      Aves Vivas ({liveSales.length})
+                    </Badge>
+                  </h4>
+                  <span className="text-xs font-bold text-amber-900">
+                    Subtotal: R$ {liveSalesRevenue.toFixed(2)}
+                  </span>
+                </div>
+                {liveSales.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic py-1">
+                    Nenhuma venda de ave viva registrada para este lote.
+                  </p>
+                ) : (
                   <div className="space-y-2">
-                    {lotSales.map((s) => (
+                    {liveSales.map((s) => (
                       <div
                         key={s.id}
-                        className="p-2.5 rounded-xl bg-secondary/30 border border-border/60 flex items-center justify-between text-xs"
+                        className="p-2.5 rounded-xl bg-amber-50/20 border border-amber-200/40 flex items-center justify-between text-xs"
                       >
                         <div>
                           <div className="flex items-center gap-2">
                             <span className="font-bold text-foreground">{s.customerName}</span>
-                            {s.birdType === 'LIVE' && (
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] bg-amber-50 text-amber-800 border-amber-200"
-                              >
-                                Ave Viva (−{s.quantity})
-                              </Badge>
-                            )}
-                            {s.birdType === 'SLAUGHTERED' && (
-                              <Badge
-                                variant="outline"
-                                className="text-[9px] bg-sky-50 text-sky-800 border-sky-200"
-                              >
-                                Ave Abatida
-                              </Badge>
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] bg-amber-50 text-amber-800 border-amber-200"
+                            >
+                              Ave Viva (−{s.quantity})
+                            </Badge>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">
+                            {s.product} • {s.quantity} un @ R$ {s.unitPrice.toFixed(2)} • {s.date}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="font-extrabold text-emerald-700 block">
+                            R$ {s.totalPrice.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {s.paymentMethod}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Seção 2: Vendas de Aves Abatidas */}
+              <div className="space-y-2 pt-2 border-t border-border/60">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-bold text-foreground flex items-center gap-1.5">
+                    <Badge
+                      variant="outline"
+                      className="text-[9px] bg-sky-50 text-sky-800 border-sky-200"
+                    >
+                      Aves Abatidas / Derivados ({slaughteredSales.length})
+                    </Badge>
+                  </h4>
+                  <span className="text-xs font-bold text-sky-900">
+                    Subtotal: R$ {slaughteredSalesRevenue.toFixed(2)}
+                  </span>
+                </div>
+                {slaughteredSales.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground italic py-1">
+                    Nenhuma venda de ave abatida registrada para este lote.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {slaughteredSales.map((s) => (
+                      <div
+                        key={s.id}
+                        className="p-2.5 rounded-xl bg-sky-50/20 border border-sky-200/40 flex items-center justify-between text-xs"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-foreground">{s.customerName}</span>
+                            <Badge
+                              variant="outline"
+                              className="text-[9px] bg-sky-50 text-sky-800 border-sky-200"
+                            >
+                              Ave Abatida
+                            </Badge>
+                            {s.slaughterId && (
+                              <span className="text-[10px] text-muted-foreground font-mono">
+                                #{s.slaughterId.slice(-6)}
+                              </span>
                             )}
                           </div>
                           <p className="text-[11px] text-muted-foreground">
@@ -1025,8 +1160,8 @@ export default function Lotes() {
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </Card>
           </TabsContent>
         </Tabs>
